@@ -315,7 +315,7 @@ def to_html(
 ) -> str:
     """The interactive page as an HTML string.
 
-    Pass a :class:`~subsearch.SearchResult` (directly or as ``result=``) to choose among its
+    Pass a :class:`~subgraphsearch.SearchResult` (directly or as ``result=``) to choose among its
     solutions within ``max_conflict`` edges of the target, and/or ``highlight`` to mark a vertex
     set. ``layout`` is a method name for :meth:`Graph.layout` or an ``(n, 2)`` array.
     """

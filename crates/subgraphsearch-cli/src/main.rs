@@ -1,4 +1,4 @@
-//! `subsearch`: find induced subgraphs with a prescribed edge count, generate and convert graphs.
+//! `subgraphsearch`: find induced subgraphs with a prescribed edge count, generate and convert graphs.
 
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
@@ -6,16 +6,16 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use subsearch_core::formats::{self, Format, WriteOptions};
-use subsearch_core::rng::{Randu, Xoshiro};
-use subsearch_core::search::SearchGraph;
-use subsearch_core::{
+use subgraphsearch_core::formats::{self, Format, WriteOptions};
+use subgraphsearch_core::rng::{Randu, Xoshiro};
+use subgraphsearch_core::search::SearchGraph;
+use subgraphsearch_core::{
     Graph, Model, RngKind, SearchParams, SearchResult, WeightedGraph, generate, legacy, ops,
     search_sequential,
 };
 
 #[derive(Parser)]
-#[command(name = "subsearch", version, about, long_about = None)]
+#[command(name = "subgraphsearch", version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -387,7 +387,7 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
         rng: args.rng.into(),
         record_trace: args.trace,
         aspiration: args.aspiration,
-        regular: args.degree.map(|degree| subsearch_core::Regular {
+        regular: args.degree.map(|degree| subgraphsearch_core::Regular {
             degree,
             two_phase: args.two_phase,
         }),
@@ -448,9 +448,9 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
 fn run_one<G: SearchGraph>(
     graph: &G,
     params: &SearchParams,
-) -> Result<SearchResult, subsearch_core::Error> {
+) -> Result<SearchResult, subgraphsearch_core::Error> {
     match params.rng {
-        RngKind::Xoshiro => subsearch_core::search(graph, params),
+        RngKind::Xoshiro => subgraphsearch_core::search(graph, params),
         RngKind::Legacy => {
             let mut experiments = Vec::new();
             search_sequential(graph, params, |e| experiments.push(e.clone())).map(|()| {
@@ -494,7 +494,7 @@ fn target(params: &SearchParams, weighted: bool) -> String {
 
 fn report(
     out: &mut impl Write,
-    result: &subsearch_core::SearchResult,
+    result: &subgraphsearch_core::SearchResult,
     elapsed: std::time::Duration,
     prefix: &str,
     args: &SearchArgs,
@@ -840,6 +840,7 @@ fn run_op(args: OpArgs) -> Result<()> {
 }
 
 /// `"T> %.2f seconds H> %s\n"`: user CPU time and host name, as `sub_search.c` prints them.
+#[cfg(unix)]
 fn timing_footer() -> String {
     // SAFETY: getrusage and gethostname only write into the buffers passed to them.
     unsafe {
@@ -856,6 +857,22 @@ fn timing_footer() -> String {
         )
     }
 }
+
+/// Elsewhere (the C programs were Unix-only): elapsed time since start-up, and the host name
+/// from the environment, truncated as on Unix.
+#[cfg(not(unix))]
+fn timing_footer() -> String {
+    let seconds = START.get().map_or(0.0, |t| t.elapsed().as_secs_f64());
+    let host: String = std::env::var("COMPUTERNAME")
+        .unwrap_or_default()
+        .chars()
+        .take(15)
+        .collect();
+    format!("T> {seconds:.2} seconds H> {host}\n")
+}
+
+#[cfg(not(unix))]
+static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
 fn run_legacy(cmd: LegacyCommand) -> Result<ExitCode> {
     if let LegacyCommand::Wggen { args } = &cmd {
@@ -896,6 +913,8 @@ fn run_legacy(cmd: LegacyCommand) -> Result<ExitCode> {
 }
 
 fn main() -> ExitCode {
+    #[cfg(not(unix))]
+    START.get_or_init(std::time::Instant::now);
     let cli = Cli::parse();
     let result = match cli.command {
         Command::Search(a) => run_search(a),
@@ -906,7 +925,7 @@ fn main() -> ExitCode {
         Command::Legacy(c) => run_legacy(c),
     };
     result.unwrap_or_else(|e| {
-        eprintln!("subsearch: {e:#}");
+        eprintln!("subgraphsearch: {e:#}");
         ExitCode::FAILURE
     })
 }

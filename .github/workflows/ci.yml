@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -33,7 +33,7 @@ jobs:
         # the Python bindings are not a default member, so lint them explicitly
         run: |
           cargo clippy --release --all-targets -- -D warnings
-          cargo clippy --release -p subsearch-py -- -D warnings
+          cargo clippy --release -p subgraphsearch-py -- -D warnings
       - name: Tests (unit, doc and golden fixtures from the C programs)
         run: cargo test --release
 
@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -52,6 +52,6 @@ jobs:
       - name: Build the package
         run: uv sync --all-extras
       - name: Build the CLI (for the CLI-to-Python round-trip test)
-        run: cargo build --release -p subsearch-cli
+        run: cargo build --release -p subgraphsearch
       - name: Tests
         run: uv run pytest -v

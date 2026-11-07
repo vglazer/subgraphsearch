@@ -21,8 +21,8 @@ class Graph:
     """An immutable simple undirected graph on vertices ``0 .. n-1``.
 
     Build one from an edge list, read it from a file (graph6, sparse6, Matrix Market, edge list
-    or USRA adjacency lists), generate it with :func:`subsearch.generate`, or convert it from
-    networkx, igraph or SciPy with :mod:`subsearch.convert`.
+    or USRA adjacency lists), generate it with :func:`subgraphsearch.generate`, or convert it from
+    networkx, igraph or SciPy with :mod:`subgraphsearch.convert`.
 
     >>> g = Graph(4, [(0, 1), (1, 2), (2, 3)])
     >>> g.num_vertices, g.num_edges
@@ -166,7 +166,7 @@ class Graph:
     # ---- search, layout, display
 
     def search(self, size: int, edges: int, **kwargs) -> SearchResult:
-        """Shorthand for :func:`subsearch.search` on this graph."""
+        """Shorthand for :func:`subgraphsearch.search` on this graph."""
         from ._search import search
 
         return search(self, size, edges, **kwargs)
@@ -384,7 +384,7 @@ class WeightedGraph:
         return self.structure.layout(method, **kwargs)
 
     def search(self, size: int, weight: int, **kwargs):
-        """Shorthand for :func:`subsearch.search` on this graph, with a target total ``weight``."""
+        """Shorthand for :func:`subgraphsearch.search` on this graph, with a target total ``weight``."""
         from ._search import search
 
         return search(self, size, weight, **kwargs)

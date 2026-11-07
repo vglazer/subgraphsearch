@@ -1,11 +1,11 @@
-//! # subsearch
+//! # subgraphsearch
 //!
 //! Randomised restricted local search for vertex-induced subgraphs with a prescribed number of
 //! edges, ported from the USRA `sub_search` program, together with the graph generators and
 //! operations of its companion `ggen`, and readers and writers for standard graph formats.
 //!
 //! ```
-//! use subsearch_core::{Graph, SearchParams, search};
+//! use subgraphsearch_core::{Graph, SearchParams, search};
 //!
 //! // find induced 4-vertex paths (3 edges) in a 12-cycle
 //! let g = Graph::from_edges(12, (0..12).map(|i| (i, (i + 1) % 12))).unwrap();

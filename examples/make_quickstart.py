@@ -8,11 +8,11 @@ from nbclient import NotebookClient
 
 md, code = nbformat.v4.new_markdown_cell, nbformat.v4.new_code_cell
 cells = [
-    md("# subsearch quickstart\n\n"
-       "`subsearch` finds **induced subgraphs with a prescribed number of vertices and edges** using the randomised "
+    md("# subgraphsearch quickstart\n\n"
+       "`subgraphsearch` finds **induced subgraphs with a prescribed number of vertices and edges** using the randomised "
        "restricted local search of USRA's `sub_search`, ported to Rust. This notebook walks through generating graphs, "
        "searching them, reading the results, and the visualisations."),
-    code("import subsearch as ss\nfrom subsearch import viz\n\nss.__version__"),
+    code("import subgraphsearch as ss\nfrom subgraphsearch import viz\n\nss.__version__"),
     md("## Graphs\n\nGenerate one of `ggen`'s random models, or read graph6, sparse6, Matrix Market, edge lists or USRA adjacency lists. "
        "In a notebook a graph shows a summary, its degree distribution and, when small, a drawing."),
     code("g = ss.generate(\"exponential\", 100, 0.6, seed=1, rng=\"legacy\")  # exactly ggen's `2 100 0 600 1 0 0 0`\ng"),
@@ -53,7 +53,7 @@ cells = [
          "print(\"degrees within the subgraph:\", set(paley.induced(reg.best.vertices).degrees().tolist()))\n"
          "reg"),
     md("## Formats and other libraries"),
-    code("import tempfile, pathlib\nfrom subsearch import convert\n\n"
+    code("import tempfile, pathlib\nfrom subgraphsearch import convert\n\n"
          "path = pathlib.Path(tempfile.mkdtemp()) / \"g.g6\"\n"
          "g.write(path)\n"
          "assert ss.read(path) == g\n"

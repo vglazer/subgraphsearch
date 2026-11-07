@@ -1,5 +1,5 @@
-//! Python bindings: the `subsearch._core` extension module. The public Python API lives in the
-//! pure-Python `subsearch` package, which wraps these.
+//! Python bindings: the `subgraphsearch._core` extension module. The public Python API lives in the
+//! pure-Python `subgraphsearch` package, which wraps these.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -7,9 +7,9 @@ use std::sync::Arc;
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use subsearch_core::formats::{self, Format, WriteOptions};
-use subsearch_core::rng::{Randu, RngKind, Xoshiro};
-use subsearch_core::{
+use subgraphsearch_core::formats::{self, Format, WriteOptions};
+use subgraphsearch_core::rng::{Randu, RngKind, Xoshiro};
+use subgraphsearch_core::{
     Error, Graph, Model, SearchGraph, SearchParams, WeightedGraph, generate, layout, legacy, ops,
 };
 
@@ -25,7 +25,7 @@ fn parse<T: std::str::FromStr<Err = String>>(s: &str) -> PyResult<T> {
 }
 
 /// An immutable simple undirected graph on vertices 0..n.
-#[pyclass(module = "subsearch._core", name = "Graph", frozen)]
+#[pyclass(module = "subgraphsearch._core", name = "Graph", frozen)]
 struct PyGraph {
     inner: Arc<Graph>,
 }
@@ -230,7 +230,7 @@ impl PyGraph {
 }
 
 /// An immutable undirected graph with integer edge weights between 1 and 255.
-#[pyclass(module = "subsearch._core", name = "WeightedGraph", frozen)]
+#[pyclass(module = "subgraphsearch._core", name = "WeightedGraph", frozen)]
 struct PyWeightedGraph {
     inner: Arc<WeightedGraph>,
 }
@@ -414,7 +414,7 @@ fn search(
         rng: parse(rng)?,
         record_trace: trace,
         aspiration,
-        regular: degree.map(|degree| subsearch_core::Regular { degree, two_phase }),
+        regular: degree.map(|degree| subgraphsearch_core::Regular { degree, two_phase }),
     };
     let result = if let Ok(g) = graph.extract::<PyRef<'_, PyGraph>>() {
         run_search(py, Arc::clone(&g.inner), params)?
@@ -436,8 +436,8 @@ fn run_search<G: SearchGraph + Send + 'static>(
     py: Python<'_>,
     graph: Arc<G>,
     params: SearchParams,
-) -> PyResult<subsearch_core::SearchResult> {
-    py.detach(move || subsearch_core::search(&*graph, &params))
+) -> PyResult<subgraphsearch_core::SearchResult> {
+    py.detach(move || subgraphsearch_core::search(&*graph, &params))
         .map_err(err)
 }
 

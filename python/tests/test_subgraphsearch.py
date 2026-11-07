@@ -6,8 +6,8 @@ import matplotlib
 import numpy as np
 import pytest
 
-import subsearch as ss
-from subsearch import convert, viz
+import subgraphsearch as ss
+from subgraphsearch import convert, viz
 
 matplotlib.use("Agg")
 
@@ -245,9 +245,9 @@ def test_jupyter_reprs(g100):
 def test_rust_cli_json_loads_in_python(tmp_path, g100):
     import subprocess
 
-    from subsearch.__main__ import main
+    from subgraphsearch.__main__ import main
 
-    exe = Path(__file__).resolve().parents[2] / "target" / "release" / "subsearch"
+    exe = Path(__file__).resolve().parents[2] / "target" / "release" / "subgraphsearch"
     if not exe.exists():
         pytest.skip("build the CLI first: cargo build --release")
     graph_path = tmp_path / "g.g6"
@@ -298,10 +298,10 @@ def test_graph6_and_sparse6_agree_with_networkx(tmp_path):
             pairs = np.argwhere(np.triu(rng.random((n, n)) < p, k=1))
             graphs.append(ss.Graph(n, pairs))
     for fmt, to_bytes, reader in [("graph6", nx.to_graph6_bytes, nx.read_graph6), ("sparse6", nx.to_sparse6_bytes, nx.read_sparse6)]:
-        # networkx writes, subsearch reads
+        # networkx writes, subgraphsearch reads
         nx_text = b"".join(to_bytes(convert.to_networkx(g), header=False) for g in graphs).decode()
         assert ss.parse_all(nx_text, fmt) == graphs, fmt
-        # subsearch writes, networkx reads
+        # subgraphsearch writes, networkx reads
         path = tmp_path / f"many.{fmt}"
         ss.write_all(path, graphs, fmt)
         back = reader(path)

@@ -1,0 +1,4 @@
+# Keep line endings exactly as committed on every platform: the golden fixtures are compared
+# byte for byte with the original C programs' output, which uses \n.
+* text=auto eol=lf
+tests/fixtures/** -text

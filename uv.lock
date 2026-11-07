@@ -2495,7 +2495,7 @@ wheels = [
 ]
 
 [[package]]
-name = "subsearch"
+name = "subgraphsearch"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -2566,7 +2566,7 @@ requires-dist = [
     { name = "networkx", marker = "extra == 'interop'", specifier = ">=3.1" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "scipy", marker = "extra == 'interop'", specifier = ">=1.10" },
-    { name = "subsearch", extras = ["viz", "interop", "igraph", "jupyter"], marker = "extra == 'all'" },
+    { name = "subgraphsearch", extras = ["viz", "interop", "igraph", "jupyter"], marker = "extra == 'all'" },
 ]
 provides-extras = ["all", "igraph", "interop", "jupyter", "viz"]
 

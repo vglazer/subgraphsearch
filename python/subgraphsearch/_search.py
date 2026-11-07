@@ -144,7 +144,7 @@ class SearchResult:
 
     @classmethod
     def from_dict(cls, data: dict, graph: Graph | WeightedGraph) -> SearchResult:
-        """Rebuilds a result from :meth:`to_dict` output or from the JSON the ``subsearch search
+        """Rebuilds a result from :meth:`to_dict` output or from the JSON the ``subgraphsearch search
         --json`` command writes."""
         p = dict(data["params"])
         if "record_trace" in p:  # the Rust CLI's field names
@@ -169,7 +169,7 @@ class SearchResult:
 
     @classmethod
     def load(cls, path, graph: Graph | WeightedGraph) -> SearchResult:
-        """Reads a result saved with :meth:`save` or ``subsearch search --json``."""
+        """Reads a result saved with :meth:`save` or ``subgraphsearch search --json``."""
         with open(path, encoding="utf-8") as f:
             return cls.from_dict(json.load(f), graph)
 
@@ -215,7 +215,7 @@ def search(
     ("diversification"). With ``rng="xoshiro"`` (default) experiments run in parallel and depend
     only on ``seed``; ``rng="legacy"`` reproduces USRA ``sub_search`` exactly.
 
-    Set ``trace=True`` to record the objective after every move, for :mod:`subsearch.viz`.
+    Set ``trace=True`` to record the objective after every move, for :mod:`subgraphsearch.viz`.
 
     Pass ``degree`` instead of ``edges`` to look for subgraphs that are regular of that degree
     (USRA's ``reg_search``); add ``two_phase=True`` to first find the right number of edges and
@@ -248,5 +248,5 @@ def search(
 def sweep(graph: Graph | WeightedGraph, size: int, edges: int | None, parameter: str, values: Sequence, **kwargs) -> dict:
     """Runs :func:`search` once per value of ``parameter`` (e.g. ``"div_dur"``), keeping the other
     arguments fixed, and returns ``{value: SearchResult}``; plot it with
-    :func:`subsearch.viz.plot_sweep`."""
+    :func:`subgraphsearch.viz.plot_sweep`."""
     return {v: search(graph, size, edges, **{**kwargs, parameter: v}) for v in values}

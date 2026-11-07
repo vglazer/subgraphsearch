@@ -1,0 +1,110 @@
+name: Release
+
+# Builds wheels for Linux, macOS and Windows plus a source distribution, then publishes them
+# with PyPI Trusted Publishing (no stored tokens).
+#
+# - Run it by hand (Actions > Release > Run workflow) to publish to TestPyPI, as a rehearsal.
+# - Push a tag `vX.Y.Z` matching the package version to publish to PyPI.
+#
+# One-time setup: add this repository as a trusted publisher on pypi.org and test.pypi.org
+# (owner vglazer, repository subgraphsearch, workflow release.yml, environment pypi or testpypi).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      index:
+        description: "Where to publish"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    name: Wheel (${{ matrix.os }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64, smoke: true }
+          - { os: ubuntu-latest, target: aarch64, smoke: false }
+          - { os: macos-latest, target: aarch64, smoke: true }
+          - { os: macos-latest, target: x86_64, smoke: false }
+          - { os: windows-latest, target: x64, smoke: true }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --out dist
+      - name: Smoke-test the wheel
+        if: matrix.smoke
+        shell: bash
+        run: |
+          python -m pip install --find-links dist subgraphsearch
+          python - <<'PY'
+          import subgraphsearch as ss
+          g = ss.generate("exponential", 100, 0.6, seed=1, rng="legacy")
+          r = ss.search(g, 11, 55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng="legacy")
+          assert r.successes == 5, r
+          print(ss.__version__, r)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    name: Source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+  publish:
+    name: Publish to ${{ github.event_name == 'push' && 'pypi' || inputs.index }}
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'push' && 'pypi' || inputs.index }}
+    permissions:
+      id-token: write # for Trusted Publishing
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that a release tag matches the package version
+        if: github.event_name == 'push'
+        run: |
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match the package version ${version}" >&2
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: ls -l dist
+      - name: Publish to TestPyPI
+        if: github.event_name != 'push' && inputs.index == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+      - name: Publish to PyPI
+        if: github.event_name == 'push' || inputs.index == 'pypi'
+        uses: pypa/gh-action-pypi-publish@release/v1

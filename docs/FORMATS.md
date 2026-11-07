@@ -1,7 +1,7 @@
 # Graph formats
 
 USRA's programs exchanged graphs as '-1'-terminated adjacency lists: line *i* lists the neighbours
-*j > i* of vertex *i*. The format is compact and simple, but nothing else reads it. `subsearch`
+*j > i* of vertex *i*. The format is compact and simple, but nothing else reads it. `subgraphsearch`
 still reads and writes it (`lists`, `.txt`) for compatibility, and adds the standard formats below.
 
 | Format | Name | Extensions | Read | Write | Best for |
@@ -17,7 +17,7 @@ still reads and writes it (`lists`, `.txt`) for compatibility, and adds the stan
 
 ## Sizes
 
-The same graphs in each format (generated with `subsearch generate ... -s 1`):
+The same graphs in each format (generated with `subgraphsearch generate ... -s 1`):
 
 | Graph | Edges | graph6 | sparse6 | USRA lists | edge list | Matrix Market | GraphML |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -38,18 +38,18 @@ smaller once the density exceeds about `log2(n) / n`: around 7% at 100 vertices,
   Ted Spence's lists of strongly regular graphs are distributed in it.
 - **Use sparse6** for large sparse graphs.
 - **Keep families of graphs in one graph6 or sparse6 file**, one graph per line, which is how
-  `geng` and graph catalogues deliver them. `subsearch info many.g6` lists them,
-  `subsearch search many.g6 --all ...` searches each in turn, `--index N` picks one, and
-  `subsearch convert many.g6 many.s6` converts them all. In Python: `ss.read_all`,
+  `geng` and graph catalogues deliver them. `subgraphsearch info many.g6` lists them,
+  `subgraphsearch search many.g6 --all ...` searches each in turn, `--index N` picks one, and
+  `subgraphsearch convert many.g6 many.s6` converts them all. In Python: `ss.read_all`,
   `ss.read(path, index=N)` and `ss.write_all`. A command that needs one graph refuses a
   multi-graph file unless given `--index`, rather than silently using the first graph.
-- **Use an edge list** for exchange with tools that know nothing about graphs. `subsearch` writes
+- **Use an edge list** for exchange with tools that know nothing about graphs. `subgraphsearch` writes
   a `# vertices: N` header, so isolated vertices survive the round trip.
 - **Use Matrix Market** to move adjacency matrices into numerical code
   (`scipy.io.mmread`). The reader accepts `pattern`, `integer` and `real` matrices, `general` or
   `symmetric`; any non-zero off-diagonal entry is an edge.
 - **Use DOT or GraphML** to draw. Both take a vertex set to highlight
-  (`subsearch convert g.g6 g.dot --highlight 3,17,42`), which colours a found subgraph.
+  (`subgraphsearch convert g.g6 g.dot --highlight 3,17,42`), which colours a found subgraph.
 
 ## Weighted graphs
 
@@ -68,9 +68,9 @@ DOT output labels edges with their weights and scales their widths; GraphML outp
 weight 1, and writing a weighted graph to them is an error rather than silently losing the weights.
 
 ## Not supported, and why
-- **JSON node-link** (d3, networkx `node_link_data`): use `subsearch.convert.to_networkx` and
+- **JSON node-link** (d3, networkx `node_link_data`): use `subgraphsearch.convert.to_networkx` and
   networkx's own JSON support. networkx is changing its default key from `links` to `edges`, so a
   fixed writer here would soon mismatch.
 - **Reading DOT and GraphML** would need full parsers for formats that are mostly used for
   output; convert with networkx (`read_graphml`, `nx_pydot.read_dot`) and
-  `subsearch.convert.from_networkx` instead.
+  `subgraphsearch.convert.from_networkx` instead.

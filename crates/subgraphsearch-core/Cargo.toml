@@ -1,5 +1,5 @@
 [package]
-name = "subsearch-core"
+name = "subgraphsearch-core"
 description = "Randomised restricted local search for induced subgraphs with a prescribed edge count, plus graph generators and formats"
 version.workspace = true
 edition.workspace = true

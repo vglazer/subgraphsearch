@@ -1,10 +1,10 @@
-//! End-to-end tests of the `subsearch` command, in particular multi-graph graph6/sparse6 files.
+//! End-to-end tests of the `subgraphsearch` command, in particular multi-graph graph6/sparse6 files.
 
 use std::path::Path;
 use std::process::{Command, Output};
 
 fn run(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_subsearch"))
+    Command::new(env!("CARGO_BIN_EXE_subgraphsearch"))
         .current_dir(dir)
         .args(args)
         .output()
@@ -21,7 +21,8 @@ fn stderr(o: &Output) -> String {
 
 /// A temporary directory holding `many.g6`: four graphs, the last too small for the searches.
 fn multi_graph_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("subsearch-cli-{name}-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("subgraphsearch-cli-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut text = String::new();
     for (model, n, d, s) in [

@@ -112,7 +112,7 @@ def plot_search_summary(result: SearchResult, figsize=None):
 
 def plot_sweep(results: Mapping, ax=None, parameter: str | None = None):
     """Success rate and mean moves per success against a swept parameter, from
-    :func:`subsearch.sweep`'s ``{value: SearchResult}``."""
+    :func:`subgraphsearch.sweep`'s ``{value: SearchResult}``."""
     ax = axes(ax)
     values = list(results)
     rate = [results[v].success_rate for v in values]

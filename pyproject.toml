@@ -3,34 +3,47 @@ requires = ["maturin>=1.9,<2"]
 build-backend = "maturin"
 
 [project]
-name = "subsearch"
+name = "subgraphsearch"
 description = "Find induced subgraphs with a prescribed number of edges by randomised restricted local search (a Rust port of USRA's sub_search), with graph generators, standard formats and visualisation"
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Victor Glazer" }]
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24"]
+keywords = ["graph", "induced subgraph", "local search", "clique", "regular subgraph", "combinatorics"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
     "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Framework :: Jupyter",
     "Topic :: Scientific/Engineering :: Mathematics",
 ]
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/vglazer/subgraphsearch"
+Repository = "https://github.com/vglazer/subgraphsearch"
+Issues = "https://github.com/vglazer/subgraphsearch/issues"
+Changelog = "https://github.com/vglazer/subgraphsearch/commits/main"
+"Original C programs" = "https://github.com/vglazer/USRA/tree/master/subgraph_finding"
 
 [project.optional-dependencies]
 viz = ["matplotlib>=3.7"]
 interop = ["networkx>=3.1", "scipy>=1.10"]
 igraph = ["igraph>=0.11"]
 jupyter = ["ipython>=8"]
-all = ["subsearch[viz,interop,igraph,jupyter]"]
+all = ["subgraphsearch[viz,interop,igraph,jupyter]"]
 
 [dependency-groups]
 dev = ["pytest>=8", "maturin>=1.9,<2", "matplotlib>=3.7", "networkx>=3.1", "scipy>=1.10", "igraph>=0.11", "ipython>=8", "nbformat>=5", "nbclient>=0.10", "ipykernel>=6"]
 
 [tool.maturin]
-manifest-path = "crates/subsearch-py/Cargo.toml"
+manifest-path = "crates/subgraphsearch-py/Cargo.toml"
 python-source = "python"
-module-name = "subsearch._core"
+module-name = "subgraphsearch._core"
 features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]

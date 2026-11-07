@@ -4,7 +4,7 @@
 //! is what [`SearchRng`] provides. Two implementations are available:
 //!
 //! - [`Randu`] reproduces the `RAND` macro shared by all the original USRA C programs bit for
-//!   bit, so that `subsearch` can regenerate their graphs and search runs exactly. It is a
+//!   bit, so that `subgraphsearch` can regenerate their graphs and search runs exactly. It is a
 //!   variant of RANDU (`x <- 65539 x mod 2^31`), which is fast but statistically weak.
 //! - [`Xoshiro`] (xoshiro256++, seeded through SplitMix64) is the default for new work.
 

@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/subsearch-core", "crates/subsearch-cli", "crates/subsearch-py"]
+members = ["crates/subgraphsearch-core", "crates/subgraphsearch-cli", "crates/subgraphsearch-py"]
 # the Python extension is built by maturin (it needs Python's linker flags), not by plain cargo
-default-members = ["crates/subsearch-core", "crates/subsearch-cli"]
+default-members = ["crates/subgraphsearch-core", "crates/subgraphsearch-cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,7 +10,7 @@ edition = "2024"
 rust-version = "1.87"
 license = "MIT"
 authors = ["Victor Glazer"]
-repository = "https://github.com/vglazer/subsearch"
+repository = "https://github.com/vglazer/subgraphsearch"
 
 [profile.release]
 lto = "thin"

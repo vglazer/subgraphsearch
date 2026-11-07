@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerate the golden fixtures used to check that `subsearch legacy ...` reproduces the
+# Regenerate the golden fixtures used to check that `subgraphsearch legacy ...` reproduces the
 # original C programs byte for byte. Requires a checkout of https://github.com/vglazer/USRA.
 #
 # Usage: USRA_DIR=~/repos/USRA scripts/make_fixtures.sh

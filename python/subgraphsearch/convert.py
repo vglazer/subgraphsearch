@@ -2,7 +2,7 @@
 
 Each ``from_*`` function maps the foreign graph's vertices to ``0 .. n-1`` in their natural order
 (``list(G.nodes)`` for networkx) and ignores self-loops, edge directions and attributes. Weights
-are kept for a :class:`~subsearch.WeightedGraph` (``to_networkx``, ``to_scipy``) and read when
+are kept for a :class:`~subgraphsearch.WeightedGraph` (``to_networkx``, ``to_scipy``) and read when
 asked for (``from_networkx(weight=...)``, ``from_scipy(weighted=True)``); otherwise ignored.
 """
 

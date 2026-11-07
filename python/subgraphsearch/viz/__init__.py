@@ -9,7 +9,7 @@
 - Interactive: :func:`to_html`, :func:`save_html` and :func:`show` (Jupyter) produce a
   self-contained page for exploring a graph and the subgraphs a search found.
 
-The matplotlib functions need ``pip install 'subsearch[viz]'``; the interactive page needs
+The matplotlib functions need ``pip install 'subgraphsearch[viz]'``; the interactive page needs
 nothing extra.
 """
 

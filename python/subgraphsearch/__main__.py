@@ -1,9 +1,9 @@
 """Command-line access to the Python-side visualisations.
 
-    python -m subsearch explore GRAPH [--result RESULT.json] [-o PAGE.html]
-    python -m subsearch report GRAPH [--result RESULT.json] [-o FIGURE.png]
+    python -m subgraphsearch explore GRAPH [--result RESULT.json] [-o PAGE.html]
+    python -m subgraphsearch report GRAPH [--result RESULT.json] [-o FIGURE.png]
 
-GRAPH is any readable graph file; RESULT.json comes from ``subsearch search --json`` (the Rust
+GRAPH is any readable graph file; RESULT.json comes from ``subgraphsearch search --json`` (the Rust
 CLI) or ``SearchResult.save``.
 """
 
@@ -18,7 +18,7 @@ from ._search import SearchResult
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m subsearch", description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(prog="python -m subgraphsearch", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
 
     explore = sub.add_parser("explore", help="write an interactive HTML page for a graph and search result")

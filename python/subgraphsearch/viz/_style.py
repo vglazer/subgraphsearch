@@ -1,4 +1,4 @@
-"""Shared colours and axes helpers. matplotlib is imported lazily so that ``import subsearch``
+"""Shared colours and axes helpers. matplotlib is imported lazily so that ``import subgraphsearch``
 works without it."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ def axes(ax=None):
     try:
         import matplotlib.pyplot as plt
     except ImportError as e:  # pragma: no cover
-        raise ImportError("plotting needs matplotlib: pip install 'subsearch[viz]'") from e
+        raise ImportError("plotting needs matplotlib: pip install 'subgraphsearch[viz]'") from e
     _, ax = plt.subplots(figsize=(5.5, 3.6), layout="constrained")
     return ax
 

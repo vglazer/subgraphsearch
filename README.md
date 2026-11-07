@@ -1,9 +1,9 @@
-# subsearch
+# subgraphsearch
 
-[![CI](https://github.com/vglazer/subsearch/actions/workflows/ci.yml/badge.svg)](https://github.com/vglazer/subsearch/actions/workflows/ci.yml)
+[![CI](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml/badge.svg)](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml)
 
 Find **induced subgraphs with a prescribed number of vertices and edges**: cliques,
-independent sets, and everything in between. `subsearch` is a Rust port, with a Python package,
+independent sets, and everything in between. `subgraphsearch` is a Rust port, with a Python package,
 of `sub_search` from the [USRA stochastic graph search project](https://github.com/vglazer/USRA/tree/master/subgraph_finding),
 together with its graph generator `ggen`.
 
@@ -12,7 +12,7 @@ together with its graph generator `ggen`.
 - **Fast.** Experiments run in parallel; a typical search is about 9× faster than the C program
   on a multi-core machine.
 - **Standard formats.** graph6, sparse6, Matrix Market, edge lists, DOT and GraphML, plus the
-  original adjacency lists. See [docs/FORMATS.md](docs/FORMATS.md).
+  original adjacency lists. See [docs/FORMATS.md](https://github.com/vglazer/subgraphsearch/blob/main/docs/FORMATS.md).
 - **Visual.** Search diagnostics, spectral and structural plots, Jupyter displays, and a
   self-contained interactive HTML viewer for graphs and the subgraphs found in them.
 
@@ -21,51 +21,52 @@ count; they cover only the extreme cases (cliques, independent sets) or densest-
 
 ## Install
 
-Requires Rust 1.87+ and, for Python, [uv](https://docs.astral.sh/uv/) (or pip with maturin).
-
 ```sh
-cargo install --path crates/subsearch-cli       # the `subsearch` command
-uv sync --all-extras                            # the Python package, in .venv
+pip install subgraphsearch              # the Python package; add [all] for plotting and interop
+cargo install subgraphsearch            # the `subgraphsearch` command (needs Rust 1.87+)
 ```
+
+Prebuilt wheels cover Linux, macOS and Windows for Python 3.10 and later. From a checkout,
+`cargo install --path crates/subgraphsearch-cli` and `uv sync --all-extras` build both from source.
 
 ## Command line
 
 ```sh
 # a random graph: 100 vertices, density 0.6 (graph6 output)
-subsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6
+subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6
 
 # search for 11-cliques: 11 vertices, 55 edges
-subsearch search g.g6 -k 11 -m 55 -n 20 --moves 1000
+subgraphsearch search g.g6 -k 11 -m 55 -n 20 --moves 1000
 
 # also report near misses within 2 edges, and save everything (with per-move traces) as JSON
-subsearch search g.g6 -k 30 -m 340 -n 60 --max-conflict 2 --trace --json result.json
+subgraphsearch search g.g6 -k 30 -m 340 -n 60 --max-conflict 2 --trace --json result.json
 
 # look at the results
-uv run python -m subsearch explore g.g6 --result result.json -o result.html   # interactive page
-uv run python -m subsearch report g.g6 --result result.json -o result.png     # figures
+uv run python -m subgraphsearch explore g.g6 --result result.json -o result.html   # interactive page
+uv run python -m subgraphsearch report g.g6 --result result.json -o result.png     # figures
 
 # regular subgraphs (USRA's reg_search / ereg_search): every vertex with degree 4 inside
-subsearch search g.g6 -k 10 --degree 4 -n 40
-subsearch search g.g6 -k 10 --degree 4 --two-phase -n 40   # right edge count first
+subgraphsearch search g.g6 -k 10 --degree 4 -n 40
+subgraphsearch search g.g6 -k 10 --degree 4 --two-phase -n 40   # right edge count first
 
 # weighted graphs (USRA's wsub_search / wggen): -m is a total weight
-subsearch generate weighted -n 200 -d 0.65 -s 1 -o w.mtx   # mean weight 0.65 per vertex pair
-subsearch search w.mtx --weighted -k 15 -m 180 -n 40
-subsearch info w.mtx --weighted
+subgraphsearch generate weighted -n 200 -d 0.65 -s 1 -o w.mtx   # mean weight 0.65 per vertex pair
+subgraphsearch search w.mtx --weighted -k 15 -m 180 -n 40
+subgraphsearch info w.mtx --weighted
 
 # files holding many graphs (graph6/sparse6, one per line, e.g. from nauty's geng)
-subsearch info many.g6                                  # one line per graph
-subsearch search many.g6 --all -k 10 -m 30 -q           # search every graph
-subsearch search many.g6 --index 3 -k 10 -m 30          # just graph 3 (from 0)
+subgraphsearch info many.g6                                  # one line per graph
+subgraphsearch search many.g6 --all -k 10 -m 30 -q           # search every graph
+subgraphsearch search many.g6 --index 3 -k 10 -m 30          # just graph 3 (from 0)
 
 # graphs: statistics, conversion, operations
-subsearch info g.g6 --degrees
-subsearch convert g.g6 g.dot --highlight 3,17,42
-subsearch op complement g.g6 gc.s6
-subsearch op common-neighbours g.g6 nbhd.g6 --vertices 3,17
+subgraphsearch info g.g6 --degrees
+subgraphsearch convert g.g6 g.dot --highlight 3,17,42
+subgraphsearch op complement g.g6 gc.s6
+subgraphsearch op common-neighbours g.g6 nbhd.g6 --vertices 3,17
 ```
 
-`subsearch search` exits with status 2 when no experiment succeeds, so scripts can tell "nothing
+`subgraphsearch search` exits with status 2 when no experiment succeeds, so scripts can tell "nothing
 found" from success.
 
 ### Search parameters
@@ -102,8 +103,8 @@ on searches that stall.
 ## Python
 
 ```python
-import subsearch as ss
-from subsearch import viz
+import subgraphsearch as ss
+from subgraphsearch import viz
 
 g = ss.generate("exponential", 100, 0.6, seed=1)
 r = ss.search(g, size=30, edges=340, experiments=60, max_moves=2000, trace=True)
@@ -115,7 +116,7 @@ viz.save_html("result.html", r)                       # interactive viewer; viz.
 ```
 
 In Jupyter, graphs and results display as summaries with small charts. See the
-[quickstart notebook](examples/quickstart.ipynb) for a full tour.
+[quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb) for a full tour.
 
 - **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
   `g.induced(vs)`, `g.switch(vs)`, `g.common_neighbourhood(vs)`, `g.layout()`,
@@ -124,7 +125,7 @@ In Jupyter, graphs and results display as summaries with small charts. See the
 - **Weighted graphs:** `ss.WeightedGraph(n, [(u, v, w), ...])`, `ss.generate_weighted(n, mean_weight)`,
   `ss.WeightedGraph.read(path)`; `ss.search` on one targets a total weight.
 - **Multi-graph files:** `ss.read_all(path)`, `ss.read(path, index=3)`, `ss.write_all(path, graphs)`.
-- **Other libraries:** `subsearch.convert.{to,from}_{networkx,igraph,scipy,numpy}`.
+- **Other libraries:** `subgraphsearch.convert.{to,from}_{networkx,igraph,scipy,numpy}`.
 - **Tuning:** `ss.sweep(g, size, edges, "div_dur", [0, 4, 16])` with `viz.plot_sweep`.
 - **Spectra:** `viz.laplacian_spectrum` (dense, or the `k` smallest via SciPy for large graphs)
   and `viz.spectral_summary`.
@@ -132,15 +133,15 @@ In Jupyter, graphs and results display as summaries with small charts. See the
 
 ## Compatibility with the original programs
 
-`subsearch legacy sub-search`, `asub-search`, `wsub-search`, `reg-search`, `ereg-search`, `ggen`
+`subgraphsearch legacy sub-search`, `asub-search`, `wsub-search`, `reg-search`, `ereg-search`, `ggen`
 and `wggen` (and `ss.legacy` in Python) read exactly what the C programs of the same names read, on stdin or, for `wggen`, the
 command line, and print exactly what they printed. Only
 the CPU time and host name on `sub_search`'s last line can differ. Elsewhere, `--rng legacy`
 gives the same graphs and search runs through the modern interfaces:
 
 ```sh
-echo "2 100 0 600 1 0 0 0" | subsearch legacy ggen                         # as ggen
-subsearch generate exponential -n 100 -d 0.6 -s 1 --rng legacy -o g.g6   # the same graph, as graph6
+echo "2 100 0 600 1 0 0 0" | subgraphsearch legacy ggen                         # as ggen
+subgraphsearch generate exponential -n 100 -d 0.6 -s 1 --rng legacy -o g.g6   # the same graph, as graph6
 ```
 
 The fixtures in `tests/fixtures` were recorded from the C programs (see `scripts/make_fixtures.sh`)
@@ -169,10 +170,10 @@ program's single random stream.
 
 | Path | Contents |
 | --- | --- |
-| `crates/subsearch-core` | the library: graph, search, generators, operations, formats, layout, legacy emulation |
-| `crates/subsearch-cli` | the `subsearch` command and the golden-fixture tests |
-| `crates/subsearch-py` | PyO3 bindings (`subsearch._core`) |
-| `python/subsearch` | the Python package: API, conversions, visualisation |
+| `crates/subgraphsearch-core` | the library: graph, search, generators, operations, formats, layout, legacy emulation |
+| `crates/subgraphsearch-cli` | the `subgraphsearch` command and the golden-fixture tests |
+| `crates/subgraphsearch-py` | PyO3 bindings (`subgraphsearch._core`) |
+| `python/subgraphsearch` | the Python package: API, conversions, visualisation |
 | `tests/fixtures` | output recorded from the original C programs |
 | `examples` | the quickstart notebook and the script that builds it |
 | `docs` | format guide |
