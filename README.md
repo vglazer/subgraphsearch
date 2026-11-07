@@ -12,7 +12,7 @@ together with its graph generator `ggen`.
 - **Fast.** Experiments run in parallel; a typical search is about 9× faster than the C program
   on a multi-core machine.
 - **Standard formats.** graph6, sparse6, Matrix Market, edge lists, DOT and GraphML, plus the
-  original adjacency lists. See [docs/FORMATS.md](https://github.com/vglazer/subgraphsearch/blob/main/docs/FORMATS.md).
+  original adjacency lists; see [Graph formats](#graph-formats).
 - **Visual.** Search diagnostics, spectral and structural plots, Jupyter displays, and a
   self-contained interactive HTML viewer for graphs and the subgraphs found in them.
 
@@ -131,6 +131,84 @@ In Jupyter, graphs and results display as summaries with small charts. See the
   and `viz.spectral_summary`.
 - **Results from the CLI:** `ss.SearchResult.load("result.json", g)`.
 
+## Graph formats
+
+USRA's programs exchanged graphs as '-1'-terminated adjacency lists: line *i* lists the neighbours
+*j > i* of vertex *i*. The format is compact and simple, but nothing else reads it. `subgraphsearch`
+still reads and writes it (`lists`, `.txt`) for compatibility, and adds the standard formats below.
+
+| Format | Name | Extensions | Read | Write | Best for |
+| --- | --- | --- | --- | --- | --- |
+| graph6 | `graph6` | `.g6` | ✓ | ✓ | dense or medium graphs (one or many per file); the default output |
+| sparse6 | `sparse6` | `.s6` | ✓ | ✓ | sparse graphs (one or many per file) |
+| Matrix Market | `mtx` | `.mtx` | ✓ | ✓ | SciPy, MATLAB, Julia, numerical code |
+| edge list | `edgelist` | `.edges`, `.csv`, `.tsv` | ✓ | ✓ | spreadsheets, shell tools, anything |
+| USRA lists | `lists` | `.txt` | ✓ | ✓ | the original C programs |
+| Graphviz | `dot` | `.dot`, `.gv` | | ✓ | drawing with Graphviz, highlighting a subgraph |
+| GraphML | `graphml` | `.graphml` | | ✓ | Gephi, Cytoscape, yEd |
+| USRA weighted lists | `wlists` | (name it: `--from wlists`) | ✓ | ✓ | the original `wggen` and `wsub_search` |
+
+### Sizes
+
+The same graphs in each format (generated with `subgraphsearch generate ... -s 1`):
+
+| Graph | Edges | graph6 | sparse6 | USRA lists | edge list | Matrix Market | GraphML |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| exponential, 100 vertices, density 0.6 | 2,969 | **0.8 KB** | 3.9 KB | 9.0 KB | 16.8 KB | 17.0 KB | 112 KB |
+| geometric, 790 vertices, 0.15 | 38,440 | **51 KB** | 69 KB | 152 KB | 290 KB | 290 KB | 1.5 MB |
+| power, 2,500 vertices, 0.2 | 615,771 | **508 KB** | 1.3 MB | 2.9 MB | 5.5 MB | 5.5 MB | 24 MB |
+| exponential, 5,000 vertices, 0.002 | 25,028 | 2.0 MB | **58 KB** | 136 KB | 234 KB | 234 KB | 1.1 MB |
+
+graph6 stores one bit per vertex pair, so its size depends only on the number of vertices
+(`n(n-1)/12` bytes). sparse6 stores roughly `log2(n)` bits per edge. As a rule of thumb, graph6 is
+smaller once the density exceeds about `log2(n) / n`: around 7% at 100 vertices, 0.25% at 5,000.
+
+### Recommendations
+
+- **Use graph6** for the dense, medium-sized graphs `sub_search` is typically run on. It is the
+  standard in combinatorics: nauty's `geng` produces it; SageMath, networkx and igraph read it;
+  and collections such as [House of Graphs](https://houseofgraphs.org/) and Brendan McKay's and
+  Ted Spence's lists of strongly regular graphs are distributed in it.
+- **Use sparse6** for large sparse graphs.
+- **Keep families of graphs in one graph6 or sparse6 file**, one graph per line, which is how
+  `geng` and graph catalogues deliver them. `subgraphsearch info many.g6` lists them,
+  `subgraphsearch search many.g6 --all ...` searches each in turn, `--index N` picks one, and
+  `subgraphsearch convert many.g6 many.s6` converts them all. In Python: `ss.read_all`,
+  `ss.read(path, index=N)` and `ss.write_all`. A command that needs one graph refuses a
+  multi-graph file unless given `--index`, rather than silently using the first graph.
+- **Use an edge list** for exchange with tools that know nothing about graphs. `subgraphsearch` writes
+  a `# vertices: N` header, so isolated vertices survive the round trip.
+- **Use Matrix Market** to move adjacency matrices into numerical code
+  (`scipy.io.mmread`). The reader accepts `pattern`, `integer` and `real` matrices, `general` or
+  `symmetric`; any non-zero off-diagonal entry is an edge.
+- **Use DOT or GraphML** to draw. Both take a vertex set to highlight
+  (`subgraphsearch convert g.g6 g.dot --highlight 3,17,42`), which colours a found subgraph.
+
+### Weighted graphs
+
+Edge weights (integers from 1 to 255) are read and written with `--weighted` on the command line,
+or as a `WeightedGraph` in Python. They are stored as:
+
+- the **third column of an edge list** (`u v w`; a missing third column means weight 1);
+- the **values of a Matrix Market file** (written as `integer symmetric`; `pattern` files read as
+  weight 1, and non-integer values are refused);
+- **USRA weighted lists** (`wlists`), the encoding `wggen` writes and `wsub_search` reads: entry
+  `x` in row `i` is the edge `{i, x % n}` with weight `x / n + 1`. USRA used `.txt` for these as
+  well as for unweighted lists, so name the format explicitly.
+
+DOT output labels edges with their weights and scales their widths; GraphML output adds a
+`weight` edge attribute. graph6, sparse6 and unweighted lists cannot hold weights: they read as
+weight 1, and writing a weighted graph to them is an error rather than silently losing the weights.
+
+### Not supported, and why
+
+- **JSON node-link** (d3, networkx `node_link_data`): use `subgraphsearch.convert.to_networkx` and
+  networkx's own JSON support. networkx is changing its default key from `links` to `edges`, so a
+  fixed writer here would soon mismatch.
+- **Reading DOT and GraphML** would need full parsers for formats that are mostly used for
+  output; convert with networkx (`read_graphml`, `nx_pydot.read_dot`) and
+  `subgraphsearch.convert.from_networkx` instead.
+
 ## Compatibility with the original programs
 
 `subgraphsearch legacy sub-search`, `asub-search`, `wsub-search`, `reg-search`, `ereg-search`, `ggen`
@@ -176,7 +254,6 @@ program's single random stream.
 | `python/subgraphsearch` | the Python package: API, conversions, visualisation |
 | `tests/fixtures` | output recorded from the original C programs |
 | `examples` | the quickstart notebook and the script that builds it |
-| `docs` | format guide |
 
 ## Development
 
