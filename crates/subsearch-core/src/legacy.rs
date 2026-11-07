@@ -218,7 +218,7 @@ pub fn sub_search<W: Write>(
                 succ_mov += e.moves as i64;
                 boxes[(e.moves as i64 / boxsize) as usize] += 1;
             }
-            if i % 25 == 0 {
+            if i.is_multiple_of(25) {
                 writeln!(out)?;
             }
             write!(out, "{} ", e.best_conflict)?;

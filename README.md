@@ -1,5 +1,7 @@
 # subsearch
 
+[![CI](https://github.com/vglazer/subsearch/actions/workflows/ci.yml/badge.svg)](https://github.com/vglazer/subsearch/actions/workflows/ci.yml)
+
 Find **induced subgraphs with a prescribed number of vertices and edges**: cliques,
 independent sets, and everything in between. `subsearch` is a Rust port, with a Python package,
 of `sub_search` from the [USRA stochastic graph search project](https://github.com/vglazer/USRA/tree/master/subgraph_finding),
@@ -19,7 +21,7 @@ count; they cover only the extreme cases (cliques, independent sets) or densest-
 
 ## Install
 
-Requires Rust 1.85+ and, for Python, [uv](https://docs.astral.sh/uv/) (or pip with maturin).
+Requires Rust 1.87+ and, for Python, [uv](https://docs.astral.sh/uv/) (or pip with maturin).
 
 ```sh
 cargo install --path crates/subsearch-cli       # the `subsearch` command
@@ -55,7 +57,7 @@ found" from success.
 ### Search parameters
 
 | Option | Meaning | Default |
-|---|---|---|
+| --- | --- | --- |
 | `-k`, `--vertices` | subgraph vertices, including `--fixed` ones | required |
 | `-m`, `--edges` | subgraph edges | required |
 | `--fixed` | vertices the subgraph must contain | none |
@@ -130,7 +132,7 @@ program's single random stream.
 ## Repository layout
 
 | Path | Contents |
-|---|---|
+| --- | --- |
 | `crates/subsearch-core` | the library: graph, search, generators, operations, formats, layout, legacy emulation |
 | `crates/subsearch-cli` | the `subsearch` command and the golden-fixture tests |
 | `crates/subsearch-py` | PyO3 bindings (`subsearch._core`) |

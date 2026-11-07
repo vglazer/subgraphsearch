@@ -55,7 +55,7 @@ impl PyGraph {
     /// A graph from edges packed as little-endian uint32 (u, v) pairs, e.g. numpy's tobytes().
     #[staticmethod]
     fn from_edge_bytes(n: usize, data: &[u8]) -> PyResult<Self> {
-        if data.len() % 8 != 0 {
+        if !data.len().is_multiple_of(8) {
             return Err(PyValueError::new_err(
                 "edge data must be a whole number of uint32 pairs",
             ));

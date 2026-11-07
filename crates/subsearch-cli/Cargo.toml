@@ -3,6 +3,7 @@ name = "subsearch-cli"
 description = "Command-line interface for subsearch, including byte-compatible emulation of the original USRA sub_search and ggen programs"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
