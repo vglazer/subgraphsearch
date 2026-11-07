@@ -13,11 +13,11 @@ out="$repo_dir/tests/fixtures"
 bin=$(mktemp -d)
 trap 'rm -rf "$bin"' EXIT
 
-for prog in sub_search asub_search wsub_search ggen wggen; do
+for prog in sub_search asub_search wsub_search reg_search ereg_search ggen wggen; do
   gcc -ansi -pedantic -Wall -O2 "$src/$prog.c" -o "$bin/$prog"
 done
 
-mkdir -p "$out/ggen" "$out/wggen" "$out/sub_search" "$out/asub_search" "$out/wsub_search" "$out/graphs"
+mkdir -p "$out/ggen" "$out/wggen" "$out/sub_search" "$out/asub_search" "$out/wsub_search" "$out/reg_search" "$out/ereg_search" "$out/graphs"
 echo "USRA commit: $(git -C "$usra_dir" rev-parse HEAD)" > "$out/SOURCE"
 
 # ---- ggen: name | stdin
@@ -163,5 +163,45 @@ wsub_case multi_border   w60_150_3  "60 8 90 0 20 3000 300 10 5 3"
 wsub_case unreachable    w100_40_7  "100 6 900 0 3 50 10 2 3 1"
 wsub_case zero_moves     w100_40_7  "100 6 9 0 3 0 10 2 3 1"
 wsub_case err_size       w100_40_7  "100 1 0 0 3 50 10 2 3 1"
+
+# ---- reg_search and ereg_search (same input): name | graph | parameters | fixed vertices
+# The Paley graph on q vertices (q prime, q = 1 mod 4) is strongly regular, the kind of graph
+# reg_search was written for: i ~ j iff i - j is a non-zero square mod q.
+paley() {
+  python3 - "$1" > "$out/graphs/paley_$1.txt" <<'PY'
+import sys
+q = int(sys.argv[1])
+squares = {x * x % q for x in range(1, q)}
+for i in range(q):
+    print("".join(f" {j}" for j in range(i + 1, q) if (j - i) % q in squares) + "-1")
+PY
+}
+paley 61
+
+reg_case() {
+  local name=$1 g=$2 params=$3 fixed=${4:-}
+  for prog in reg_search ereg_search; do
+    { echo "$params"; cat "$out/graphs/$g.txt"; [[ -n $fixed ]] && echo "$fixed"; } > "$out/$prog/$name.in"
+    set +e
+    "$bin/$prog" < "$out/$prog/$name.in" > "$out/$prog/$name.out" 2> "$out/$prog/$name.err"
+    echo $? > "$out/$prog/$name.status"
+    set -e
+  done
+}
+
+reg_case doc_4cycles     exp_100_600_1  "100 4 2 1 100 500 150 2 7 0" "0"
+reg_case cycles          exp_300_140_7  "300 8 2 0 20 1000 200 5 3 1"
+reg_case cubic           exp_300_140_7  "300 10 3 0 20 2000 300 8 5 -2"
+reg_case independent     exp_300_140_7  "300 12 0 0 20 1000 200 5 9 1"
+reg_case near_clique     exp_100_600_1  "100 8 7 0 20 1000 200 5 11 1"
+reg_case paley_4reg      paley_61       "61 10 4 0 20 2000 300 8 13 -2"
+reg_case paley_6reg      paley_61       "61 14 6 0 15 3000 300 10 17 -3"
+reg_case paley_fixed     paley_61       "61 9 4 2 15 2000 300 8 19 2" "0 1"
+reg_case dense_5reg      exp_100_600_2  "100 12 5 0 15 3000 300 10 23 -4"
+reg_case geometric       geo_400_150_1  "400 10 3 0 15 2000 300 8 29 3"
+reg_case unreachable     exp_30_300_5   "30 6 9 0 3 50 10 2 3 1"
+reg_case zero_moves      exp_30_300_5   "30 6 2 0 3 0 10 2 3 1"
+reg_case err_size        exp_30_300_5   "30 30 2 0 3 50 10 2 3 1"
+reg_case err_freq        exp_30_300_5   "30 6 2 0 3 50 0 2 3 1"
 
 echo "fixtures written to $out"

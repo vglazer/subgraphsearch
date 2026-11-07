@@ -44,6 +44,14 @@ cells = [
     code("w = ss.generate_weighted(200, 0.65, seed=1, rng=\"legacy\")  # exactly wggen's `200 65 1`\n"
          "rw = ss.search(w, 15, 180, experiments=40, max_moves=3000, div_freq=300, div_dur=10)\n"
          "rw"),
+    md("## Regular subgraphs\n\nInstead of an edge count, `degree=` asks for subgraphs in which every vertex has that many neighbours "
+       "(USRA's `reg_search`), the search it was written for in strongly regular graphs. The Paley graph on 61 vertices is one; "
+       "here we look for 4-regular subgraphs on 10 of its vertices. `two_phase=True` first finds the right number of edges (`ereg_search`)."),
+    code("q = 61\nsquares = {x * x % q for x in range(1, q)}\n"
+         "paley = ss.Graph(q, [(i, j) for i in range(q) for j in range(i + 1, q) if (j - i) % q in squares])\n"
+         "reg = ss.search(paley, 10, degree=4, experiments=40, max_moves=2000, div_freq=300, div_dur=8)\n"
+         "print(\"degrees within the subgraph:\", set(paley.induced(reg.best.vertices).degrees().tolist()))\n"
+         "reg"),
     md("## Formats and other libraries"),
     code("import tempfile, pathlib\nfrom subsearch import convert\n\n"
          "path = pathlib.Path(tempfile.mkdtemp()) / \"g.g6\"\n"
@@ -56,7 +64,7 @@ cells = [
     md("## The original interfaces\n\n`ss.legacy` takes exactly what `sub_search` and `ggen` read on stdin and returns what they printed."),
     code("print(ss.legacy.ggen(\"2 10 0 500 42 0 0 0\"))"),
 ]
-nb = nbformat.v4.new_notebook(cells=cells, metadata={"kernelspec": {"name": "python3", "display_name": "Python 3", "language": "python"}})
+nb = nbformat.v4.new_notebook(cells=cells, metadata={"kernelspec": {"name": "python3", "display_name": "Python 3 (ipykernel)", "language": "python"}})
 NotebookClient(nb, timeout=600, kernel_name="python3").execute()
 # Sign the notebook, as `jupyter trust` would, so that its saved outputs (inline charts, the
 # interactive viewer) display on this machine instead of being stripped as untrusted HTML.

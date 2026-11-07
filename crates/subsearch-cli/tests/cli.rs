@@ -132,3 +132,49 @@ fn convert_round_trips_multi_graph_files() {
             .success()
     );
 }
+
+#[test]
+fn degree_searches_for_regular_subgraphs() {
+    let dir = multi_graph_dir("regular");
+    for extra in [&[][..], &["--two-phase"][..]] {
+        let mut args = vec![
+            "search", "many.g6", "--index", "2", "-k", "8", "--degree", "2", "-n", "10", "-q",
+        ];
+        args.extend_from_slice(extra);
+        let o = run(&dir, &args);
+        assert!(o.status.success(), "{}", stderr(&o));
+        assert!(stdout(&o).contains("regular of degree 2"), "{}", stdout(&o));
+    }
+    let o = run(
+        &dir,
+        &[
+            "search", "many.g6", "--index", "0", "-k", "5", "-m", "3", "--degree", "2",
+        ],
+    );
+    assert_eq!(
+        o.status.code(),
+        Some(2),
+        "-m and --degree conflict: {}",
+        stderr(&o)
+    );
+    let o = run(
+        &dir,
+        &[
+            "search",
+            "many.g6",
+            "--index",
+            "0",
+            "-k",
+            "5",
+            "--two-phase",
+            "-m",
+            "3",
+        ],
+    );
+    assert_eq!(o.status.code(), Some(1));
+    assert!(
+        stderr(&o).contains("--two-phase needs --degree"),
+        "{}",
+        stderr(&o)
+    );
+}

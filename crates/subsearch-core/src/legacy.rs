@@ -11,8 +11,9 @@ use crate::formats::{self, Format};
 use crate::generate;
 use crate::graph::{Graph, GraphBuilder, WeightedGraph};
 use crate::ops;
+use crate::regular;
 use crate::rng::{Randu, RngKind};
-use crate::search::{self, NUM_BOXES, SearchGraph, SearchParams};
+use crate::search::{self, Experiment, NUM_BOXES, Regular, SearchParams};
 
 /// Reads integers the way C's `scanf("%d")` does: skip whitespace, an optional sign, then digits.
 /// In particular `"5-1"` reads as `5` followed by `-1`, which `ggen`'s output relies on.
@@ -167,6 +168,26 @@ pub fn wsub_search<W: Write>(
     run_search(input, out, footer, Variant::Weighted)
 }
 
+/// Runs `reg_search`: the same input as [`sub_search`], except that the third parameter is the
+/// degree the subgraph should be regular of, not an edge count.
+pub fn reg_search<W: Write>(
+    input: &str,
+    out: &mut W,
+    footer: impl FnOnce() -> String,
+) -> Result<Status, Error> {
+    run_search(input, out, footer, Variant::Regular)
+}
+
+/// Runs `ereg_search`: `reg_search` that first finds the right number of edges; see
+/// [`crate::regular`].
+pub fn ereg_search<W: Write>(
+    input: &str,
+    out: &mut W,
+    footer: impl FnOnce() -> String,
+) -> Result<Status, Error> {
+    run_search(input, out, footer, Variant::TwoPhase)
+}
+
 /// Reads `n` weighted '-1'-terminated adjacency lists in `wsub_search`'s encoding. As in the C
 /// program, a pair listed twice keeps the last weight given.
 fn read_weighted_adjacency(sc: &mut Scanner, n: usize) -> Result<WeightedGraph, Error> {
@@ -302,6 +323,17 @@ fn run_search<W: Write>(
         rng: RngKind::Legacy,
         record_trace: false,
         aspiration: variant == Variant::Aspiration,
+        regular: match variant {
+            Variant::Regular => Some(Regular {
+                degree: e_sub,
+                two_phase: false,
+            }),
+            Variant::TwoPhase => Some(Regular {
+                degree: e_sub,
+                two_phase: true,
+            }),
+            _ => None,
+        },
     };
     let run = Run {
         params,
@@ -310,22 +342,61 @@ fn run_search<W: Write>(
         num_mov,
         num_exps,
     };
+    let sorted = |g: &Graph, k: usize| -> Vec<(usize, i64)> {
+        g.neighbors(k)
+            .iter()
+            .map(|&u| (u as usize, i64::from(u)))
+            .collect()
+    };
     match (plain, weights) {
-        (Some(g), _) => report_experiments(&g, &run, out, footer, |_, u| u as i64),
+        // reg_search and ereg_search print neighbours in the order of their partitioned lists
+        (Some(g), _) if run.params.regular.is_some() => {
+            report_experiments(&run, out, footer, |report| {
+                regular::search_sequential(&g, &run.params, |e, lists| {
+                    report(e, &|k| {
+                        lists[k]
+                            .iter()
+                            .map(|&u| (u as usize, i64::from(u)))
+                            .collect()
+                    })
+                })
+            })
+        }
+        (Some(g), _) => report_experiments(&run, out, footer, |report| {
+            search::search_sequential(&g, &run.params, |e| report(e, &|k| sorted(&g, k)))
+        }),
         // wsub_search prints edge {k, u} of weight w as u + (w - 1) * v
-        (_, Some(g)) => report_experiments(&g, &run, out, footer, |k, u| {
-            u as i64 + (i64::from(g.weight(k, u)) - 1) * v
+        (_, Some(g)) => report_experiments(&run, out, footer, |report| {
+            search::search_sequential(&g, &run.params, |e| {
+                report(e, &|k| {
+                    g.neighbors(k)
+                        .iter()
+                        .map(|&u| {
+                            (
+                                u as usize,
+                                i64::from(u) + (i64::from(g.weight(k, u as usize)) - 1) * v,
+                            )
+                        })
+                        .collect()
+                })
+            })
         }),
         _ => unreachable!(),
     }
 }
 
-/// Which of the three search programs to emulate.
+/// For a vertex, its neighbours in the order the C program printed them, each with the number
+/// printed for it.
+type Neighbours<'a> = &'a dyn Fn(usize) -> Vec<(usize, i64)>;
+
+/// Which of the search programs to emulate.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Variant {
     Plain,
     Aspiration,
     Weighted,
+    Regular,
+    TwoPhase,
 }
 
 /// What [`report_experiments`] needs besides the graph.
@@ -340,12 +411,11 @@ struct Run {
 /// Runs the experiments and prints them as the C programs do. `entry(k, u)` is how the neighbour
 /// `u` of `k` appears in printed adjacency lists. As in the C programs, the printed `E =` counts
 /// edges, even for weighted graphs.
-fn report_experiments<G: SearchGraph, W: Write>(
-    graph: &G,
+fn report_experiments<W: Write>(
     run: &Run,
     out: &mut W,
     footer: impl FnOnce() -> String,
-    entry: impl Fn(usize, usize) -> i64,
+    drive: impl FnOnce(&mut dyn FnMut(&Experiment, Neighbours)) -> Result<(), Error>,
 ) -> Result<Status, Error> {
     let Run {
         params,
@@ -361,7 +431,8 @@ fn report_experiments<G: SearchGraph, W: Write>(
     let (mut succ_exp, mut succ_mov, mut tot_mov, mut glob_vals) = (0i64, 0i64, 0i64, 0i64);
     let mut boxes = [0i64; NUM_BOXES];
     let boxsize = num_mov / NUM_BOXES as i64 + 1;
-    search::search_sequential(graph, params, |e| {
+    let _ = params;
+    drive(&mut |e, neighbours| {
         if io_result.is_err() {
             return;
         }
@@ -386,12 +457,11 @@ fn report_experiments<G: SearchGraph, W: Write>(
                 if show_sols < 0 {
                     let mut degree = 0;
                     for &k in &e.vertices {
-                        for &u in graph.neighbors(k) {
-                            let u = u as usize;
+                        for (u, printed) in neighbours(k) {
                             if e.vertices.binary_search(&u).is_ok() {
                                 degree += 1;
                                 if u > k {
-                                    write!(out, " {}", entry(k, u))?;
+                                    write!(out, " {printed}")?;
                                 }
                             }
                         }

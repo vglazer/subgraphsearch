@@ -44,6 +44,10 @@ subsearch search g.g6 -k 30 -m 340 -n 60 --max-conflict 2 --trace --json result.
 uv run python -m subsearch explore g.g6 --result result.json -o result.html   # interactive page
 uv run python -m subsearch report g.g6 --result result.json -o result.png     # figures
 
+# regular subgraphs (USRA's reg_search / ereg_search): every vertex with degree 4 inside
+subsearch search g.g6 -k 10 --degree 4 -n 40
+subsearch search g.g6 -k 10 --degree 4 --two-phase -n 40   # right edge count first
+
 # weighted graphs (USRA's wsub_search / wggen): -m is a total weight
 subsearch generate weighted -n 200 -d 0.65 -s 1 -o w.mtx   # mean weight 0.65 per vertex pair
 subsearch search w.mtx --weighted -k 15 -m 180 -n 40
@@ -69,7 +73,9 @@ found" from success.
 | Option | Meaning | Default |
 | --- | --- | --- |
 | `-k`, `--vertices` | subgraph vertices, including `--fixed` ones | required |
-| `-m`, `--edges` | subgraph edges | required |
+| `-m`, `--edges` | subgraph edges | required, unless `--degree` |
+| `-d`, `--degree` | instead: subgraphs regular of this degree, as in USRA's `reg_search` | |
+| `--two-phase` | with `--degree`: reach the right edge count first, as in `ereg_search` | off |
 | `--fixed` | vertices the subgraph must contain | none |
 | `-n`, `--experiments` | independent restarts | 10 |
 | `--moves` | maximum moves (vertex swaps) per experiment | 1000 |
@@ -114,6 +120,7 @@ In Jupyter, graphs and results display as summaries with small charts. See the
 - **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
   `g.induced(vs)`, `g.switch(vs)`, `g.common_neighbourhood(vs)`, `g.layout()`,
   `g.adjacency_matrix()`, `g.laplacian()`.
+- **Regular subgraphs:** `ss.search(g, size, degree=4)`, and `two_phase=True` for `ereg_search`.
 - **Weighted graphs:** `ss.WeightedGraph(n, [(u, v, w), ...])`, `ss.generate_weighted(n, mean_weight)`,
   `ss.WeightedGraph.read(path)`; `ss.search` on one targets a total weight.
 - **Multi-graph files:** `ss.read_all(path)`, `ss.read(path, index=3)`, `ss.write_all(path, graphs)`.
@@ -125,8 +132,8 @@ In Jupyter, graphs and results display as summaries with small charts. See the
 
 ## Compatibility with the original programs
 
-`subsearch legacy sub-search`, `asub-search`, `wsub-search`, `ggen` and `wggen` (and `ss.legacy`
-in Python) read exactly what the C programs of the same names read, on stdin or, for `wggen`, the
+`subsearch legacy sub-search`, `asub-search`, `wsub-search`, `reg-search`, `ereg-search`, `ggen`
+and `wggen` (and `ss.legacy` in Python) read exactly what the C programs of the same names read, on stdin or, for `wggen`, the
 command line, and print exactly what they printed. Only
 the CPU time and host name on `sub_search`'s last line can differ. Elsewhere, `--rng legacy`
 gives the same graphs and search runs through the modern interfaces:
@@ -138,15 +145,21 @@ subsearch generate exponential -n 100 -d 0.6 -s 1 --rng legacy -o g.g6   # the s
 
 The fixtures in `tests/fixtures` were recorded from the C programs (see `scripts/make_fixtures.sh`)
 and cover all of `ggen`'s graph types and operations, `wggen`, every output mode of
-`sub_search`, `asub_search` and `wsub_search`, fixed vertices, edge cases and error handling.
+`sub_search`, `asub_search`, `wsub_search`, `reg_search` and `ereg_search` (including a strongly
+regular Paley graph), fixed vertices, edge cases and error handling.
 
 The only differences are on invalid input: the port reports problems the C programs silently
-mishandled (out-of-range or duplicate vertices, truncated input), and `sub_search` input may not
-contain self-loops.
+mishandled (out-of-range or duplicate vertices, truncated input), and search input may not
+contain self-loops. Two quirks of `ereg_search` are kept, because they change its results: its
+first-phase edge target is computed from the number of *non-fixed* subgraph vertices, so with
+`--fixed` it aims at the wrong edge count and rarely succeeds (plain `--degree` does not have this
+problem); and its partitioned neighbour lists carry over between experiments, which changes only
+the order in which solutions' adjacency lists are printed.
 
 ### Performance
 
-On a single search, the port takes about 1.35× the C program's CPU time. It keeps the adjacency
+On a single search, the port takes about 1.5× the C program's CPU time (1.43 s against 0.96 s
+on the benchmark below, built with Rust 1.99; it was 1.35× with Rust 1.89). It keeps the adjacency
 matrix as a bitset, an eighth of the C program's memory. In normal use experiments run in
 parallel: 400 experiments of up to 3,000 moves on a 100-vertex graph take 0.11 s, against the C
 program's 0.95 s, on a 16-core laptop. `--rng legacy` is always sequential, to reproduce the C
@@ -175,9 +188,10 @@ USRA_DIR=~/repos/USRA scripts/make_fixtures.sh        # re-record fixtures from 
 
 ## Roadmap
 
-`sub_search`, `asub_search` (`--aspiration`), `wsub_search` (`--weighted`), `ggen` and `wggen`
-are done. Still to come, on the same engine: `reg_search` and `ereg_search`, which look for regular
-induced subgraphs of a given degree.
+All seven USRA programs are ported: `sub_search`, `asub_search` (`--aspiration`), `wsub_search`
+(`--weighted`), `reg_search` (`--degree`), `ereg_search` (`--degree --two-phase`), `ggen` and
+`wggen`. Possible next steps: publishing to PyPI and crates.io, a time limit and progress output
+for long searches, and closing the single-threaded speed gap with the C program.
 
 ## License
 

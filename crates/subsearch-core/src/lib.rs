@@ -16,7 +16,7 @@
 //!
 //! Modules:
 //! - [`graph`]: the [`Graph`] type.
-//! - [`search`](mod@search): the search itself.
+//! - [`search`](mod@search): the search itself, and [`regular`]: its regular-subgraph variant.
 //! - [`generate`] and [`ops`]: random graphs, complements, induced subgraphs, switching,
 //!   incidence structures.
 //! - [`formats`]: graph6, sparse6, Matrix Market, edge lists, USRA adjacency lists, DOT, GraphML.
@@ -30,6 +30,7 @@ pub mod graph;
 pub mod layout;
 pub mod legacy;
 pub mod ops;
+pub mod regular;
 pub mod rng;
 pub mod search;
 
@@ -37,7 +38,9 @@ pub use formats::Format;
 pub use generate::Model;
 pub use graph::{Graph, GraphBuilder, WeightedGraph};
 pub use rng::RngKind;
-pub use search::{Experiment, SearchGraph, SearchParams, SearchResult, search, search_sequential};
+pub use search::{
+    Experiment, Regular, SearchGraph, SearchParams, SearchResult, search, search_sequential,
+};
 
 /// Errors reported by this crate.
 #[derive(Debug, thiserror::Error)]

@@ -46,6 +46,10 @@ enum LegacyCommand {
     AsubSearch,
     /// `wsub_search` (`sub_search` on weighted graphs): weights encoded in the adjacency lists.
     WsubSearch,
+    /// `reg_search`: regular subgraphs; the third parameter is the degree.
+    RegSearch,
+    /// `ereg_search`: `reg_search` that first finds the right number of edges.
+    EregSearch,
     /// `wggen`: a weighted random graph; arguments VERTICES DENSITY SEED, as on its command line.
     Wggen {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -134,9 +138,22 @@ struct SearchArgs {
     /// Number of subgraph vertices (including fixed ones).
     #[arg(short = 'k', long)]
     vertices: usize,
-    /// Desired number of subgraph edges.
-    #[arg(short = 'm', long)]
-    edges: i64,
+    /// Desired number of subgraph edges (or total weight, with --weighted).
+    #[arg(
+        short = 'm',
+        long,
+        required_unless_present = "degree",
+        conflicts_with = "degree"
+    )]
+    edges: Option<i64>,
+    /// Instead of an edge count, look for subgraphs that are regular of this degree (USRA's
+    /// reg_search).
+    #[arg(short = 'd', long)]
+    degree: Option<i64>,
+    /// With --degree: first find the right number of edges, then make the subgraph regular
+    /// (USRA's ereg_search).
+    #[arg(long)]
+    two_phase: bool,
     /// Vertices the subgraph must contain, e.g. 3,17,42.
     #[arg(long, value_delimiter = ',')]
     fixed: Vec<usize>,
@@ -342,6 +359,9 @@ fn write_stdout(g: &Graph, format: Format, options: &WriteOptions) -> Result<()>
 }
 
 fn run_search(args: SearchArgs) -> Result<ExitCode> {
+    if args.two_phase && args.degree.is_none() {
+        bail!("--two-phase needs --degree: it searches for regular subgraphs");
+    }
     let graphs = if args.weighted {
         Vec::new()
     } else if args.all {
@@ -357,7 +377,7 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
     }
     let params = SearchParams {
         size: args.vertices,
-        edges: args.edges,
+        edges: args.edges.unwrap_or(0),
         fixed: args.fixed.clone(),
         experiments: args.experiments,
         max_moves: args.moves,
@@ -367,6 +387,10 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
         rng: args.rng.into(),
         record_trace: args.trace,
         aspiration: args.aspiration,
+        regular: args.degree.map(|degree| subsearch_core::Regular {
+            degree,
+            two_phase: args.two_phase,
+        }),
     };
     let mut out = io::stdout().lock();
     if args.weighted {
@@ -406,10 +430,10 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
     if args.all {
         writeln!(
             out,
-            "{graphs_with_success}/{} graphs contain a {}-vertex subgraph with {} edges",
+            "{graphs_with_success}/{} graphs contain a {}-vertex subgraph {}",
             graphs.len(),
             params.size,
-            params.edges
+            target(&params, false)
         )?;
     }
     write_json(&args, &results)?;
@@ -459,6 +483,15 @@ fn write_json(args: &SearchArgs, results: &[(usize, SearchResult)]) -> Result<()
     Ok(())
 }
 
+/// What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3".
+fn target(params: &SearchParams, weighted: bool) -> String {
+    match params.regular {
+        Some(r) => format!("regular of degree {}", r.degree),
+        None if weighted => format!("with total weight {}", params.edges),
+        None => format!("with {} edges", params.edges),
+    }
+}
+
 fn report(
     out: &mut impl Write,
     result: &subsearch_core::SearchResult,
@@ -488,15 +521,10 @@ fn report(
     let s = result.successes();
     writeln!(
         out,
-        "{prefix}{s}/{} experiments found a {}-vertex subgraph with {} {} ({:.2}s)",
+        "{prefix}{s}/{} experiments found a {}-vertex subgraph {} ({:.2}s)",
         result.experiments.len(),
         params.size,
-        params.edges,
-        if args.weighted {
-            "total weight"
-        } else {
-            "edges"
-        },
+        target(params, args.weighted),
         elapsed.as_secs_f64()
     )?;
     if args.all && args.quiet {
@@ -852,6 +880,8 @@ fn run_legacy(cmd: LegacyCommand) -> Result<ExitCode> {
         LegacyCommand::SubSearch => legacy::sub_search(&input, &mut out, timing_footer),
         LegacyCommand::AsubSearch => legacy::asub_search(&input, &mut out, timing_footer),
         LegacyCommand::WsubSearch => legacy::wsub_search(&input, &mut out, timing_footer),
+        LegacyCommand::RegSearch => legacy::reg_search(&input, &mut out, timing_footer),
+        LegacyCommand::EregSearch => legacy::ereg_search(&input, &mut out, timing_footer),
         LegacyCommand::Wggen { .. } => unreachable!(),
         LegacyCommand::Ggen => legacy::ggen(&input, &mut out).map(|()| 0),
     };

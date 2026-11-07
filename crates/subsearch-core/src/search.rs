@@ -45,6 +45,10 @@ pub trait SearchGraph: Sync {
     fn adjacency_row(&self, u: usize) -> Self::Row<'_>;
     /// What the edge `{u, v}` contributes to the subgraph's value: its weight, or 0 or 1.
     fn edge_value(&self, u: usize, v: usize) -> i64;
+    /// The graph as an unweighted [`Graph`], if it is one (regular searches need one).
+    fn as_graph(&self) -> Option<&Graph> {
+        None
+    }
     /// [`SearchGraph::edge_value`] for a known neighbour `v` of `u`.
     fn neighbor_value(&self, u: usize, v: usize) -> i64 {
         self.edge_value(u, v)
@@ -94,6 +98,9 @@ impl SearchGraph for Graph {
     }
     fn objective_bound(&self) -> i64 {
         2 * self.num_edges() as i64
+    }
+    fn as_graph(&self) -> Option<&Graph> {
+        Some(self)
     }
 }
 
@@ -147,6 +154,20 @@ pub struct SearchParams {
     /// excludes), and take one of them whenever it would beat the best value so far.
     #[serde(default)]
     pub aspiration: bool,
+    /// Search for regular induced subgraphs instead (USRA's `reg_search` and `ereg_search`); the
+    /// `edges` target is then ignored. Needs an unweighted [`Graph`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regular: Option<Regular>,
+}
+
+/// A regular-subgraph search: see [`crate::regular`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Regular {
+    /// The degree every subgraph vertex should have within the subgraph.
+    pub degree: i64,
+    /// First find the right number of edges, then make the subgraph regular (`ereg_search`).
+    #[serde(default)]
+    pub two_phase: bool,
 }
 
 impl SearchParams {
@@ -165,6 +186,7 @@ impl SearchParams {
             rng: RngKind::Xoshiro,
             record_trace: false,
             aspiration: false,
+            regular: None,
         }
     }
 
@@ -268,6 +290,9 @@ impl SearchResult {
 /// stream, so results depend only on the seed. With [`RngKind::Legacy`], experiments run one after
 /// another and match the C program exactly.
 pub fn search<G: SearchGraph>(graph: &G, params: &SearchParams) -> Result<SearchResult, Error> {
+    if params.regular.is_some() {
+        return crate::regular::search(unweighted(graph)?, params);
+    }
     params.validate(graph.num_vertices())?;
     let experiments = match params.rng {
         RngKind::Legacy => {
@@ -307,6 +332,11 @@ pub fn search_sequential<G: SearchGraph, F>(
 where
     F: FnMut(&Experiment),
 {
+    if params.regular.is_some() {
+        return crate::regular::search_sequential(unweighted(graph)?, params, |e, _| {
+            on_experiment(e)
+        });
+    }
     params.validate(graph.num_vertices())?;
     let mut ws = Workspace::new(graph, params);
     match params.rng {
@@ -361,6 +391,12 @@ fn scan_row<R: AdjacencyRow>(
     }
     *opt_val = best;
     *opt_mov = count;
+}
+
+fn unweighted<G: SearchGraph>(graph: &G) -> Result<&Graph, Error> {
+    graph
+        .as_graph()
+        .ok_or_else(|| Error::Invalid("regular searches need an unweighted graph".into()))
 }
 
 /// Search state. Field names follow `sub_search.c`.

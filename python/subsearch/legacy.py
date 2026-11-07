@@ -26,6 +26,17 @@ def asub_search(stdin: str) -> tuple[str, int]:
     return _core.legacy_asub_search(stdin)
 
 
+def reg_search(stdin: str) -> tuple[str, int]:
+    """Runs ``reg_search``: like :func:`sub_search`, but the third parameter is the degree the
+    subgraph should be regular of."""
+    return _core.legacy_reg_search(stdin)
+
+
+def ereg_search(stdin: str) -> tuple[str, int]:
+    """Runs ``ereg_search``: :func:`reg_search` that first finds the right number of edges."""
+    return _core.legacy_ereg_search(stdin)
+
+
 def wsub_search(stdin: str) -> tuple[str, int]:
     """Runs ``wsub_search`` (``sub_search`` on weighted graphs): entry ``x`` in adjacency list
     ``i`` is the edge ``{i, x % v}`` with weight ``x // v + 1``, and the target is a total weight."""

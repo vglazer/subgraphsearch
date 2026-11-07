@@ -34,7 +34,7 @@ def plot_traces(result: SearchResult, ax=None, max_experiments: int = 12, show_d
             ax.plot(len(t) - 1, 0, "o", color=ACCENT, ms=4)
     ax.set_yscale("symlog", linthresh=1)
     ax.set_xlabel("move")
-    ax.set_ylabel("|edges − target|")
+    ax.set_ylabel("deviation from regular" if p.degree is not None else "|edges − target|")
     hidden = len(traces) - len(shown)
     title = f"objective per move ({len(shown)} of {len(traces)} experiments)" if hidden else "objective per move"
     return finish(ax, title)
@@ -106,7 +106,7 @@ def plot_search_summary(result: SearchResult, figsize=None):
     if has_traces:
         plot_traces(result, axs[2])
     p = result.params
-    fig.suptitle(f"{p.size}-vertex, {p.edges}-edge subgraphs in a graph with {result.graph.n} vertices and {result.graph.m} edges", fontsize=11)
+    fig.suptitle(f"{p.size}-vertex subgraphs {result.target}, in a graph with {result.graph.n} vertices and {result.graph.m} edges", fontsize=11)
     return fig
 
 

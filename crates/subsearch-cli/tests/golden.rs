@@ -93,3 +93,13 @@ fn wsub_search_matches_the_c_program() {
 fn wggen_matches_the_c_program() {
     check_with("wggen", "wggen", "args");
 }
+
+#[test]
+fn reg_search_matches_the_c_program() {
+    check("reg_search", "reg-search");
+}
+
+#[test]
+fn ereg_search_matches_the_c_program() {
+    check("ereg_search", "ereg-search");
+}

@@ -383,7 +383,7 @@ type ExperimentTuple = (i64, usize, bool, Vec<usize>, Option<Vec<u32>>);
 
 /// Runs a search; returns one (best_conflict, moves, success, vertices, trace) per experiment.
 #[pyfunction]
-#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration = false))]
+#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration = false, degree = None, two_phase = false))]
 #[allow(clippy::too_many_arguments)]
 fn search(
     py: Python<'_>,
@@ -399,6 +399,8 @@ fn search(
     rng: &str,
     trace: bool,
     aspiration: bool,
+    degree: Option<i64>,
+    two_phase: bool,
 ) -> PyResult<Vec<ExperimentTuple>> {
     let params = SearchParams {
         size,
@@ -412,6 +414,7 @@ fn search(
         rng: parse(rng)?,
         record_trace: trace,
         aspiration,
+        regular: degree.map(|degree| subsearch_core::Regular { degree, two_phase }),
     };
     let result = if let Ok(g) = graph.extract::<PyRef<'_, PyGraph>>() {
         run_search(py, Arc::clone(&g.inner), params)?
@@ -456,6 +459,18 @@ fn legacy_wsub_search(py: Python<'_>, stdin: String) -> PyResult<(String, i32)> 
     run_legacy_search(py, stdin, "wsub")
 }
 
+/// Runs the original `reg_search` program's interface on `stdin`; returns (stdout, exit status).
+#[pyfunction]
+fn legacy_reg_search(py: Python<'_>, stdin: String) -> PyResult<(String, i32)> {
+    run_legacy_search(py, stdin, "reg")
+}
+
+/// Runs the original `ereg_search` program's interface on `stdin`; returns (stdout, exit status).
+#[pyfunction]
+fn legacy_ereg_search(py: Python<'_>, stdin: String) -> PyResult<(String, i32)> {
+    run_legacy_search(py, stdin, "ereg")
+}
+
 /// Runs the original `wggen` program with these command-line arguments; returns its stdout.
 #[pyfunction]
 fn legacy_wggen(args: Vec<String>) -> PyResult<String> {
@@ -481,6 +496,8 @@ fn run_legacy_search(
         let status = match program {
             "asub" => legacy::asub_search(&stdin, &mut out, footer)?,
             "wsub" => legacy::wsub_search(&stdin, &mut out, footer)?,
+            "reg" => legacy::reg_search(&stdin, &mut out, footer)?,
+            "ereg" => legacy::ereg_search(&stdin, &mut out, footer)?,
             _ => legacy::sub_search(&stdin, &mut out, footer)?,
         };
         Ok((String::from_utf8(out).unwrap(), status))
@@ -517,8 +534,8 @@ mod _core {
     #[pymodule_export]
     use super::{
         PyGraph, PyWeightedGraph, dumps_all, formats_list, generate_graph, generate_weighted,
-        legacy_asub_search, legacy_ggen, legacy_sub_search, legacy_wggen, legacy_wsub_search,
-        search,
+        legacy_asub_search, legacy_ereg_search, legacy_ggen, legacy_reg_search, legacy_sub_search,
+        legacy_wggen, legacy_wsub_search, search,
     };
 
     #[pymodule_init]

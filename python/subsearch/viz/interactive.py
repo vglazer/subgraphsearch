@@ -328,7 +328,7 @@ def to_html(
         raise ValueError(f"layout must have shape ({graph.n}, 2), got {pos.shape}")
     if result is not None and title is None:
         p = result.params
-        title = f"{p.size}-vertex, {p.edges}-edge subgraphs: {result.successes}/{len(result.experiments)} experiments succeeded"
+        title = f"{p.size}-vertex subgraphs {result.target}: {result.successes}/{len(result.experiments)} experiments succeeded"
     data = {
         "n": graph.n,
         "density": graph.density,

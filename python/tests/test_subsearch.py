@@ -393,3 +393,49 @@ def test_weighted_visualisation(tmp_path, w200):
     import matplotlib.pyplot as plt
 
     plt.close("all")
+
+
+# ---- regular subgraphs (reg_search, ereg_search)
+
+def paley(q):
+    squares = {x * x % q for x in range(1, q)}
+    return ss.Graph(q, [(i, j) for i in range(q) for j in range(i + 1, q) if (j - i) % q in squares])
+
+
+def test_regular_search():
+    g = paley(61)
+    assert g == ss.read(FIXTURES / "graphs" / "paley_61.txt")
+    for two_phase in (False, True):
+        r = ss.search(g, 10, degree=4, two_phase=two_phase, experiments=10, max_moves=2000, div_freq=300, div_dur=8, trace=True)
+        assert r.target == "regular of degree 4" and "regular of degree 4" in r.summary()
+        assert r.successes > 0
+        for e in r.experiments:
+            if e.success:
+                sub = g.induced(e.vertices)
+                assert set(sub.degrees().tolist()) == {4}
+        back = ss.SearchResult.from_dict(json.loads(json.dumps(r.to_dict())), g)
+        assert back.params.degree == 4 and back.params.two_phase == two_phase
+    with pytest.raises(ValueError, match="exactly one"):
+        ss.search(g, 10, 20, degree=4)
+    with pytest.raises(ValueError, match="two_phase needs degree"):
+        ss.search(g, 10, 20, two_phase=True)
+    with pytest.raises(ValueError, match="unweighted"):
+        ss.search(ss.WeightedGraph.from_graph(g), 10, degree=4)
+
+
+def test_legacy_regular_programs():
+    strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
+    for program in ("reg_search", "ereg_search"):
+        for name in ["paley_4reg", "paley_6reg", "dense_5reg", "doc_4cycles", "geometric"]:
+            out, status = getattr(ss.legacy, program)((FIXTURES / program / f"{name}.in").read_text())
+            assert strip(out) == strip((FIXTURES / program / f"{name}.out").read_text()), (program, name)
+            assert status == 0
+
+
+def test_regular_search_matches_c_through_the_modern_api():
+    # rng="legacy" reproduces reg_search's experiments: the same subgraphs, in order
+    g = paley(61)
+    r = ss.search(g, 10, degree=4, experiments=20, max_moves=2000, div_freq=300, div_dur=8, seed=13, rng="legacy")
+    expected = (FIXTURES / "reg_search" / "paley_4reg.out").read_text()
+    blocks = [b.strip() for b in expected.split("\n\n") if re.fullmatch(r"[0-9 ]+", b.strip()) and len(b.split()) == 10]
+    assert [" ".join(map(str, e.vertices)) for e in r.experiments] == blocks

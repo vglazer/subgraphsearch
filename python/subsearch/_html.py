@@ -121,7 +121,7 @@ def search_html(result: SearchResult) -> str:
     from ._graph import structure_of
 
     rows = [
-        ("target", f"{p.size} vertices, " + (f"total weight {p.edges}" if result.weighted else f"{p.edges} edges")),
+        ("target", f"{p.size} vertices, {result.target}"),
         ("experiments", f"{len(result.experiments)} × ≤{p.max_moves} moves"),
         ("successes", f"{result.successes} ({result.success_rate:.0%})"),
         ("relative cost", fmt(result.relative_cost) + " moves"),

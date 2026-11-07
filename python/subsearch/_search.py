@@ -44,6 +44,10 @@ class SearchParams:
     rng: str = "xoshiro"
     trace: bool = False
     aspiration: bool = False
+    #: For a regular-subgraph search (USRA's ``reg_search``): the degree; ``edges`` is then unused.
+    degree: int | None = None
+    #: With ``degree``: first find the right number of edges (USRA's ``ereg_search``).
+    two_phase: bool = False
 
 
 @dataclass
@@ -53,6 +57,14 @@ class SearchResult:
     graph: Graph | WeightedGraph
     params: SearchParams
     experiments: list[Experiment]
+
+    @property
+    def target(self) -> str:
+        """What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3"."""
+        p = self.params
+        if p.degree is not None:
+            return f"regular of degree {p.degree}"
+        return f"with total weight {p.edges}" if self.weighted else f"with {p.edges} edges"
 
     @property
     def weighted(self) -> bool:
@@ -112,8 +124,7 @@ class SearchResult:
     def summary(self) -> str:
         p = self.params
         lines = [
-            f"{self.successes}/{len(self.experiments)} experiments found a {p.size}-vertex subgraph with "
-            + (f"total weight {p.edges}" if self.weighted else f"{p.edges} edges"),
+            f"{self.successes}/{len(self.experiments)} experiments found a {p.size}-vertex subgraph {self.target}",
             f"relative cost {self.relative_cost:.1f} moves, true cost {self.true_cost:.1f} moves, "
             f"average conflict {self.average_conflict:.3f}",
         ]
@@ -136,8 +147,11 @@ class SearchResult:
         """Rebuilds a result from :meth:`to_dict` output or from the JSON the ``subsearch search
         --json`` command writes."""
         p = dict(data["params"])
-        if "record_trace" in p:  # the Rust CLI's field name
+        if "record_trace" in p:  # the Rust CLI's field names
             p["trace"] = p.pop("record_trace")
+        regular = p.pop("regular", None)
+        if regular:
+            p["degree"], p["two_phase"] = regular["degree"], regular.get("two_phase", False)
         p["fixed"] = tuple(p.get("fixed", ()))
         params = SearchParams(**{k: v for k, v in p.items() if k in SearchParams.__dataclass_fields__})
         exps = [
@@ -164,7 +178,9 @@ class SearchResult:
             f.write(self.to_json())
 
     def __repr__(self) -> str:
-        return f"SearchResult({self.successes}/{len(self.experiments)} successes, size={self.params.size}, edges={self.params.edges})"
+        p = self.params
+        target = f"degree={p.degree}" if p.degree is not None else f"edges={p.edges}"
+        return f"SearchResult({self.successes}/{len(self.experiments)} successes, size={p.size}, {target})"
 
     def _repr_html_(self) -> str:
         from ._html import search_html
@@ -175,8 +191,10 @@ class SearchResult:
 def search(
     graph: Graph | WeightedGraph,
     size: int,
-    edges: int,
+    edges: int | None = None,
     *,
+    degree: int | None = None,
+    two_phase: bool = False,
     fixed: Iterable[int] = (),
     experiments: int = 10,
     max_moves: int = 1000,
@@ -199,13 +217,27 @@ def search(
 
     Set ``trace=True`` to record the objective after every move, for :mod:`subsearch.viz`.
 
+    Pass ``degree`` instead of ``edges`` to look for subgraphs that are regular of that degree
+    (USRA's ``reg_search``); add ``two_phase=True`` to first find the right number of edges and
+    then make the subgraph regular (``ereg_search``). Regular searches need an unweighted graph.
+
     ``aspiration=True`` adds the limited aspiration of USRA's ``asub_search``: swaps involving
     the two vertices just swapped, which the restricted search otherwise excludes, are taken
     whenever they would beat the best value found so far.
     """
+    if (edges is None) == (degree is None):
+        raise ValueError("give exactly one of edges (an edge count or total weight) and degree (for a regular subgraph)")
+    if two_phase and degree is None:
+        raise ValueError("two_phase needs degree: it searches for regular subgraphs")
     fixed = tuple(int(v) for v in fixed)
-    params = SearchParams(int(size), int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng, bool(trace), bool(aspiration))
-    raw = _core.search(graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq, params.div_dur, params.seed, rng, params.trace, params.aspiration)
+    params = SearchParams(
+        int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
+        int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
+    )
+    raw = _core.search(
+        graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq,
+        params.div_dur, params.seed, rng, params.trace, params.aspiration, params.degree, params.two_phase,
+    )
     exps = [
         Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))
         for i, (c, m, s, v, t) in enumerate(raw)
@@ -213,7 +245,7 @@ def search(
     return SearchResult(graph, params, exps)
 
 
-def sweep(graph: Graph, size: int, edges: int, parameter: str, values: Sequence, **kwargs) -> dict:
+def sweep(graph: Graph | WeightedGraph, size: int, edges: int | None, parameter: str, values: Sequence, **kwargs) -> dict:
     """Runs :func:`search` once per value of ``parameter`` (e.g. ``"div_dur"``), keeping the other
     arguments fixed, and returns ``{value: SearchResult}``; plot it with
     :func:`subsearch.viz.plot_sweep`."""
