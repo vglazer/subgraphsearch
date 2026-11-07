@@ -40,6 +40,8 @@ enum Command {
 enum LegacyCommand {
     /// `sub_search`: parameters, adjacency lists and fixed vertices on stdin.
     SubSearch,
+    /// `asub_search` (`sub_search` with limited aspiration): the same input as `sub_search`.
+    AsubSearch,
     /// `ggen`: parameters (and any input lists and fixed vertices) on stdin.
     Ggen,
 }
@@ -147,6 +149,10 @@ struct SearchArgs {
     /// Print nothing but the summary.
     #[arg(short, long)]
     quiet: bool,
+    /// Limited aspiration (USRA's asub_search): also take swaps involving the two vertices just
+    /// swapped when they would beat the best value so far.
+    #[arg(long)]
+    aspiration: bool,
     /// Search every graph in a multi-graph file (graph6 or sparse6), one after another.
     #[arg(long, conflicts_with = "index")]
     all: bool,
@@ -311,6 +317,7 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
         seed: args.seed,
         rng: args.rng.into(),
         record_trace: args.trace,
+        aspiration: args.aspiration,
     };
     let mut out = io::stdout().lock();
     let mut results = Vec::with_capacity(graphs.len());
@@ -648,6 +655,7 @@ fn run_legacy(cmd: LegacyCommand) -> Result<ExitCode> {
     let mut out = io::BufWriter::new(io::stdout().lock());
     let result = match cmd {
         LegacyCommand::SubSearch => legacy::sub_search(&input, &mut out, timing_footer),
+        LegacyCommand::AsubSearch => legacy::asub_search(&input, &mut out, timing_footer),
         LegacyCommand::Ggen => legacy::ggen(&input, &mut out).map(|()| 0),
     };
     out.flush()?;

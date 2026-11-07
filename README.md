@@ -70,6 +70,7 @@ found" from success.
 | `--moves` | maximum moves (vertex swaps) per experiment | 1000 |
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
 | `-s`, `--seed`, `--rng` | random seed; `xoshiro` (default) or `legacy` | 1, xoshiro |
+| `--aspiration` | limited aspiration, as in USRA's `asub_search` (see below) | off |
 
 Each experiment starts from random vertices and repeatedly swaps one subgraph vertex for one
 outside vertex, choosing at random among the swaps that bring the edge count closest to the
@@ -78,6 +79,13 @@ examined (the "restricted" local search), and the two vertices just swapped are 
 straight back. Bursts of random moves help it escape local minima. The
 [original report](https://github.com/vglazer/USRA/blob/master/subgraph_finding/doc/sub_search.md)
 describes the algorithm in detail.
+
+With `--aspiration` (`aspiration=True` in Python), the swaps involving the two vertices just
+swapped, which the restricted search otherwise excludes, are also examined after each move, and
+one is taken whenever it would beat the best value found so far. This is the
+[`asub_search`](https://github.com/vglazer/USRA/blob/master/subgraph_finding/doc/asub_search.md)
+variant. On random test graphs it made no consistent difference, so it is off by default; try it
+on searches that stall.
 
 ## Python
 
@@ -109,8 +117,9 @@ In Jupyter, graphs and results display as summaries with small charts. See the
 
 ## Compatibility with the original programs
 
-`subsearch legacy sub-search` and `subsearch legacy ggen` (and `ss.legacy` in Python) read
-exactly what `sub_search` and `ggen` read on stdin and print exactly what they printed. Only
+`subsearch legacy sub-search`, `subsearch legacy asub-search` and `subsearch legacy ggen` (and
+`ss.legacy` in Python) read exactly what `sub_search`, `asub_search` and `ggen` read on stdin and
+print exactly what they printed. Only
 the CPU time and host name on `sub_search`'s last line can differ. Elsewhere, `--rng legacy`
 gives the same graphs and search runs through the modern interfaces:
 
@@ -120,8 +129,8 @@ subsearch generate exponential -n 100 -d 0.6 -s 1 --rng legacy -o g.g6   # the s
 ```
 
 The fixtures in `tests/fixtures` were recorded from the C programs (see `scripts/make_fixtures.sh`)
-and cover all of `ggen`'s graph types and operations, every `sub_search` output mode, fixed
-vertices, edge cases and error handling.
+and cover all of `ggen`'s graph types and operations, every `sub_search` and `asub_search`
+output mode, fixed vertices, edge cases and error handling.
 
 The only differences are on invalid input: the port reports problems the C programs silently
 mishandled (out-of-range or duplicate vertices, truncated input), and `sub_search` input may not
@@ -158,10 +167,10 @@ USRA_DIR=~/repos/USRA scripts/make_fixtures.sh        # re-record fixtures from 
 
 ## Roadmap
 
-`sub_search` and `ggen` are done. The other USRA programs share the same engine and come next:
+`sub_search`, `asub_search` (`--aspiration`) and `ggen` are done. The other USRA programs share
+the same engine and come next:
 
 - `wsub_search`: weighted edges, with `wggen` and a weighted format;
-- `asub_search`: limited aspiration (restricted moves that improve the best value so far);
 - `reg_search` and `ereg_search`: regular induced subgraphs of a given degree.
 
 ## License

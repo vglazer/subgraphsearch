@@ -140,6 +140,27 @@ def test_legacy_search_matches_the_c_program_fixtures():
         assert status == 0
 
 
+def test_legacy_asub_search_matches_the_c_program_fixtures():
+    strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
+    for name in ["readme_cliques", "one_step_show", "approx_adj", "geometric"]:
+        out, status = ss.legacy.asub_search((FIXTURES / "asub_search" / f"{name}.in").read_text())
+        assert strip(out) == strip((FIXTURES / "asub_search" / f"{name}.out").read_text()), name
+        assert status == 0
+
+
+def test_aspiration_search(g100):
+    plain = ss.search(g100, 11, 55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng="legacy")
+    asp = ss.search(g100, 11, 55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng="legacy", aspiration=True)
+    assert asp.params.aspiration and not plain.params.aspiration
+    # the same as the C programs (see the readme_cliques fixtures): 5 and 4 successes
+    assert (plain.successes, asp.successes) == (5, 4)
+    r = ss.search(g100, 30, 340, experiments=20, max_moves=2000, div_freq=300, div_dur=8, aspiration=True)
+    for e in r.experiments:
+        if e.success:
+            assert g100.induced_edge_count(e.vertices) == 340
+    assert ss.SearchResult.from_dict(r.to_dict(), g100).params.aspiration
+
+
 def test_legacy_ggen_and_errors():
     assert ss.legacy.ggen((FIXTURES / "ggen" / "exp_10_500_42.in").read_text()) == (FIXTURES / "ggen" / "exp_10_500_42.out").read_text()
     with pytest.raises(ValueError, match="seed must be a positive integer"):

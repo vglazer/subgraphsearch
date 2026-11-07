@@ -242,7 +242,7 @@ type ExperimentTuple = (i64, usize, bool, Vec<usize>, Option<Vec<u32>>);
 
 /// Runs a search; returns one (best_conflict, moves, success, vertices, trace) per experiment.
 #[pyfunction]
-#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace))]
+#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration = false))]
 #[allow(clippy::too_many_arguments)]
 fn search(
     py: Python<'_>,
@@ -257,6 +257,7 @@ fn search(
     seed: i64,
     rng: &str,
     trace: bool,
+    aspiration: bool,
 ) -> PyResult<Vec<ExperimentTuple>> {
     let params = SearchParams {
         size,
@@ -269,6 +270,7 @@ fn search(
         seed,
         rng: parse(rng)?,
         record_trace: trace,
+        aspiration,
     };
     let g = Arc::clone(&graph.inner);
     let result = py
@@ -284,15 +286,30 @@ fn search(
 /// Runs the original `sub_search` program's interface on `stdin`; returns (stdout, exit status).
 #[pyfunction]
 fn legacy_sub_search(py: Python<'_>, stdin: String) -> PyResult<(String, i32)> {
+    run_legacy_search(py, stdin, false)
+}
+
+/// Runs the original `asub_search` program's interface on `stdin`; returns (stdout, exit status).
+#[pyfunction]
+fn legacy_asub_search(py: Python<'_>, stdin: String) -> PyResult<(String, i32)> {
+    run_legacy_search(py, stdin, true)
+}
+
+fn run_legacy_search(py: Python<'_>, stdin: String, aspiration: bool) -> PyResult<(String, i32)> {
     py.detach(move || {
         let mut out = Vec::new();
         let start = std::time::Instant::now();
-        let status = legacy::sub_search(&stdin, &mut out, || {
+        let footer = || {
             format!(
                 "T> {:.2} seconds H> python\n",
                 start.elapsed().as_secs_f64()
             )
-        })?;
+        };
+        let status = if aspiration {
+            legacy::asub_search(&stdin, &mut out, footer)?
+        } else {
+            legacy::sub_search(&stdin, &mut out, footer)?
+        };
         Ok((String::from_utf8(out).unwrap(), status))
     })
     .map_err(err)
@@ -326,7 +343,8 @@ fn formats_list() -> Vec<(&'static str, bool)> {
 mod _core {
     #[pymodule_export]
     use super::{
-        PyGraph, dumps_all, formats_list, generate_graph, legacy_ggen, legacy_sub_search, search,
+        PyGraph, dumps_all, formats_list, generate_graph, legacy_asub_search, legacy_ggen,
+        legacy_sub_search, search,
     };
 
     #[pymodule_init]

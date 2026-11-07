@@ -12,7 +12,11 @@
 //! - For the first `div_dur` moves of every `div_freq` (and whenever no optimal move is known),
 //!   a uniformly random swap is made instead ("diversification").
 //!
-//! With [`RngKind::Legacy`] the search consumes random numbers exactly as the C program does, so
+//! - With [`SearchParams::aspiration`] (USRA's `asub_search`), the swaps involving the two
+//!   vertices just swapped are also examined after each move, and one is taken whenever it would
+//!   beat the best value so far.
+//!
+//! With [`RngKind::Legacy`] the search consumes random numbers exactly as the C programs do, so
 //! the same seed gives the same experiments, move for move (see [`search_sequential`]).
 
 use rayon::prelude::*;
@@ -50,6 +54,11 @@ pub struct SearchParams {
     /// Record the objective value after every move (memory: experiments x moves).
     #[serde(default)]
     pub record_trace: bool,
+    /// Limited aspiration, as in USRA's `asub_search`: after each move, also consider the
+    /// swaps involving the two vertices just swapped (which the restricted search otherwise
+    /// excludes), and take one of them whenever it would beat the best value so far.
+    #[serde(default)]
+    pub aspiration: bool,
 }
 
 impl SearchParams {
@@ -67,6 +76,7 @@ impl SearchParams {
             seed: 1,
             rng: RngKind::Xoshiro,
             record_trace: false,
+            aspiration: false,
         }
     }
 
@@ -290,6 +300,9 @@ struct Workspace {
     /// Optimal moves found in the current neighbourhood.
     sub_opt: Vec<usize>,
     rest_opt: Vec<usize>,
+    /// Aspiration moves (with `params.aspiration`), as in `asub_search.c`.
+    sub_asp: Vec<usize>,
+    rest_asp: Vec<usize>,
     /// Non-fixed vertices; a partial shuffle of it picks each starting subgraph.
     rand_perm: Vec<usize>,
 }
@@ -312,10 +325,63 @@ impl Workspace {
             u_list: vec![0; v - params.size],
             sub_opt: vec![0; v],
             rest_opt: vec![0; v],
+            sub_asp: if params.aspiration {
+                vec![0; v]
+            } else {
+                Vec::new()
+            },
+            rest_asp: if params.aspiration {
+                vec![0; v]
+            } else {
+                Vec::new()
+            },
             rand_perm: Vec::with_capacity(v - v_fix),
         };
         ws.reset(params);
         ws
+    }
+
+    /// Lists the aspiration moves: swaps involving the two vertices just swapped (`rest_vert` now
+    /// inside the subgraph, `sub_vert` now outside) that would beat the best value so far,
+    /// `g_opt_val`. At most `v` are kept. Mirrors `asub_search.c`.
+    fn aspiration_moves(
+        &mut self,
+        graph: &Graph,
+        new_min_val: i64,
+        g_opt_val: i64,
+        sub_vert: usize,
+        rest_vert: usize,
+    ) -> usize {
+        let cap = self.sub_asp.len();
+        let mut asp_mov = 0;
+        // swap rest_vert back out for any outside vertex
+        let degree = new_min_val - i64::from(self.sub_degs[rest_vert]);
+        let row = graph.row(rest_vert);
+        for k in 0..self.v_rest {
+            let vert = self.rest_verts[k];
+            let val = (degree - bit(row, vert) as i64 + i64::from(self.sub_degs[vert])).abs();
+            if val < g_opt_val && asp_mov < cap {
+                self.sub_asp[asp_mov] = rest_vert;
+                self.rest_asp[asp_mov] = vert;
+                asp_mov += 1;
+            }
+        }
+        // swap sub_vert back in for any subgraph vertex
+        let degree = new_min_val + i64::from(self.sub_degs[sub_vert]);
+        let row = graph.row(sub_vert);
+        for k in 0..self.v_sub {
+            let vert = self.sub_verts[k];
+            if vert == rest_vert {
+                continue;
+            }
+            let val = (degree - bit(row, vert) as i64 - i64::from(self.sub_degs[vert])).abs();
+            if val < g_opt_val && asp_mov < cap {
+                self.sub_asp[asp_mov] = vert;
+                self.rest_asp[asp_mov] = sub_vert;
+                asp_mov += 1;
+            }
+        }
+        asp_mov
     }
 
     /// Restores the state of a fresh workspace.
@@ -330,8 +396,9 @@ impl Workspace {
             .extend((0..self.sub_ch.len()).filter(|&i| self.sub_ch[i] == 0));
     }
 
-    /// One experiment. Mirrors the body of the experiment loop in `sub_search.c` statement by
-    /// statement, so that random numbers are drawn in exactly the same order.
+    /// One experiment. Mirrors the body of the experiment loop in `sub_search.c` (or, with
+    /// `params.aspiration`, `asub_search.c`) statement by statement, so that random numbers are
+    /// drawn in exactly the same order.
     fn run<R: SearchRng>(
         &mut self,
         graph: &Graph,
@@ -385,14 +452,18 @@ impl Workspace {
         let mut g_opt_val = e;
         let mut old_min_val = e;
         let mut opt_mov = 0usize;
+        let mut asp_mov = 0usize;
         let mut success = false;
         let mut j = 0;
         while j < params.max_moves {
-            // choose a random (diversifying) move or a locally optimal one
+            // choose a random (diversifying) move, an aspiration move, or a locally optimal one
             let (sub_vert, rest_vert) = if j % params.div_freq < params.div_dur || opt_mov == 0 {
                 let s = self.sub_verts[rng.below(v_sub as u32) as usize];
                 let r = self.rest_verts[rng.below(v_rest as u32) as usize];
                 (s, r)
+            } else if asp_mov > 0 {
+                let index = rng.below(asp_mov as u32) as usize;
+                (self.sub_asp[index], self.rest_asp[index])
             } else {
                 let index = rng.below(opt_mov as u32) as usize;
                 (self.sub_opt[index], self.rest_opt[index])
@@ -492,6 +563,10 @@ impl Workspace {
                     &mut self.sub_opt,
                     &mut self.rest_opt,
                 );
+            }
+
+            if params.aspiration {
+                asp_mov = self.aspiration_moves(graph, new_min_val, g_opt_val, sub_vert, rest_vert);
             }
 
             for k in 0..u_cols {

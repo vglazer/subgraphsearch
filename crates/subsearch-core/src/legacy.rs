@@ -142,6 +142,25 @@ pub fn sub_search<W: Write>(
     out: &mut W,
     footer: impl FnOnce() -> String,
 ) -> Result<Status, Error> {
+    run_search(input, out, footer, false)
+}
+
+/// Runs `asub_search` (`sub_search` with limited aspiration); see [`sub_search`]. The two
+/// programs read and print exactly the same things.
+pub fn asub_search<W: Write>(
+    input: &str,
+    out: &mut W,
+    footer: impl FnOnce() -> String,
+) -> Result<Status, Error> {
+    run_search(input, out, footer, true)
+}
+
+fn run_search<W: Write>(
+    input: &str,
+    out: &mut W,
+    footer: impl FnOnce() -> String,
+    aspiration: bool,
+) -> Result<Status, Error> {
     let mut sc = Scanner::new(input);
     let mut p = [0i64; 10];
     for x in p.iter_mut() {
@@ -199,6 +218,7 @@ pub fn sub_search<W: Write>(
         seed,
         rng: RngKind::Legacy,
         record_trace: false,
+        aspiration,
     };
     let threshold = show_sols.unsigned_abs() as i64;
     let mut io_result = Ok(());

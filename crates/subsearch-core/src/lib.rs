@@ -16,7 +16,7 @@
 //!
 //! Modules:
 //! - [`graph`]: the [`Graph`] type.
-//! - [`search`]: the search itself.
+//! - [`search`](mod@search): the search itself.
 //! - [`generate`] and [`ops`]: random graphs, complements, induced subgraphs, switching,
 //!   incidence structures.
 //! - [`formats`]: graph6, sparse6, Matrix Market, edge lists, USRA adjacency lists, DOT, GraphML.

@@ -13,11 +13,11 @@ out="$repo_dir/tests/fixtures"
 bin=$(mktemp -d)
 trap 'rm -rf "$bin"' EXIT
 
-for prog in sub_search ggen; do
+for prog in sub_search asub_search ggen; do
   gcc -ansi -pedantic -Wall -O2 "$src/$prog.c" -o "$bin/$prog"
 done
 
-mkdir -p "$out/ggen" "$out/sub_search" "$out/graphs"
+mkdir -p "$out/ggen" "$out/sub_search" "$out/asub_search" "$out/graphs"
 echo "USRA commit: $(git -C "$usra_dir" rev-parse HEAD)" > "$out/SOURCE"
 
 # ---- ggen: name | stdin
@@ -79,14 +79,16 @@ graph pow_300_200_52c "3 300 0 200 52 0 0 1"
 graph geo_400_150_1   "4 400 0 150 1 0 0 0"
 graph exp_30_300_5    "2 30 0 300 5 0 0 0"
 
-# ---- sub_search: name | graph | parameters | fixed vertices
+# ---- sub_search and asub_search (same input): name | graph | parameters | fixed vertices
 sub_case() {
   local name=$1 g=$2 params=$3 fixed=${4:-}
-  { echo "$params"; cat "$out/graphs/$g.txt"; [[ -n $fixed ]] && echo "$fixed"; } > "$out/sub_search/$name.in"
-  set +e
-  "$bin/sub_search" < "$out/sub_search/$name.in" > "$out/sub_search/$name.out" 2> "$out/sub_search/$name.err"
-  echo $? > "$out/sub_search/$name.status"
-  set -e
+  for prog in sub_search asub_search; do
+    { echo "$params"; cat "$out/graphs/$g.txt"; [[ -n $fixed ]] && echo "$fixed"; } > "$out/$prog/$name.in"
+    set +e
+    "$bin/$prog" < "$out/$prog/$name.in" > "$out/$prog/$name.out" 2> "$out/$prog/$name.err"
+    echo $? > "$out/$prog/$name.status"
+    set -e
+  done
 }
 
 sub_case readme_cliques    exp_100_600_1   "100 11 55 0 5 100 25 4 72 1"

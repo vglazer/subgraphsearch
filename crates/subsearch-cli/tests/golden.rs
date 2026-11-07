@@ -67,3 +67,8 @@ fn ggen_matches_the_c_program() {
 fn sub_search_matches_the_c_program() {
     check("sub_search", "sub-search");
 }
+
+#[test]
+fn asub_search_matches_the_c_program() {
+    check("asub_search", "asub-search");
+}

@@ -20,6 +20,12 @@ def sub_search(stdin: str) -> tuple[str, int]:
     return _core.legacy_sub_search(stdin)
 
 
+def asub_search(stdin: str) -> tuple[str, int]:
+    """Runs ``asub_search`` (``sub_search`` with limited aspiration), which reads and prints the
+    same things as :func:`sub_search`."""
+    return _core.legacy_asub_search(stdin)
+
+
 def ggen(stdin: str) -> str:
     """Runs ``ggen`` (parameters, plus any input lists and fixed vertices) and returns its output.
     Raises ``ValueError`` with ``ggen``'s error message on invalid input."""

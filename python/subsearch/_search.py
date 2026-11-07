@@ -43,6 +43,7 @@ class SearchParams:
     seed: int = 1
     rng: str = "xoshiro"
     trace: bool = False
+    aspiration: bool = False
 
 
 @dataclass
@@ -178,6 +179,7 @@ def search(
     seed: int = 1,
     rng: str = "xoshiro",
     trace: bool = False,
+    aspiration: bool = False,
 ) -> SearchResult:
     """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges.
 
@@ -189,10 +191,14 @@ def search(
     only on ``seed``; ``rng="legacy"`` reproduces USRA ``sub_search`` exactly.
 
     Set ``trace=True`` to record the objective after every move, for :mod:`subsearch.viz`.
+
+    ``aspiration=True`` adds the limited aspiration of USRA's ``asub_search``: swaps involving
+    the two vertices just swapped, which the restricted search otherwise excludes, are taken
+    whenever they would beat the best value found so far.
     """
     fixed = tuple(int(v) for v in fixed)
-    params = SearchParams(int(size), int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng, bool(trace))
-    raw = _core.search(graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq, params.div_dur, params.seed, rng, params.trace)
+    params = SearchParams(int(size), int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng, bool(trace), bool(aspiration))
+    raw = _core.search(graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq, params.div_dur, params.seed, rng, params.trace, params.aspiration)
     exps = [
         Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))
         for i, (c, m, s, v, t) in enumerate(raw)
