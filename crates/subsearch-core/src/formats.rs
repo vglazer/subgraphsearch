@@ -102,18 +102,88 @@ pub struct WriteOptions<'a> {
     pub highlight: &'a [usize],
 }
 
-/// Parses a graph from `text` in `format`.
+/// Parses the single graph in `text`. Fails if a graph6 or sparse6 text holds several graphs
+/// (use [`parse_all`] for those).
 pub fn parse(text: &str, format: Format) -> Result<Graph, Error> {
+    let mut graphs = parse_all(text, format)?;
+    match graphs.len() {
+        1 => Ok(graphs.pop().unwrap()),
+        0 => Err(Error::Parse {
+            line: None,
+            msg: format!("no {} graph found", format.name()),
+        }),
+        count => Err(Error::MultipleGraphs(count)),
+    }
+}
+
+/// Parses every graph in `text`. graph6 and sparse6 hold one graph per line (blank lines are
+/// skipped, and a `>>graph6<<` or `>>sparse6<<` header may start the first); the other formats
+/// hold exactly one graph.
+pub fn parse_all(text: &str, format: Format) -> Result<Vec<Graph>, Error> {
     match format {
-        Format::Lists => parse_lists(text),
-        Format::EdgeList => parse_edge_list(text),
-        Format::Graph6 => parse_graph6(text.trim()),
-        Format::Sparse6 => parse_sparse6(text.trim()),
-        Format::MatrixMarket => parse_matrix_market(text),
+        Format::Lists => Ok(vec![parse_lists(text)?]),
+        Format::EdgeList => Ok(vec![parse_edge_list(text)?]),
+        Format::MatrixMarket => Ok(vec![parse_matrix_market(text)?]),
+        Format::Graph6 | Format::Sparse6 => {
+            let header = if format == Format::Graph6 {
+                ">>graph6<<"
+            } else {
+                ">>sparse6<<"
+            };
+            let mut graphs = Vec::new();
+            for (i, line) in text.lines().enumerate() {
+                let line = line.trim();
+                let line = if i == 0 {
+                    line.strip_prefix(header).unwrap_or(line)
+                } else {
+                    line
+                };
+                if line.is_empty() {
+                    continue;
+                }
+                let g = if format == Format::Graph6 {
+                    parse_graph6(line)
+                } else {
+                    parse_sparse6(line)
+                };
+                graphs.push(g.map_err(|e| at_line(e, i + 1))?);
+            }
+            Ok(graphs)
+        }
         Format::Dot | Format::GraphML => Err(Error::Invalid(format!(
             "reading {} is not supported",
             format.name()
         ))),
+    }
+}
+
+/// Whether `format` can hold several graphs in one file.
+pub fn holds_many(format: Format) -> bool {
+    matches!(format, Format::Graph6 | Format::Sparse6)
+}
+
+/// Serialises several graphs, one per line. Only graph6 and sparse6 can hold more than one.
+pub fn to_string_all(graphs: &[Graph], format: Format) -> Result<String, Error> {
+    if graphs.len() != 1 && !holds_many(format) {
+        return Err(Error::Invalid(format!(
+            "{} holds a single graph, but {} were given; use graph6 or sparse6",
+            format.name(),
+            graphs.len()
+        )));
+    }
+    Ok(graphs
+        .iter()
+        .map(|g| to_string(g, format, &WriteOptions::default()))
+        .collect())
+}
+
+fn at_line(e: Error, line: usize) -> Error {
+    match e {
+        Error::Parse { msg, .. } => Error::Parse {
+            line: Some(line),
+            msg,
+        },
+        other => other,
     }
 }
 
@@ -140,6 +210,18 @@ pub fn read_file(path: &Path, format: Option<Format>) -> Result<Graph, Error> {
     })?;
     let text = std::fs::read_to_string(path)?;
     parse(&text, format)
+}
+
+/// Reads every graph in a file; see [`parse_all`].
+pub fn read_file_all(path: &Path, format: Option<Format>) -> Result<Vec<Graph>, Error> {
+    let format = format.or_else(|| Format::from_path(path)).ok_or_else(|| {
+        Error::Invalid(format!(
+            "cannot tell the format of {} from its extension; specify it",
+            path.display()
+        ))
+    })?;
+    let text = std::fs::read_to_string(path)?;
+    parse_all(&text, format)
 }
 
 /// Writes a graph to a file, using `format` or else guessing it from the extension.
@@ -326,9 +408,8 @@ fn pack_bits(bits: &[bool], out: &mut Vec<u8>) {
     }
 }
 
-fn parse_graph6(text: &str) -> Result<Graph, Error> {
-    let text = text.strip_prefix(">>graph6<<").unwrap_or(text);
-    let line = text.lines().next().unwrap_or("");
+/// Parses one graph6 line (no header).
+fn parse_graph6(line: &str) -> Result<Graph, Error> {
     let (n, data) = decode_n(line.as_bytes())?;
     let groups = six_bit_groups(data)?;
     let needed = (n * n.saturating_sub(1) / 2).div_ceil(6);
@@ -377,9 +458,8 @@ fn sparse6_k(n: usize) -> usize {
     k
 }
 
-fn parse_sparse6(text: &str) -> Result<Graph, Error> {
-    let text = text.strip_prefix(">>sparse6<<").unwrap_or(text);
-    let line = text.lines().next().unwrap_or("");
+/// Parses one sparse6 line (no header).
+fn parse_sparse6(line: &str) -> Result<Graph, Error> {
     let body = line.strip_prefix(':').ok_or_else(|| Error::Parse {
         line: Some(1),
         msg: "sparse6 data must start with ':'".into(),
@@ -642,6 +722,44 @@ mod tests {
         let s = Graph::from_edges(7, [(0, 1), (0, 2), (1, 2), (5, 6)]).unwrap();
         assert_eq!(write_sparse6(&s), ":Fa@x^");
         assert_eq!(parse_sparse6(":Fa@x^").unwrap(), s);
+    }
+
+    #[test]
+    fn multi_graph_files() {
+        let graphs: Vec<Graph> = (2..6)
+            .map(|n| Graph::from_edges(n, (1..n).map(|i| (i - 1, i))).unwrap())
+            .collect();
+        for format in [Format::Graph6, Format::Sparse6] {
+            let text = to_string_all(&graphs, format).unwrap();
+            assert_eq!(text.lines().count(), 4);
+            assert_eq!(parse_all(&text, format).unwrap(), graphs);
+            assert!(matches!(
+                parse(&text, format),
+                Err(Error::MultipleGraphs(4))
+            ));
+            // header, blank lines and surrounding whitespace are tolerated
+            let header = if format == Format::Graph6 {
+                ">>graph6<<"
+            } else {
+                ">>sparse6<<"
+            };
+            let padded = format!(
+                "{header}{}\n\n  {}\n",
+                text.lines().next().unwrap(),
+                text.lines().nth(1).unwrap()
+            );
+            assert_eq!(parse_all(&padded, format).unwrap(), graphs[..2].to_vec());
+        }
+        // a bad line is reported with its line number
+        let err = parse_all("A_\nDQc\nD!!\n", Format::Graph6)
+            .unwrap_err()
+            .to_string();
+        assert!(err.starts_with("line 3:"), "{err}");
+        assert!(to_string_all(&graphs, Format::EdgeList).is_err());
+        assert!(matches!(
+            parse("", Format::Graph6),
+            Err(Error::Parse { .. })
+        ));
     }
 
     #[test]

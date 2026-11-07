@@ -242,3 +242,46 @@ def test_rust_cli_json_loads_in_python(tmp_path, g100):
     assert main(["explore", str(graph_path), "--result", str(out), "-o", str(tmp_path / "x.html")]) == 0
     assert main(["report", str(graph_path), "--result", str(out), "-o", str(tmp_path / "x.png")]) == 0
     assert (tmp_path / "x-search.png").exists() and (tmp_path / "x-graph.png").exists()
+
+
+# ---- multi-graph files
+
+def test_multi_graph_files(tmp_path):
+    graphs = [ss.generate("exponential", 30, 0.4, seed=s) for s in (1, 2, 3)] + [cycle(5)]
+    for ext in ("g6", "s6"):
+        path = tmp_path / f"many.{ext}"
+        ss.write_all(path, graphs)
+        assert ss.read_all(path) == graphs
+        assert ss.read(path, index=1) == graphs[1]
+        assert ss.read(path, index=-1) == graphs[-1]
+        with pytest.raises(ValueError, match="holds 4 graphs"):
+            ss.read(path)
+        with pytest.raises(IndexError, match="holds 4 graph"):
+            ss.read(path, index=4)
+    text = ss.dumps_all(graphs)
+    assert len(text.splitlines()) == 4 and ss.parse_all(text, "graph6") == graphs
+    assert ss.Graph.parse(text, "graph6", index=3) == graphs[3]
+    assert ss.read_all(FIXTURES / "graphs" / "exp_30_300_5.txt") == [ss.read(FIXTURES / "graphs" / "exp_30_300_5.txt")]
+    with pytest.raises(ValueError, match="single graph"):
+        ss.dumps_all(graphs, "edgelist")
+    with pytest.raises(ValueError, match="multi-graph format"):
+        ss.write_all(tmp_path / "x.edges", graphs)
+
+
+def test_graph6_and_sparse6_agree_with_networkx(tmp_path):
+    nx = pytest.importorskip("networkx")
+    rng = np.random.default_rng(0)
+    graphs = [ss.Graph(0, [])]
+    for n in [1, 2, 7, 62, 63, 64, 65, 100, 260]:
+        for p in (0.02, 0.3):
+            pairs = np.argwhere(np.triu(rng.random((n, n)) < p, k=1))
+            graphs.append(ss.Graph(n, pairs))
+    for fmt, to_bytes, reader in [("graph6", nx.to_graph6_bytes, nx.read_graph6), ("sparse6", nx.to_sparse6_bytes, nx.read_sparse6)]:
+        # networkx writes, subsearch reads
+        nx_text = b"".join(to_bytes(convert.to_networkx(g), header=False) for g in graphs).decode()
+        assert ss.parse_all(nx_text, fmt) == graphs, fmt
+        # subsearch writes, networkx reads
+        path = tmp_path / f"many.{fmt}"
+        ss.write_all(path, graphs, fmt)
+        back = reader(path)
+        assert [convert.from_networkx(h) for h in back] == graphs, fmt

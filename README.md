@@ -44,6 +44,11 @@ subsearch search g.g6 -k 30 -m 340 -n 60 --max-conflict 2 --trace --json result.
 uv run python -m subsearch explore g.g6 --result result.json -o result.html   # interactive page
 uv run python -m subsearch report g.g6 --result result.json -o result.png     # figures
 
+# files holding many graphs (graph6/sparse6, one per line, e.g. from nauty's geng)
+subsearch info many.g6                                  # one line per graph
+subsearch search many.g6 --all -k 10 -m 30 -q           # search every graph
+subsearch search many.g6 --index 3 -k 10 -m 30          # just graph 3 (from 0)
+
 # graphs: statistics, conversion, operations
 subsearch info g.g6 --degrees
 subsearch convert g.g6 g.dot --highlight 3,17,42
@@ -95,6 +100,7 @@ In Jupyter, graphs and results display as summaries with small charts. See the
 - **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
   `g.induced(vs)`, `g.switch(vs)`, `g.common_neighbourhood(vs)`, `g.layout()`,
   `g.adjacency_matrix()`, `g.laplacian()`.
+- **Multi-graph files:** `ss.read_all(path)`, `ss.read(path, index=3)`, `ss.write_all(path, graphs)`.
 - **Other libraries:** `subsearch.convert.{to,from}_{networkx,igraph,scipy,numpy}`.
 - **Tuning:** `ss.sweep(g, size, edges, "div_dur", [0, 4, 16])` with `viz.plot_sweep`.
 - **Spectra:** `viz.laplacian_spectrum` (dense, or the `k` smallest via SciPy for large graphs)

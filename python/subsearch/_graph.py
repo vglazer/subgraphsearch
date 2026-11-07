@@ -44,15 +44,23 @@ class Graph:
     # ---- construction and I/O
 
     @staticmethod
-    def read(path: str | PathLike, format: str | None = None) -> Graph:
+    def read(path: str | PathLike, format: str | None = None, index: int | None = None) -> Graph:
         """Reads a graph file. The format is inferred from the extension unless given:
         ``.g6`` graph6, ``.s6`` sparse6, ``.mtx`` Matrix Market, ``.edges``/``.csv`` edge list,
-        ``.txt`` USRA '-1'-terminated adjacency lists."""
+        ``.txt`` USRA '-1'-terminated adjacency lists.
+
+        graph6 and sparse6 files can hold many graphs, one per line; pick one with ``index``
+        (from 0), or read them all with :func:`read_all`.
+        """
+        if index is not None:
+            return _pick(read_all(path, format), index, str(path))
         return Graph(_core.Graph.read(str(path), format))
 
     @staticmethod
-    def parse(text: str, format: str) -> Graph:
+    def parse(text: str, format: str, index: int | None = None) -> Graph:
         """Parses a graph from text, e.g. ``Graph.parse("DQc", "graph6")``."""
+        if index is not None:
+            return _pick(parse_all(text, format), index, "the text")
         return Graph(_core.Graph.parse(text, format))
 
     def dumps(self, format: str, highlight: Iterable[int] = ()) -> str:
@@ -199,9 +207,43 @@ class Graph:
         return graph_html(self)
 
 
-def read(path: str | PathLike, format: str | None = None) -> Graph:
+def _pick(graphs: list[Graph], index: int, source: str) -> Graph:
+    if not -len(graphs) <= index < len(graphs):
+        raise IndexError(f"index {index} is out of range: {source} holds {len(graphs)} graph(s)")
+    return graphs[index]
+
+
+def read(path: str | PathLike, format: str | None = None, index: int | None = None) -> Graph:
     """Reads a graph file; see :meth:`Graph.read`."""
-    return Graph.read(path, format)
+    return Graph.read(path, format, index)
+
+
+def read_all(path: str | PathLike, format: str | None = None) -> list[Graph]:
+    """Reads every graph in a file. graph6 and sparse6 files hold one graph per line, as nauty's
+    ``geng`` and collections such as House of Graphs produce them; other formats hold one."""
+    return [Graph(g) for g in _core.Graph.read_all(str(path), format)]
+
+
+def parse_all(text: str, format: str) -> list[Graph]:
+    """Parses every graph in ``text``; see :func:`read_all`."""
+    return [Graph(g) for g in _core.Graph.parse_all(text, format)]
+
+
+def dumps_all(graphs: Iterable[Graph], format: str = "graph6") -> str:
+    """Serialises several graphs, one per line. Only graph6 and sparse6 can hold more than one."""
+    return _core.dumps_all([g._g for g in graphs], format)
+
+
+def write_all(path: str | PathLike, graphs: Iterable[Graph], format: str | None = None) -> None:
+    """Writes several graphs to one file (graph6 or sparse6; inferred from the extension unless
+    given)."""
+    if format is None:
+        ext = str(path).rsplit(".", 1)[-1].lower()
+        format = {"g6": "graph6", "graph6": "graph6", "s6": "sparse6", "sparse6": "sparse6"}.get(ext)
+        if format is None:
+            raise ValueError(f"cannot tell a multi-graph format from {path!r}; use a .g6 or .s6 file or pass format=")
+    with open(path, "w", encoding="ascii") as f:
+        f.write(dumps_all(graphs, format))
 
 
 def generate(model: str, n: int, density: float, *, seed: int = 1, rng: str = "xoshiro") -> Graph:

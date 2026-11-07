@@ -68,11 +68,36 @@ struct GraphInput {
     /// Input format, if it cannot be inferred from the file extension.
     #[arg(long = "from", value_parser = parse_format)]
     format: Option<Format>,
+    /// For files holding several graphs (graph6 or sparse6, one per line): which to use, from 0.
+    #[arg(long)]
+    index: Option<usize>,
 }
 
 impl GraphInput {
+    /// The single graph to work on: the one chosen with --index, or the file's only graph.
     fn load(&self) -> Result<Graph> {
-        read_graph(&self.graph, self.format)
+        match self.index {
+            None => read_graph(&self.graph, self.format),
+            Some(i) => {
+                let mut graphs = read_graphs(&self.graph, self.format)?;
+                if i >= graphs.len() {
+                    bail!(
+                        "--index {i} is out of range: {} holds {} graph(s)",
+                        self.graph.display(),
+                        graphs.len()
+                    );
+                }
+                Ok(graphs.swap_remove(i))
+            }
+        }
+    }
+
+    /// Every graph in the file (just the one chosen, with --index).
+    fn load_all(&self) -> Result<Vec<Graph>> {
+        match self.index {
+            Some(_) => Ok(vec![self.load()?]),
+            None => read_graphs(&self.graph, self.format),
+        }
     }
 }
 
@@ -122,6 +147,9 @@ struct SearchArgs {
     /// Print nothing but the summary.
     #[arg(short, long)]
     quiet: bool,
+    /// Search every graph in a multi-graph file (graph6 or sparse6), one after another.
+    #[arg(long, conflicts_with = "index")]
+    all: bool,
 }
 
 #[derive(Args)]
@@ -216,14 +244,27 @@ fn parse_model(s: &str) -> Result<Model, String> {
     s.parse()
 }
 
+fn read_stdin(format: Option<Format>) -> Result<(String, Format)> {
+    let format = format.context("reading from stdin requires --from FORMAT")?;
+    let mut text = String::new();
+    io::stdin().read_to_string(&mut text)?;
+    Ok((text, format))
+}
+
 fn read_graph(path: &Path, format: Option<Format>) -> Result<Graph> {
     if path == Path::new("-") {
-        let format = format.context("reading from stdin requires --from FORMAT")?;
-        let mut text = String::new();
-        io::stdin().read_to_string(&mut text)?;
+        let (text, format) = read_stdin(format)?;
         return Ok(formats::parse(&text, format)?);
     }
     formats::read_file(path, format).with_context(|| format!("reading {}", path.display()))
+}
+
+fn read_graphs(path: &Path, format: Option<Format>) -> Result<Vec<Graph>> {
+    if path == Path::new("-") {
+        let (text, format) = read_stdin(format)?;
+        return Ok(formats::parse_all(&text, format)?);
+    }
+    formats::read_file_all(path, format).with_context(|| format!("reading {}", path.display()))
 }
 
 fn write_graph(
@@ -248,7 +289,11 @@ fn write_stdout(g: &Graph, format: Format, options: &WriteOptions) -> Result<()>
 }
 
 fn run_search(args: SearchArgs) -> Result<ExitCode> {
-    let graph = args.input.load()?;
+    let graphs = if args.all {
+        args.input.load_all()?
+    } else {
+        vec![args.input.load()?]
+    };
     if let Some(t) = args.threads {
         rayon::ThreadPoolBuilder::new()
             .num_threads(t)
@@ -258,7 +303,7 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
     let params = SearchParams {
         size: args.vertices,
         edges: args.edges,
-        fixed: args.fixed,
+        fixed: args.fixed.clone(),
         experiments: args.experiments,
         max_moves: args.moves,
         div_freq: args.div_freq,
@@ -267,21 +312,79 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
         rng: args.rng.into(),
         record_trace: args.trace,
     };
-    let start = std::time::Instant::now();
-    let result = match params.rng {
-        RngKind::Xoshiro => subsearch_core::search(&graph, &params)?,
-        RngKind::Legacy => {
-            let mut experiments = Vec::new();
-            search_sequential(&graph, &params, |e| experiments.push(e.clone()))?;
-            subsearch_core::SearchResult {
-                params: params.clone(),
-                experiments,
-            }
-        }
-    };
-    let elapsed = start.elapsed();
-
     let mut out = io::stdout().lock();
+    let mut results = Vec::with_capacity(graphs.len());
+    let mut graphs_with_success = 0;
+    for (index, graph) in graphs.iter().enumerate() {
+        let prefix = if args.all {
+            format!("graph {index}: ")
+        } else {
+            String::new()
+        };
+        let start = std::time::Instant::now();
+        let result = match params.rng {
+            RngKind::Xoshiro => subsearch_core::search(graph, &params),
+            RngKind::Legacy => {
+                let mut experiments = Vec::new();
+                search_sequential(graph, &params, |e| experiments.push(e.clone())).map(|()| {
+                    subsearch_core::SearchResult {
+                        params: params.clone(),
+                        experiments,
+                    }
+                })
+            }
+        };
+        let result = match result {
+            Ok(r) => r,
+            // with --all, a graph too small for the subgraph is reported and skipped
+            Err(e) if args.all => {
+                writeln!(out, "{prefix}skipped: {e}")?;
+                continue;
+            }
+            Err(e) => return Err(e.into()),
+        };
+        report(&mut out, &result, start.elapsed(), &prefix, &args)?;
+        graphs_with_success += usize::from(result.successes() > 0);
+        results.push((index, result));
+    }
+    if args.all {
+        writeln!(
+            out,
+            "{graphs_with_success}/{} graphs contain a {}-vertex subgraph with {} edges",
+            graphs.len(),
+            params.size,
+            params.edges
+        )?;
+    }
+    if let Some(path) = &args.json {
+        let file =
+            std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
+        let writer = io::BufWriter::new(file);
+        if args.all {
+            let all: Vec<_> = results
+                .iter()
+                .map(|(i, r)| serde_json::json!({"graph": i, "params": r.params, "experiments": r.experiments}))
+                .collect();
+            serde_json::to_writer(writer, &all)?;
+        } else if let Some((_, r)) = results.first() {
+            serde_json::to_writer(writer, r)?;
+        }
+    }
+    Ok(if graphs_with_success > 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(2)
+    })
+}
+
+fn report(
+    out: &mut impl Write,
+    result: &subsearch_core::SearchResult,
+    elapsed: std::time::Duration,
+    prefix: &str,
+    args: &SearchArgs,
+) -> Result<()> {
+    let params = &result.params;
     if !args.quiet {
         for (i, e) in result.experiments.iter().enumerate() {
             if e.best_conflict <= args.max_conflict {
@@ -293,7 +396,7 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
                 let list: Vec<String> = e.vertices.iter().map(usize::to_string).collect();
                 writeln!(
                     out,
-                    "experiment {i}: {tag} after {} moves: {}",
+                    "{prefix}experiment {i}: {tag} after {} moves: {}",
                     e.moves,
                     list.join(" ")
                 )?;
@@ -303,16 +406,19 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
     let s = result.successes();
     writeln!(
         out,
-        "{s}/{} experiments found a {}-vertex subgraph with {} edges ({:.2}s)",
+        "{prefix}{s}/{} experiments found a {}-vertex subgraph with {} edges ({:.2}s)",
         result.experiments.len(),
         params.size,
         params.edges,
         elapsed.as_secs_f64()
     )?;
+    if args.all && args.quiet {
+        return Ok(());
+    }
     let fmt = |x: Option<f64>| x.map_or("-".to_string(), |x| format!("{x:.1}"));
     writeln!(
         out,
-        "moves per success: {} (successful experiments), {} (all experiments); mean best conflict {:.3}",
+        "{prefix}moves per success: {} (successful experiments), {} (all experiments); mean best conflict {:.3}",
         fmt(result.relative_cost()),
         fmt(result.true_cost()),
         result.average_conflict()
@@ -321,21 +427,12 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
         let b: Vec<String> = result.boxes().iter().map(usize::to_string).collect();
         writeln!(
             out,
-            "success-time distribution over {} boxes: {}",
+            "{prefix}success-time distribution over {} boxes: {}",
             b.len(),
             b.join(" ")
         )?;
     }
-    if let Some(path) = &args.json {
-        let file =
-            std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
-        serde_json::to_writer(io::BufWriter::new(file), &result)?;
-    }
-    Ok(if s > 0 {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(2)
-    })
+    Ok(())
 }
 
 fn run_generate(args: GenerateArgs) -> Result<()> {
@@ -373,15 +470,46 @@ fn run_generate(args: GenerateArgs) -> Result<()> {
 }
 
 fn run_convert(args: ConvertArgs) -> Result<()> {
-    let graph = args.input.load()?;
-    let options = WriteOptions {
-        highlight: &args.highlight,
-    };
-    write_graph(&graph, Some(&args.output), args.format, &options)
+    let mut graphs = args.input.load_all()?;
+    if graphs.len() == 1 {
+        let options = WriteOptions {
+            highlight: &args.highlight,
+        };
+        return write_graph(
+            &graphs.pop().unwrap(),
+            Some(&args.output),
+            args.format,
+            &options,
+        );
+    }
+    // a multi-graph file: convert every graph, which only graph6 and sparse6 can hold
+    if !args.highlight.is_empty() {
+        bail!("--highlight needs a single graph; choose one with --index");
+    }
+    let to_stdout = args.output == Path::new("-");
+    let format = args
+        .format
+        .or_else(|| Format::from_path(&args.output))
+        .or(to_stdout.then_some(Format::Graph6));
+    let format =
+        format.context("cannot tell the output format from the file extension; use --to")?;
+    let text = formats::to_string_all(&graphs, format)
+        .map_err(|e| anyhow::anyhow!("{e} (or choose one graph with --index)"))?;
+    if to_stdout {
+        io::stdout().write_all(text.as_bytes())?;
+    } else {
+        std::fs::write(&args.output, text)
+            .with_context(|| format!("writing {}", args.output.display()))?;
+    }
+    Ok(())
 }
 
 fn run_info(args: InfoArgs) -> Result<()> {
-    let g = args.input.load()?;
+    let graphs = args.input.load_all()?;
+    if graphs.len() != 1 {
+        return info_table(&graphs, args.json);
+    }
+    let g = &graphs[0];
     let degrees = g.degrees();
     let (_, components) = g.components();
     let n = g.num_vertices();
@@ -420,6 +548,49 @@ fn run_info(args: InfoArgs) -> Result<()> {
         for (d, c) in histogram {
             println!("{d:>6}  {c}");
         }
+    }
+    Ok(())
+}
+
+/// One line per graph, for multi-graph files.
+fn info_table(graphs: &[Graph], json: bool) -> Result<()> {
+    let rows: Vec<_> = graphs
+        .iter()
+        .map(|g| {
+            let d = g.degrees();
+            (
+                g.num_vertices(),
+                g.num_edges(),
+                g.density(),
+                g.components().1,
+                d.iter().min().copied().unwrap_or(0),
+                d.iter().max().copied().unwrap_or(0),
+            )
+        })
+        .collect();
+    if json {
+        let list: Vec<_> = rows
+            .iter()
+            .enumerate()
+            .map(|(i, &(n, m, density, comps, dmin, dmax))| {
+                serde_json::json!({"graph": i, "vertices": n, "edges": m, "density": density, "components": comps, "degree": {"min": dmin, "max": dmax}})
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&list)?);
+        return Ok(());
+    }
+    println!("{} graphs", graphs.len());
+    println!(
+        "{:>6} {:>9} {:>10} {:>8} {:>10} {:>11}",
+        "graph", "vertices", "edges", "density", "components", "degrees"
+    );
+    for (i, (n, m, density, comps, dmin, dmax)) in rows.into_iter().enumerate() {
+        let degrees = if dmin == dmax {
+            format!("{dmin} (regular)")
+        } else {
+            format!("{dmin}-{dmax}")
+        };
+        println!("{i:>6} {n:>9} {m:>10} {density:>8.4} {comps:>10} {degrees:>11}");
     }
     Ok(())
 }

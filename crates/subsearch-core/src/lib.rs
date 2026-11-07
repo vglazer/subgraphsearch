@@ -54,6 +54,10 @@ pub enum Error {
     InvalidSubgraphSize(i64),
     #[error("{0} is not a valid diversification frequency: it must be at least 1")]
     InvalidDiversificationFrequency(i64),
+    #[error(
+        "the file holds {0} graphs; choose one (CLI: --index N, Python: index=N) or use them all (CLI: search --all, Python: read_all)"
+    )]
+    MultipleGraphs(usize),
     #[error("{0}")]
     Invalid(String),
     #[error("{}{msg}", line.map(|l| format!("line {l}: ")).unwrap_or_default())]

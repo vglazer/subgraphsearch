@@ -6,8 +6,8 @@ still reads and writes it (`lists`, `.txt`) for compatibility, and adds the stan
 
 | Format | Name | Extensions | Read | Write | Best for |
 |---|---|---|---|---|---|
-| graph6 | `graph6` | `.g6` | ✓ | ✓ | dense or medium graphs; the default output |
-| sparse6 | `sparse6` | `.s6` | ✓ | ✓ | sparse graphs |
+| graph6 | `graph6` | `.g6` | ✓ | ✓ | dense or medium graphs (one or many per file); the default output |
+| sparse6 | `sparse6` | `.s6` | ✓ | ✓ | sparse graphs (one or many per file) |
 | Matrix Market | `mtx` | `.mtx` | ✓ | ✓ | SciPy, MATLAB, Julia, numerical code |
 | edge list | `edgelist` | `.edges`, `.csv`, `.tsv` | ✓ | ✓ | spreadsheets, shell tools, anything |
 | USRA lists | `lists` | `.txt` | ✓ | ✓ | the original C programs |
@@ -34,9 +34,14 @@ smaller once the density exceeds about `log2(n) / n`: around 7% at 100 vertices,
 - **Use graph6** for the dense, medium-sized graphs `sub_search` is typically run on. It is the
   standard in combinatorics: nauty's `geng` produces it; SageMath, networkx and igraph read it;
   and collections such as [House of Graphs](https://houseofgraphs.org/) and Brendan McKay's and
-  Ted Spence's lists of strongly regular graphs are distributed in it. A file can also hold many
-  graphs, one per line.
+  Ted Spence's lists of strongly regular graphs are distributed in it.
 - **Use sparse6** for large sparse graphs.
+- **Keep families of graphs in one graph6 or sparse6 file**, one graph per line, which is how
+  `geng` and graph catalogues deliver them. `subsearch info many.g6` lists them,
+  `subsearch search many.g6 --all ...` searches each in turn, `--index N` picks one, and
+  `subsearch convert many.g6 many.s6` converts them all. In Python: `ss.read_all`,
+  `ss.read(path, index=N)` and `ss.write_all`. A command that needs one graph refuses a
+  multi-graph file unless given `--index`, rather than silently using the first graph.
 - **Use an edge list** for exchange with tools that know nothing about graphs. `subsearch` writes
   a `# vertices: N` header, so isolated vertices survive the round trip.
 - **Use Matrix Market** to move adjacency matrices into numerical code

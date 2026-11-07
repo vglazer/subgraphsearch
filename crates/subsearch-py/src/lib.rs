@@ -84,6 +84,24 @@ impl PyGraph {
         ))
     }
 
+    /// Reads every graph in a file (graph6 and sparse6 hold one per line).
+    #[staticmethod]
+    #[pyo3(signature = (path, format = None))]
+    fn read_all(py: Python<'_>, path: PathBuf, format: Option<&str>) -> PyResult<Vec<Self>> {
+        let format = format.map(parse::<Format>).transpose()?;
+        let graphs = py
+            .detach(|| formats::read_file_all(&path, format))
+            .map_err(err)?;
+        Ok(graphs.into_iter().map(Self::wrap).collect())
+    }
+
+    /// Parses every graph in `text`.
+    #[staticmethod]
+    fn parse_all(text: &str, format: &str) -> PyResult<Vec<Self>> {
+        let graphs = formats::parse_all(text, parse(format)?).map_err(err)?;
+        Ok(graphs.into_iter().map(Self::wrap).collect())
+    }
+
     /// Serialises the graph; `highlight` marks vertices in DOT and GraphML output.
     #[pyo3(signature = (format, highlight = Vec::new()))]
     fn dumps(&self, format: &str, highlight: Vec<usize>) -> PyResult<String> {
@@ -288,6 +306,13 @@ fn legacy_ggen(stdin: &str) -> PyResult<String> {
     Ok(String::from_utf8(out).unwrap())
 }
 
+/// Serialises several graphs, one per line (graph6 and sparse6 only, for more than one).
+#[pyfunction]
+fn dumps_all(graphs: Vec<PyRef<'_, PyGraph>>, format: &str) -> PyResult<String> {
+    let owned: Vec<Graph> = graphs.iter().map(|g| (*g.inner).clone()).collect();
+    formats::to_string_all(&owned, parse(format)?).map_err(err)
+}
+
 /// Names of the supported file formats, and whether each can be read.
 #[pyfunction]
 fn formats_list() -> Vec<(&'static str, bool)> {
@@ -300,7 +325,9 @@ fn formats_list() -> Vec<(&'static str, bool)> {
 #[pymodule]
 mod _core {
     #[pymodule_export]
-    use super::{PyGraph, formats_list, generate_graph, legacy_ggen, legacy_sub_search, search};
+    use super::{
+        PyGraph, dumps_all, formats_list, generate_graph, legacy_ggen, legacy_sub_search, search,
+    };
 
     #[pymodule_init]
     fn init(m: &pyo3::Bound<'_, pyo3::types::PyModule>) -> pyo3::PyResult<()> {
