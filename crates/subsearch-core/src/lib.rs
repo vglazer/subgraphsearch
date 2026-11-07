@@ -35,9 +35,9 @@ pub mod search;
 
 pub use formats::Format;
 pub use generate::Model;
-pub use graph::{Graph, GraphBuilder};
+pub use graph::{Graph, GraphBuilder, WeightedGraph};
 pub use rng::RngKind;
-pub use search::{Experiment, SearchParams, SearchResult, search, search_sequential};
+pub use search::{Experiment, SearchGraph, SearchParams, SearchResult, search, search_sequential};
 
 /// Errors reported by this crate.
 #[derive(Debug, thiserror::Error)]

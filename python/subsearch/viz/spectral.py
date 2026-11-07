@@ -8,7 +8,7 @@ from math import lgamma
 
 import numpy as np
 
-from .._graph import Graph
+from .._graph import Graph, structure_of
 from ._style import ACCENT, NEUTRAL, SECONDARY, axes, finish
 
 #: Above this many vertices, dense eigendecomposition is refused (it needs O(n^2) memory and
@@ -22,6 +22,7 @@ def laplacian_spectrum(graph: Graph, normalized: bool = False, k: int | None = N
     With ``k`` set, only the ``k`` smallest are computed, with SciPy's sparse solver, which
     scales to much larger graphs.
     """
+    graph = structure_of(graph)
     if k is not None:
         import scipy.sparse as sp
         from scipy.sparse.linalg import eigsh
@@ -47,6 +48,7 @@ def spectral_summary(graph: Graph) -> dict:
     """Connected components (by search, exactly), the algebraic connectivity (Fiedler value,
     the second-smallest Laplacian eigenvalue, positive iff the graph is connected) and the
     largest Laplacian eigenvalue."""
+    graph = structure_of(graph)
     _, components = graph.components()
     vals = laplacian_spectrum(graph) if graph.n > 0 else np.zeros(0)
     return {
@@ -60,6 +62,7 @@ def spectral_summary(graph: Graph) -> dict:
 
 def plot_spectrum(graph: Graph, ax=None, normalized: bool = False, bins: int = 40):
     """Histogram of the Laplacian eigenvalues, marking the algebraic connectivity."""
+    graph = structure_of(graph)
     ax = axes(ax)
     vals = laplacian_spectrum(graph, normalized)
     ax.hist(vals, bins=bins, color=SECONDARY, edgecolor="white", lw=0.4)
@@ -84,6 +87,7 @@ def _binomial_pmf(trials: int, p: float, k: np.ndarray) -> np.ndarray:
 def plot_degree_distribution(graph: Graph, ax=None, compare_random: bool = True, log: bool = False):
     """Degree counts, optionally against the binomial distribution an Erdős–Rényi graph with the
     same density would have, which makes skewed or heavy-tailed degrees stand out."""
+    graph = structure_of(graph)
     ax = axes(ax)
     d = graph.degrees()
     lo, hi = (int(d.min()), int(d.max())) if len(d) else (0, 0)
@@ -124,6 +128,7 @@ def plot_adjacency(graph: Graph, highlight: Iterable[int] = (), ax=None, order: 
     top-left so the subgraph appears as a block. ``order`` sorts the remaining vertices by
     ``"degree"``, by ``"spectral"`` position (the Fiedler vector, which reveals clusters) or by
     ``"index"``."""
+    graph = structure_of(graph)
     from matplotlib.colors import ListedColormap
 
     ax = axes(ax)
@@ -147,6 +152,7 @@ def plot_adjacency(graph: Graph, highlight: Iterable[int] = (), ax=None, order: 
 
 def plot_graph_summary(graph: Graph, highlight: Iterable[int] = (), figsize=None):
     """A figure with the degree distribution, the Laplacian spectrum and the adjacency matrix."""
+    graph = structure_of(graph)
     import matplotlib.pyplot as plt
 
     fig, axs = plt.subplots(1, 3, figsize=figsize or (13, 3.8), layout="constrained")

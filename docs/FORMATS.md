@@ -13,6 +13,7 @@ still reads and writes it (`lists`, `.txt`) for compatibility, and adds the stan
 | USRA lists | `lists` | `.txt` | ✓ | ✓ | the original C programs |
 | Graphviz | `dot` | `.dot`, `.gv` | | ✓ | drawing with Graphviz, highlighting a subgraph |
 | GraphML | `graphml` | `.graphml` | | ✓ | Gephi, Cytoscape, yEd |
+| USRA weighted lists | `wlists` | (name it: `--from wlists`) | ✓ | ✓ | the original `wggen` and `wsub_search` |
 
 ## Sizes
 
@@ -50,9 +51,23 @@ smaller once the density exceeds about `log2(n) / n`: around 7% at 100 vertices,
 - **Use DOT or GraphML** to draw. Both take a vertex set to highlight
   (`subsearch convert g.g6 g.dot --highlight 3,17,42`), which colours a found subgraph.
 
-## Not supported, and why
+## Weighted graphs
 
-- **Weighted graphs** (`wsub_search`'s format) are planned together with the weighted search.
+Edge weights (integers from 1 to 255) are read and written with `--weighted` on the command line,
+or as a `WeightedGraph` in Python. They are stored as:
+
+- the **third column of an edge list** (`u v w`; a missing third column means weight 1);
+- the **values of a Matrix Market file** (written as `integer symmetric`; `pattern` files read as
+  weight 1, and non-integer values are refused);
+- **USRA weighted lists** (`wlists`), the encoding `wggen` writes and `wsub_search` reads: entry
+  `x` in row `i` is the edge `{i, x % n}` with weight `x / n + 1`. USRA used `.txt` for these as
+  well as for unweighted lists, so name the format explicitly.
+
+DOT output labels edges with their weights and scales their widths; GraphML output adds a
+`weight` edge attribute. graph6, sparse6 and unweighted lists cannot hold weights: they read as
+weight 1, and writing a weighted graph to them is an error rather than silently losing the weights.
+
+## Not supported, and why
 - **JSON node-link** (d3, networkx `node_link_data`): use `subsearch.convert.to_networkx` and
   networkx's own JSON support. networkx is changing its default key from `links` to `edges`, so a
   fixed writer here would soon mismatch.

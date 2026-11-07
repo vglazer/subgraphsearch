@@ -306,3 +306,90 @@ def test_graph6_and_sparse6_agree_with_networkx(tmp_path):
         ss.write_all(path, graphs, fmt)
         back = reader(path)
         assert [convert.from_networkx(h) for h in back] == graphs, fmt
+
+
+# ---- weighted graphs (wsub_search, wggen)
+
+@pytest.fixture(scope="module")
+def w200():
+    return ss.generate_weighted(200, 0.65, seed=1, rng="legacy")
+
+
+def test_weighted_graph_basics():
+    w = ss.WeightedGraph(4, [(0, 1, 3), (2, 1, 5)])
+    assert (w.n, w.m, w.total_weight) == (4, 2, 8)
+    assert w.weight(1, 0) == 3 and w.weight(0, 3) == 0
+    assert w.edges().tolist() == [[0, 1, 3], [1, 2, 5]]
+    assert w.weighted_degrees().tolist() == [3, 8, 5, 0]
+    assert w.induced_weight([0, 1, 2]) == 8 and w.structure.m == 2
+    assert ss.WeightedGraph.from_graph(w.structure).total_weight == 2
+    with pytest.raises(ValueError, match="between 1 and 255"):
+        ss.WeightedGraph(3, [(0, 1, 0)])
+
+
+def test_generate_weighted_matches_wggen(w200):
+    assert w200 == ss.WeightedGraph.read(FIXTURES / "graphs" / "w200_65_1.txt", "wlists")
+    assert w200.total_weight == 12935
+    assert ss.generate_weighted(30, 3.0, seed=5).total_weight == 30 * 29 * 300 // 200
+    with pytest.raises(ValueError, match="multiple of 0.01"):
+        ss.generate_weighted(10, 0.005)
+
+
+@pytest.mark.parametrize("fmt,ext", [("edgelist", "edges"), ("mtx", "mtx"), ("wlists", "wl")])
+def test_weighted_round_trips(tmp_path, w200, fmt, ext):
+    path = tmp_path / f"w.{ext}"
+    w200.write(path, fmt)
+    assert ss.WeightedGraph.read(path, fmt) == w200
+    with pytest.raises(ValueError, match="cannot store edge weights"):
+        w200.dumps("graph6")
+
+
+def test_weighted_interop(w200):
+    nx = pytest.importorskip("networkx")
+    pytest.importorskip("scipy")
+    G = convert.to_networkx(w200)
+    assert G.size(weight="weight") == w200.total_weight
+    assert convert.from_networkx(G, weight="weight") == w200
+    assert convert.from_networkx(G) == w200.structure
+    a = convert.to_scipy(w200)
+    assert a.sum() == 2 * w200.total_weight
+    assert convert.from_scipy(a, weighted=True) == w200
+
+
+def test_weighted_search(w200):
+    r = ss.search(w200, 15, 180, experiments=30, max_moves=3000, div_freq=300, div_dur=10, seed=2)
+    assert r.weighted and "total weight 180" in r.summary()
+    assert r.successes > 0
+    for e in r.experiments:
+        if e.success:
+            assert w200.induced_weight(e.vertices) == 180
+    # legacy rng reproduces the C wsub_search fixture
+    legacy = ss.search(w200, 10, 30, experiments=20, max_moves=1000, div_freq=200, div_dur=5, seed=3, rng="legacy")
+    expected = (FIXTURES / "wsub_search" / "light.out").read_text()
+    for e in legacy.experiments:
+        assert " ".join(map(str, e.vertices)) + " " in expected
+
+
+def test_legacy_weighted_programs():
+    strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
+    for name in ["light_adj", "multi_weights", "hard_183", "fixed", "unit_weights"]:
+        out, status = ss.legacy.wsub_search((FIXTURES / "wsub_search" / f"{name}.in").read_text())
+        assert strip(out) == strip((FIXTURES / "wsub_search" / f"{name}.out").read_text()), name
+    for name in ["w10_50_3", "w60_150_3"]:
+        args = (FIXTURES / "wggen" / f"{name}.args").read_text()
+        assert ss.legacy.wggen(args) == (FIXTURES / "wggen" / f"{name}.out").read_text()
+    with pytest.raises(ValueError, match="edge weight exceeds 127"):
+        ss.legacy.wggen([10, 30000, 1])
+
+
+def test_weighted_visualisation(tmp_path, w200):
+    r = ss.search(w200, 15, 180, experiments=6, max_moves=2000, seed=4, trace=True)
+    page = viz.to_html(r)
+    data = json.loads(re.search(r"const DATA = (\{.*?\});\n", page).group(1))
+    assert len(data["weights"]) == w200.m and sum(data["weights"]) == w200.total_weight
+    assert "total weight" in r._repr_html_() and "edge weights" in w200._repr_html_()
+    viz.plot_search_summary(r)
+    viz.plot_graph_summary(w200, r.best.vertices)
+    import matplotlib.pyplot as plt
+
+    plt.close("all")

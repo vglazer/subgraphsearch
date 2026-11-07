@@ -7,11 +7,12 @@
 use std::io::{self, Write};
 
 use crate::Error;
+use crate::formats::{self, Format};
 use crate::generate;
-use crate::graph::{Graph, GraphBuilder};
+use crate::graph::{Graph, GraphBuilder, WeightedGraph};
 use crate::ops;
 use crate::rng::{Randu, RngKind};
-use crate::search::{self, NUM_BOXES, SearchParams};
+use crate::search::{self, NUM_BOXES, SearchGraph, SearchParams};
 
 /// Reads integers the way C's `scanf("%d")` does: skip whitespace, an optional sign, then digits.
 /// In particular `"5-1"` reads as `5` followed by `-1`, which `ggen`'s output relies on.
@@ -142,7 +143,7 @@ pub fn sub_search<W: Write>(
     out: &mut W,
     footer: impl FnOnce() -> String,
 ) -> Result<Status, Error> {
-    run_search(input, out, footer, false)
+    run_search(input, out, footer, Variant::Plain)
 }
 
 /// Runs `asub_search` (`sub_search` with limited aspiration); see [`sub_search`]. The two
@@ -152,14 +153,91 @@ pub fn asub_search<W: Write>(
     out: &mut W,
     footer: impl FnOnce() -> String,
 ) -> Result<Status, Error> {
-    run_search(input, out, footer, true)
+    run_search(input, out, footer, Variant::Aspiration)
+}
+
+/// Runs `wsub_search` (`sub_search` on weighted graphs); see [`sub_search`]. Edge weights are
+/// encoded in the adjacency lists: entry `x` in row `i` is the edge `{i, x % v}` with weight
+/// `x / v + 1`, and the target `e_sub` is a total weight.
+pub fn wsub_search<W: Write>(
+    input: &str,
+    out: &mut W,
+    footer: impl FnOnce() -> String,
+) -> Result<Status, Error> {
+    run_search(input, out, footer, Variant::Weighted)
+}
+
+/// Reads `n` weighted '-1'-terminated adjacency lists in `wsub_search`'s encoding. As in the C
+/// program, a pair listed twice keeps the last weight given.
+fn read_weighted_adjacency(sc: &mut Scanner, n: usize) -> Result<WeightedGraph, Error> {
+    let mut weights = vec![0u8; n * n];
+    for i in 0..n {
+        loop {
+            let x = read_int(sc)?;
+            if x == -1 {
+                break;
+            }
+            if x < 0 {
+                return Err(Error::Legacy(format!("invalid adjacency entry {x}")));
+            }
+            let (u, w) = ((x % n as i64) as usize, x / n as i64 + 1);
+            if u == i {
+                return Err(Error::Legacy(format!(
+                    "self-loop at vertex {u} is not supported"
+                )));
+            }
+            // wsub_search kept weights in a signed char
+            if w > i64::from(generate::MAX_GENERATED_WEIGHT) {
+                return Err(Error::Legacy(format!(
+                    "entry {x} encodes weight {w}, more than the original program could store (127)"
+                )));
+            }
+            weights[i * n + u] = w as u8;
+            weights[u * n + i] = w as u8;
+        }
+    }
+    Ok(WeightedGraph::from_matrix(n, weights))
+}
+
+/// Runs `wggen` with the given command-line arguments (excluding the program name), writing its
+/// stdout to `out`. Errors carry the message `wggen` prints on stderr before exiting with status 1.
+pub fn wggen<W: Write>(args: &[String], out: &mut W) -> Result<(), Error> {
+    if args.len() != 3 {
+        return Err(Error::Legacy(
+            "usage: wggen [ number of vertices ] [ density ] [ seed ] ".into(),
+        ));
+    }
+    let (v, d, seed) = (atoi(&args[0]) as i32, atoi(&args[1]) as i32, atoi(&args[2]));
+    if v < 1 || d < 0 || seed <= 0 {
+        return Err(Error::Legacy(format!(
+            "wggen: need v >= 1, density >= 0 and seed >= 1, got {v} {d} {seed}"
+        )));
+    }
+    let g =
+        generate::weighted(v as usize, d as u32, &mut Randu::new(seed)).map_err(|e| match e {
+            Error::Invalid(msg) => Error::Legacy(format!("wggen: {msg}")),
+            other => other,
+        })?;
+    write!(
+        out,
+        "{}",
+        formats::to_string_weighted(&g, Format::WeightedLists, &formats::WriteOptions::default())?
+    )?;
+    write!(out, "\nV = {v}, E = {}\n", g.total_weight())?;
+    Ok(())
+}
+
+/// C's `atoi`/`atol`: optional whitespace and sign, then digits; anything else gives 0.
+fn atoi(s: &str) -> i64 {
+    let mut sc = Scanner::new(s);
+    sc.next_int().unwrap_or(0)
 }
 
 fn run_search<W: Write>(
     input: &str,
     out: &mut W,
     footer: impl FnOnce() -> String,
-    aspiration: bool,
+    variant: Variant,
 ) -> Result<Status, Error> {
     let mut sc = Scanner::new(input);
     let mut p = [0i64; 10];
@@ -201,7 +279,12 @@ fn run_search<W: Write>(
         )));
     }
     let n = v as usize;
-    let graph = read_adjacency(&mut sc, n, false)?;
+    let weighted = variant == Variant::Weighted;
+    let (plain, weights) = if weighted {
+        (None, Some(read_weighted_adjacency(&mut sc, n)?))
+    } else {
+        (Some(read_adjacency(&mut sc, n, false)?), None)
+    };
     let mut fixed = Vec::with_capacity(v_fix as usize);
     for _ in 0..v_fix {
         fixed.push(read_vertex(&mut sc, n, false)?.unwrap());
@@ -218,15 +301,67 @@ fn run_search<W: Write>(
         seed,
         rng: RngKind::Legacy,
         record_trace: false,
-        aspiration,
+        aspiration: variant == Variant::Aspiration,
     };
+    let run = Run {
+        params,
+        show_sols,
+        v_sub,
+        num_mov,
+        num_exps,
+    };
+    match (plain, weights) {
+        (Some(g), _) => report_experiments(&g, &run, out, footer, |_, u| u as i64),
+        // wsub_search prints edge {k, u} of weight w as u + (w - 1) * v
+        (_, Some(g)) => report_experiments(&g, &run, out, footer, |k, u| {
+            u as i64 + (i64::from(g.weight(k, u)) - 1) * v
+        }),
+        _ => unreachable!(),
+    }
+}
+
+/// Which of the three search programs to emulate.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Variant {
+    Plain,
+    Aspiration,
+    Weighted,
+}
+
+/// What [`report_experiments`] needs besides the graph.
+struct Run {
+    params: SearchParams,
+    show_sols: i64,
+    v_sub: i64,
+    num_mov: i64,
+    num_exps: i64,
+}
+
+/// Runs the experiments and prints them as the C programs do. `entry(k, u)` is how the neighbour
+/// `u` of `k` appears in printed adjacency lists. As in the C programs, the printed `E =` counts
+/// edges, even for weighted graphs.
+fn report_experiments<G: SearchGraph, W: Write>(
+    graph: &G,
+    run: &Run,
+    out: &mut W,
+    footer: impl FnOnce() -> String,
+    entry: impl Fn(usize, usize) -> i64,
+) -> Result<Status, Error> {
+    let Run {
+        params,
+        show_sols,
+        v_sub,
+        num_mov,
+        num_exps,
+    } = run;
+    let (show_sols, v_sub, num_mov, num_exps) = (*show_sols, *v_sub, *num_mov, *num_exps);
     let threshold = show_sols.unsigned_abs() as i64;
     let mut io_result = Ok(());
     let mut i = 0usize;
     let (mut succ_exp, mut succ_mov, mut tot_mov, mut glob_vals) = (0i64, 0i64, 0i64, 0i64);
     let mut boxes = [0i64; NUM_BOXES];
     let boxsize = num_mov / NUM_BOXES as i64 + 1;
-    search::search_sequential(&graph, &params, |e| {
+    search::search_sequential(graph, params, |e| {
         if io_result.is_err() {
             return;
         }
@@ -256,7 +391,7 @@ fn run_search<W: Write>(
                             if e.vertices.binary_search(&u).is_ok() {
                                 degree += 1;
                                 if u > k {
-                                    write!(out, " {u}")?;
+                                    write!(out, " {}", entry(k, u))?;
                                 }
                             }
                         }

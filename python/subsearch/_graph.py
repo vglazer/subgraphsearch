@@ -273,3 +273,151 @@ def generate(model: str, n: int, density: float, *, seed: int = 1, rng: str = "x
     if seed <= 0:
         raise ValueError(f"seed must be a positive integer, got {seed}")
     return Graph(_core.generate_graph(model, int(n), permille, int(seed), rng))
+
+
+class WeightedGraph:
+    """An immutable undirected graph whose edges carry integer weights from 1 to 255, as searched
+    by USRA's ``wsub_search``: the search target is then a total weight rather than an edge count.
+
+    >>> w = WeightedGraph(3, [(0, 1, 2), (1, 2, 5)])
+    >>> w.total_weight, w.weight(2, 1)
+    (7, 5)
+    """
+
+    __slots__ = ("_g",)
+
+    def __init__(self, n: int = 0, edges: Iterable[tuple[int, int, int]] | np.ndarray = ()):
+        if isinstance(n, _core.WeightedGraph):
+            self._g = n
+            return
+        self._g = _core.WeightedGraph(int(n), [(int(u), int(v), int(w)) for u, v, w in edges])
+
+    @staticmethod
+    def from_graph(graph: Graph) -> WeightedGraph:
+        """Every edge of ``graph`` with weight 1."""
+        return WeightedGraph(_core.WeightedGraph.from_graph(graph._g))
+
+    @staticmethod
+    def read(path: str | PathLike, format: str | None = None) -> WeightedGraph:
+        """Reads weights from an edge list's third column, a Matrix Market file's values, or USRA
+        weighted lists (``format="wlists"``); formats without weights give every edge weight 1."""
+        return WeightedGraph(_core.WeightedGraph.read(str(path), format))
+
+    @staticmethod
+    def parse(text: str, format: str) -> WeightedGraph:
+        return WeightedGraph(_core.WeightedGraph.parse(text, format))
+
+    def dumps(self, format: str, highlight: Iterable[int] = ()) -> str:
+        """Serialises with weights: ``edgelist``, ``mtx``, ``wlists``, ``dot`` or ``graphml``."""
+        return self._g.dumps(format, [int(v) for v in highlight])
+
+    def write(self, path: str | PathLike, format: str | None = None, highlight: Iterable[int] = ()) -> None:
+        self._g.write(str(path), format, [int(v) for v in highlight])
+
+    @property
+    def num_vertices(self) -> int:
+        return self._g.num_vertices
+
+    @property
+    def num_edges(self) -> int:
+        return self._g.num_edges
+
+    n = num_vertices
+    m = num_edges
+
+    @property
+    def total_weight(self) -> int:
+        return self._g.total_weight
+
+    @property
+    def structure(self) -> Graph:
+        """The unweighted graph with the same edges."""
+        return Graph(self._g.structure())
+
+    @property
+    def density(self) -> float:
+        """Edge density of the underlying unweighted graph."""
+        return self.structure.density
+
+    def __len__(self) -> int:
+        return self.num_vertices
+
+    def edges(self) -> np.ndarray:
+        """Edges as an ``(m, 3)`` array of ``(u, v, weight)`` with ``u < v``."""
+        return np.asarray(self._g.edges(), dtype=np.int64).reshape(-1, 3)
+
+    def edge_list(self) -> list[tuple[int, int, int]]:
+        return self._g.edges()
+
+    def weight(self, u: int, v: int) -> int:
+        """The weight of ``{u, v}``, or 0 if it is not an edge."""
+        return self._g.weight(int(u), int(v))
+
+    def neighbors(self, u: int) -> np.ndarray:
+        return np.asarray(self._g.neighbors(int(u)), dtype=np.int64)
+
+    def degrees(self) -> np.ndarray:
+        """Number of neighbours of each vertex."""
+        return self.structure.degrees()
+
+    def weighted_degrees(self) -> np.ndarray:
+        """Total weight of the edges at each vertex."""
+        e = self.edges()
+        return np.bincount(e[:, 0], weights=e[:, 2], minlength=self.n).astype(np.int64) + np.bincount(
+            e[:, 1], weights=e[:, 2], minlength=self.n
+        ).astype(np.int64)
+
+    def induced_weight(self, vertices: Iterable[int]) -> int:
+        """Total weight of the edges among ``vertices``."""
+        return self._g.induced_weight([int(v) for v in vertices])
+
+    def weight_matrix(self, dtype=np.int16) -> np.ndarray:
+        """Dense ``n x n`` matrix of weights (0 for non-edges)."""
+        a = np.zeros((self.n, self.n), dtype=dtype)
+        e = self.edges()
+        a[e[:, 0], e[:, 1]] = e[:, 2]
+        a[e[:, 1], e[:, 0]] = e[:, 2]
+        return a
+
+    def layout(self, method: str = "spring", **kwargs) -> np.ndarray:
+        """Positions of the underlying unweighted graph; see :meth:`Graph.layout`."""
+        return self.structure.layout(method, **kwargs)
+
+    def search(self, size: int, weight: int, **kwargs):
+        """Shorthand for :func:`subsearch.search` on this graph, with a target total ``weight``."""
+        from ._search import search
+
+        return search(self, size, weight, **kwargs)
+
+    def __repr__(self) -> str:
+        return f"WeightedGraph(vertices={self.n}, edges={self.m}, total_weight={self.total_weight})"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, WeightedGraph) and self._g == other._g
+
+    __hash__ = None  # type: ignore[assignment]
+
+    def _repr_html_(self) -> str:
+        from ._html import weighted_graph_html
+
+        return weighted_graph_html(self)
+
+
+def generate_weighted(n: int, mean_weight: float, *, seed: int = 1, rng: str = "xoshiro") -> WeightedGraph:
+    """A weighted random graph as USRA's ``wggen`` makes it: ``n (n - 1) / 2 * mean_weight`` times,
+    a uniformly random pair of vertices has its weight increased by 1.
+
+    ``mean_weight`` is the mean weight per vertex pair, in steps of 0.01 (``wggen``'s density
+    divided by 100); it may exceed 1. ``rng="legacy"`` reproduces ``wggen``'s graphs exactly.
+    """
+    percent = round(mean_weight * 100)
+    if percent < 0 or not math.isclose(percent, mean_weight * 100, abs_tol=1e-6):
+        raise ValueError(f"mean_weight must be a non-negative multiple of 0.01, got {mean_weight}")
+    if seed <= 0:
+        raise ValueError(f"seed must be a positive integer, got {seed}")
+    return WeightedGraph(_core.generate_weighted(int(n), percent, int(seed), rng))
+
+
+def structure_of(graph) -> Graph:
+    """The unweighted graph underlying ``graph`` (which may already be unweighted)."""
+    return graph.structure if isinstance(graph, WeightedGraph) else graph

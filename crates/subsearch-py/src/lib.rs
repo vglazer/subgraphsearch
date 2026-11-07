@@ -9,7 +9,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use subsearch_core::formats::{self, Format, WriteOptions};
 use subsearch_core::rng::{Randu, RngKind, Xoshiro};
-use subsearch_core::{Error, Graph, Model, SearchParams, generate, layout, legacy, ops};
+use subsearch_core::{
+    Error, Graph, Model, SearchGraph, SearchParams, WeightedGraph, generate, layout, legacy, ops,
+};
 
 fn err(e: Error) -> PyErr {
     match e {
@@ -227,6 +229,145 @@ impl PyGraph {
     }
 }
 
+/// An immutable undirected graph with integer edge weights between 1 and 255.
+#[pyclass(module = "subsearch._core", name = "WeightedGraph", frozen)]
+struct PyWeightedGraph {
+    inner: Arc<WeightedGraph>,
+}
+
+impl PyWeightedGraph {
+    fn wrap(g: WeightedGraph) -> Self {
+        PyWeightedGraph { inner: Arc::new(g) }
+    }
+
+    fn check(&self, v: usize) -> PyResult<()> {
+        let n = self.inner.num_vertices();
+        if v >= n {
+            return Err(PyValueError::new_err(format!(
+                "vertex {v} is out of range [0, {n})"
+            )));
+        }
+        Ok(())
+    }
+}
+
+#[pymethods]
+impl PyWeightedGraph {
+    /// WeightedGraph(n, edges): edges are (u, v, weight) triples.
+    #[new]
+    fn new(n: usize, edges: Vec<(usize, usize, u32)>) -> PyResult<Self> {
+        Ok(Self::wrap(
+            WeightedGraph::from_weighted_edges(n, edges).map_err(err)?,
+        ))
+    }
+
+    /// Every edge of an unweighted graph, with weight 1.
+    #[staticmethod]
+    fn from_graph(g: &PyGraph) -> Self {
+        Self::wrap(WeightedGraph::from_graph(&g.inner))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (path, format = None))]
+    fn read(py: Python<'_>, path: PathBuf, format: Option<&str>) -> PyResult<Self> {
+        let format = format.map(parse::<Format>).transpose()?;
+        let g = py
+            .detach(|| formats::read_weighted_file(&path, format))
+            .map_err(err)?;
+        Ok(Self::wrap(g))
+    }
+
+    #[staticmethod]
+    fn parse(text: &str, format: &str) -> PyResult<Self> {
+        Ok(Self::wrap(
+            formats::parse_weighted(text, parse(format)?).map_err(err)?,
+        ))
+    }
+
+    #[pyo3(signature = (format, highlight = Vec::new()))]
+    fn dumps(&self, format: &str, highlight: Vec<usize>) -> PyResult<String> {
+        formats::to_string_weighted(
+            &self.inner,
+            parse(format)?,
+            &WriteOptions {
+                highlight: &highlight,
+            },
+        )
+        .map_err(err)
+    }
+
+    #[pyo3(signature = (path, format = None, highlight = Vec::new()))]
+    fn write(&self, path: PathBuf, format: Option<&str>, highlight: Vec<usize>) -> PyResult<()> {
+        let format = format.map(parse::<Format>).transpose()?;
+        formats::write_weighted_file(
+            &self.inner,
+            &path,
+            format,
+            &WriteOptions {
+                highlight: &highlight,
+            },
+        )
+        .map_err(err)
+    }
+
+    #[getter]
+    fn num_vertices(&self) -> usize {
+        self.inner.num_vertices()
+    }
+
+    #[getter]
+    fn num_edges(&self) -> usize {
+        self.inner.num_edges()
+    }
+
+    #[getter]
+    fn total_weight(&self) -> u64 {
+        self.inner.total_weight()
+    }
+
+    /// Edges (u, v, weight) with u < v.
+    fn edges(&self) -> Vec<(usize, usize, u8)> {
+        self.inner.edges().collect()
+    }
+
+    fn weight(&self, u: usize, v: usize) -> PyResult<u8> {
+        self.check(u)?;
+        self.check(v)?;
+        Ok(self.inner.weight(u, v))
+    }
+
+    fn neighbors(&self, u: usize) -> PyResult<Vec<u32>> {
+        self.check(u)?;
+        Ok(self.inner.neighbors(u).to_vec())
+    }
+
+    fn induced_weight(&self, vertices: Vec<usize>) -> PyResult<u64> {
+        let structure = self.inner.structure();
+        ops::rest(&structure, &vertices).map_err(err)?;
+        Ok(self.inner.induced_weight(&vertices))
+    }
+
+    /// The unweighted graph with the same edges.
+    fn structure(&self) -> PyGraph {
+        PyGraph::wrap(self.inner.structure())
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+/// A weighted random graph as USRA's wggen makes it, `density` in percent (mean weight per
+/// vertex pair times 100).
+#[pyfunction]
+fn generate_weighted(n: usize, density: u32, seed: i64, rng: &str) -> PyResult<PyWeightedGraph> {
+    let g = match parse::<RngKind>(rng)? {
+        RngKind::Legacy => generate::weighted(n, density, &mut Randu::new(seed)),
+        RngKind::Xoshiro => generate::weighted(n, density, &mut Xoshiro::new(seed as u64)),
+    };
+    Ok(PyWeightedGraph::wrap(g.map_err(err)?))
+}
+
 /// A random graph from `model` with `density` per mille.
 #[pyfunction]
 fn generate_graph(model: &str, n: usize, density: u32, seed: i64, rng: &str) -> PyResult<PyGraph> {
@@ -246,7 +387,7 @@ type ExperimentTuple = (i64, usize, bool, Vec<usize>, Option<Vec<u32>>);
 #[allow(clippy::too_many_arguments)]
 fn search(
     py: Python<'_>,
-    graph: &PyGraph,
+    graph: &Bound<'_, PyAny>,
     size: usize,
     edges: i64,
     fixed: Vec<usize>,
@@ -272,10 +413,15 @@ fn search(
         record_trace: trace,
         aspiration,
     };
-    let g = Arc::clone(&graph.inner);
-    let result = py
-        .detach(move || subsearch_core::search(&g, &params))
-        .map_err(err)?;
+    let result = if let Ok(g) = graph.extract::<PyRef<'_, PyGraph>>() {
+        run_search(py, Arc::clone(&g.inner), params)?
+    } else if let Ok(g) = graph.extract::<PyRef<'_, PyWeightedGraph>>() {
+        run_search(py, Arc::clone(&g.inner), params)?
+    } else {
+        return Err(PyValueError::new_err(
+            "graph must be a Graph or a WeightedGraph",
+        ));
+    };
     Ok(result
         .experiments
         .into_iter()
@@ -283,19 +429,46 @@ fn search(
         .collect())
 }
 
+fn run_search<G: SearchGraph + Send + 'static>(
+    py: Python<'_>,
+    graph: Arc<G>,
+    params: SearchParams,
+) -> PyResult<subsearch_core::SearchResult> {
+    py.detach(move || subsearch_core::search(&*graph, &params))
+        .map_err(err)
+}
+
 /// Runs the original `sub_search` program's interface on `stdin`; returns (stdout, exit status).
 #[pyfunction]
 fn legacy_sub_search(py: Python<'_>, stdin: String) -> PyResult<(String, i32)> {
-    run_legacy_search(py, stdin, false)
+    run_legacy_search(py, stdin, "sub")
 }
 
 /// Runs the original `asub_search` program's interface on `stdin`; returns (stdout, exit status).
 #[pyfunction]
 fn legacy_asub_search(py: Python<'_>, stdin: String) -> PyResult<(String, i32)> {
-    run_legacy_search(py, stdin, true)
+    run_legacy_search(py, stdin, "asub")
 }
 
-fn run_legacy_search(py: Python<'_>, stdin: String, aspiration: bool) -> PyResult<(String, i32)> {
+/// Runs the original `wsub_search` program's interface on `stdin`; returns (stdout, exit status).
+#[pyfunction]
+fn legacy_wsub_search(py: Python<'_>, stdin: String) -> PyResult<(String, i32)> {
+    run_legacy_search(py, stdin, "wsub")
+}
+
+/// Runs the original `wggen` program with these command-line arguments; returns its stdout.
+#[pyfunction]
+fn legacy_wggen(args: Vec<String>) -> PyResult<String> {
+    let mut out = Vec::new();
+    legacy::wggen(&args, &mut out).map_err(err)?;
+    Ok(String::from_utf8(out).unwrap())
+}
+
+fn run_legacy_search(
+    py: Python<'_>,
+    stdin: String,
+    program: &'static str,
+) -> PyResult<(String, i32)> {
     py.detach(move || {
         let mut out = Vec::new();
         let start = std::time::Instant::now();
@@ -305,10 +478,10 @@ fn run_legacy_search(py: Python<'_>, stdin: String, aspiration: bool) -> PyResul
                 start.elapsed().as_secs_f64()
             )
         };
-        let status = if aspiration {
-            legacy::asub_search(&stdin, &mut out, footer)?
-        } else {
-            legacy::sub_search(&stdin, &mut out, footer)?
+        let status = match program {
+            "asub" => legacy::asub_search(&stdin, &mut out, footer)?,
+            "wsub" => legacy::wsub_search(&stdin, &mut out, footer)?,
+            _ => legacy::sub_search(&stdin, &mut out, footer)?,
         };
         Ok((String::from_utf8(out).unwrap(), status))
     })
@@ -343,8 +516,9 @@ fn formats_list() -> Vec<(&'static str, bool)> {
 mod _core {
     #[pymodule_export]
     use super::{
-        PyGraph, dumps_all, formats_list, generate_graph, legacy_asub_search, legacy_ggen,
-        legacy_sub_search, search,
+        PyGraph, PyWeightedGraph, dumps_all, formats_list, generate_graph, generate_weighted,
+        legacy_asub_search, legacy_ggen, legacy_sub_search, legacy_wggen, legacy_wsub_search,
+        search,
     };
 
     #[pymodule_init]

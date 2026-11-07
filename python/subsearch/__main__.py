@@ -13,7 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from ._graph import Graph
+from ._graph import Graph, WeightedGraph
 from ._search import SearchResult
 
 
@@ -28,11 +28,12 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--format", help="graph format, if not implied by the extension")
         p.add_argument("--result", type=Path, help="search result JSON")
         p.add_argument("-o", "--output", type=Path, help="output file")
+        p.add_argument("--weighted", action="store_true", help="read edge weights (edge list, mtx or wlists)")
     explore.add_argument("--max-conflict", type=int, default=0, help="also offer near-misses within this many edges")
     explore.add_argument("--layout", default="spring", choices=["spring", "spectral", "circle"])
 
     args = parser.parse_args(argv)
-    graph = Graph.read(args.graph, args.format)
+    graph = WeightedGraph.read(args.graph, args.format) if args.weighted else Graph.read(args.graph, args.format)
     result = SearchResult.load(args.result, graph) if args.result else None
 
     if args.command == "explore":

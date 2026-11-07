@@ -8,8 +8,10 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use subsearch_core::formats::{self, Format, WriteOptions};
 use subsearch_core::rng::{Randu, Xoshiro};
+use subsearch_core::search::SearchGraph;
 use subsearch_core::{
-    Graph, Model, RngKind, SearchParams, generate, legacy, ops, search_sequential,
+    Graph, Model, RngKind, SearchParams, SearchResult, WeightedGraph, generate, legacy, ops,
+    search_sequential,
 };
 
 #[derive(Parser)]
@@ -42,6 +44,13 @@ enum LegacyCommand {
     SubSearch,
     /// `asub_search` (`sub_search` with limited aspiration): the same input as `sub_search`.
     AsubSearch,
+    /// `wsub_search` (`sub_search` on weighted graphs): weights encoded in the adjacency lists.
+    WsubSearch,
+    /// `wggen`: a weighted random graph; arguments VERTICES DENSITY SEED, as on its command line.
+    Wggen {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// `ggen`: parameters (and any input lists and fixed vertices) on stdin.
     Ggen,
 }
@@ -92,6 +101,21 @@ impl GraphInput {
                 Ok(graphs.swap_remove(i))
             }
         }
+    }
+
+    /// The graph with edge weights (an edge list's third column, Matrix Market values, or
+    /// weighted lists); formats without weights give every edge weight 1.
+    fn load_weighted(&self) -> Result<WeightedGraph> {
+        let format = self.format.or_else(|| Format::from_path(&self.graph));
+        if self.index.is_some() || format.is_some_and(|f| !formats::holds_weights(f)) {
+            return Ok(WeightedGraph::from_graph(&self.load()?));
+        }
+        if self.graph == Path::new("-") {
+            let (text, format) = read_stdin(self.format)?;
+            return Ok(formats::parse_weighted(&text, format)?);
+        }
+        formats::read_weighted_file(&self.graph, self.format)
+            .with_context(|| format!("reading {}", self.graph.display()))
     }
 
     /// Every graph in the file (just the one chosen, with --index).
@@ -156,17 +180,22 @@ struct SearchArgs {
     /// Search every graph in a multi-graph file (graph6 or sparse6), one after another.
     #[arg(long, conflicts_with = "index")]
     all: bool,
+    /// Use edge weights (USRA's wsub_search): -m is then a total weight. Weights come from an
+    /// edge list's third column, Matrix Market values, or weighted lists (--from wlists).
+    #[arg(long, conflicts_with = "all")]
+    weighted: bool,
 }
 
 #[derive(Args)]
 struct GenerateArgs {
-    /// Random graph model.
-    #[arg(value_parser = parse_model)]
-    model: Model,
+    /// Random graph model: exponential, power, geometric, or weighted (USRA's wggen).
+    #[arg(value_parser = parse_gen_model)]
+    model: GenModel,
     /// Number of vertices.
     #[arg(short = 'n', long)]
     vertices: usize,
-    /// Edge density between 0 and 1, in steps of 0.001 (e.g. 0.6).
+    /// Edge density between 0 and 1, in steps of 0.001 (e.g. 0.6). For weighted graphs: the mean
+    /// weight per vertex pair, in steps of 0.01, which may exceed 1.
     #[arg(short, long)]
     density: f64,
     /// Random seed (positive).
@@ -178,9 +207,25 @@ struct GenerateArgs {
     /// Output file ('-' or omitted for stdout).
     #[arg(short, long)]
     output: Option<PathBuf>,
-    /// Output format, if it cannot be inferred from the file extension (default: graph6).
+    /// Output format, if it cannot be inferred from the file extension (default: graph6, or an
+    /// edge list for weighted graphs).
     #[arg(long = "to", value_parser = parse_format)]
     format: Option<Format>,
+}
+
+#[derive(Clone, Copy)]
+enum GenModel {
+    Unweighted(Model),
+    Weighted,
+}
+
+fn parse_gen_model(s: &str) -> Result<GenModel, String> {
+    if s.eq_ignore_ascii_case("weighted") {
+        return Ok(GenModel::Weighted);
+    }
+    s.parse()
+        .map(GenModel::Unweighted)
+        .map_err(|e| format!("{e}, or weighted"))
 }
 
 #[derive(Args)]
@@ -195,6 +240,9 @@ struct ConvertArgs {
     /// Vertices to highlight (DOT) or flag (GraphML), e.g. a search result.
     #[arg(long, value_delimiter = ',')]
     highlight: Vec<usize>,
+    /// Keep edge weights (the output format must be able to store them).
+    #[arg(long)]
+    weighted: bool,
 }
 
 #[derive(Args)]
@@ -207,6 +255,9 @@ struct InfoArgs {
     /// Print as JSON.
     #[arg(long)]
     json: bool,
+    /// Also report edge weights.
+    #[arg(long)]
+    weighted: bool,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -243,10 +294,6 @@ struct OpArgs {
 }
 
 fn parse_format(s: &str) -> Result<Format, String> {
-    s.parse()
-}
-
-fn parse_model(s: &str) -> Result<Model, String> {
     s.parse()
 }
 
@@ -295,7 +342,9 @@ fn write_stdout(g: &Graph, format: Format, options: &WriteOptions) -> Result<()>
 }
 
 fn run_search(args: SearchArgs) -> Result<ExitCode> {
-    let graphs = if args.all {
+    let graphs = if args.weighted {
+        Vec::new()
+    } else if args.all {
         args.input.load_all()?
     } else {
         vec![args.input.load()?]
@@ -320,6 +369,18 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
         aspiration: args.aspiration,
     };
     let mut out = io::stdout().lock();
+    if args.weighted {
+        let graph = args.input.load_weighted()?;
+        let start = std::time::Instant::now();
+        let result = run_one(&graph, &params)?;
+        report(&mut out, &result, start.elapsed(), "", &args)?;
+        write_json(&args, &[(0, result.clone())])?;
+        return Ok(if result.successes() > 0 {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(2)
+        });
+    }
     let mut results = Vec::with_capacity(graphs.len());
     let mut graphs_with_success = 0;
     for (index, graph) in graphs.iter().enumerate() {
@@ -329,19 +390,7 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
             String::new()
         };
         let start = std::time::Instant::now();
-        let result = match params.rng {
-            RngKind::Xoshiro => subsearch_core::search(graph, &params),
-            RngKind::Legacy => {
-                let mut experiments = Vec::new();
-                search_sequential(graph, &params, |e| experiments.push(e.clone())).map(|()| {
-                    subsearch_core::SearchResult {
-                        params: params.clone(),
-                        experiments,
-                    }
-                })
-            }
-        };
-        let result = match result {
+        let result = match run_one(graph, &params) {
             Ok(r) => r,
             // with --all, a graph too small for the subgraph is reported and skipped
             Err(e) if args.all => {
@@ -363,25 +412,51 @@ fn run_search(args: SearchArgs) -> Result<ExitCode> {
             params.edges
         )?;
     }
-    if let Some(path) = &args.json {
-        let file =
-            std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
-        let writer = io::BufWriter::new(file);
-        if args.all {
-            let all: Vec<_> = results
-                .iter()
-                .map(|(i, r)| serde_json::json!({"graph": i, "params": r.params, "experiments": r.experiments}))
-                .collect();
-            serde_json::to_writer(writer, &all)?;
-        } else if let Some((_, r)) = results.first() {
-            serde_json::to_writer(writer, r)?;
-        }
-    }
+    write_json(&args, &results)?;
     Ok(if graphs_with_success > 0 {
         ExitCode::SUCCESS
     } else {
         ExitCode::from(2)
     })
+}
+
+/// One search: in parallel with xoshiro, sequentially (as the C programs) with the legacy rng.
+fn run_one<G: SearchGraph>(
+    graph: &G,
+    params: &SearchParams,
+) -> Result<SearchResult, subsearch_core::Error> {
+    match params.rng {
+        RngKind::Xoshiro => subsearch_core::search(graph, params),
+        RngKind::Legacy => {
+            let mut experiments = Vec::new();
+            search_sequential(graph, params, |e| experiments.push(e.clone())).map(|()| {
+                SearchResult {
+                    params: params.clone(),
+                    experiments,
+                }
+            })
+        }
+    }
+}
+
+/// Writes --json output: one result, or with --all a list tagged with graph indices.
+fn write_json(args: &SearchArgs, results: &[(usize, SearchResult)]) -> Result<()> {
+    let Some(path) = &args.json else {
+        return Ok(());
+    };
+    let file =
+        std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
+    let writer = io::BufWriter::new(file);
+    if args.all {
+        let all: Vec<_> = results
+            .iter()
+            .map(|(i, r)| serde_json::json!({"graph": i, "params": r.params, "experiments": r.experiments}))
+            .collect();
+        serde_json::to_writer(writer, &all)?;
+    } else if let Some((_, r)) = results.first() {
+        serde_json::to_writer(writer, r)?;
+    }
+    Ok(())
 }
 
 fn report(
@@ -413,10 +488,15 @@ fn report(
     let s = result.successes();
     writeln!(
         out,
-        "{prefix}{s}/{} experiments found a {}-vertex subgraph with {} edges ({:.2}s)",
+        "{prefix}{s}/{} experiments found a {}-vertex subgraph with {} {} ({:.2}s)",
         result.experiments.len(),
         params.size,
         params.edges,
+        if args.weighted {
+            "total weight"
+        } else {
+            "edges"
+        },
         elapsed.as_secs_f64()
     )?;
     if args.all && args.quiet {
@@ -443,6 +523,13 @@ fn report(
 }
 
 fn run_generate(args: GenerateArgs) -> Result<()> {
+    if args.seed <= 0 {
+        bail!("--seed must be a positive integer, got {}", args.seed);
+    }
+    let model = match args.model {
+        GenModel::Unweighted(m) => m,
+        GenModel::Weighted => return generate_weighted(&args),
+    };
     let permille = (args.density * 1000.0).round();
     if !(0.0..=1000.0).contains(&permille) || (permille - args.density * 1000.0).abs() > 1e-6 {
         bail!(
@@ -450,19 +537,13 @@ fn run_generate(args: GenerateArgs) -> Result<()> {
             args.density
         );
     }
-    if args.seed <= 0 {
-        bail!("--seed must be a positive integer, got {}", args.seed);
-    }
     let density = permille as u32;
     let graph = match RngKind::from(args.rng) {
-        RngKind::Legacy => generate::generate(
-            args.model,
-            args.vertices,
-            density,
-            &mut Randu::new(args.seed),
-        )?,
+        RngKind::Legacy => {
+            generate::generate(model, args.vertices, density, &mut Randu::new(args.seed))?
+        }
         RngKind::Xoshiro => generate::generate(
-            args.model,
+            model,
             args.vertices,
             density,
             &mut Xoshiro::new(args.seed as u64),
@@ -476,7 +557,61 @@ fn run_generate(args: GenerateArgs) -> Result<()> {
     )
 }
 
+fn generate_weighted(args: &GenerateArgs) -> Result<()> {
+    let percent = (args.density * 100.0).round();
+    if percent < 0.0 || (percent - args.density * 100.0).abs() > 1e-6 {
+        bail!(
+            "--density for weighted graphs is the mean weight per vertex pair, a non-negative multiple of 0.01; got {}",
+            args.density
+        );
+    }
+    let graph = match RngKind::from(args.rng) {
+        RngKind::Legacy => {
+            generate::weighted(args.vertices, percent as u32, &mut Randu::new(args.seed))?
+        }
+        RngKind::Xoshiro => generate::weighted(
+            args.vertices,
+            percent as u32,
+            &mut Xoshiro::new(args.seed as u64),
+        )?,
+    };
+    write_weighted(
+        &graph,
+        args.output.as_deref(),
+        args.format,
+        &WriteOptions::default(),
+    )
+}
+
+fn write_weighted(
+    g: &WeightedGraph,
+    path: Option<&Path>,
+    format: Option<Format>,
+    options: &WriteOptions,
+) -> Result<()> {
+    match path {
+        Some(p) if p != Path::new("-") => formats::write_weighted_file(g, p, format, options)
+            .with_context(|| format!("writing {}", p.display())),
+        _ => {
+            let text = formats::to_string_weighted(g, format.unwrap_or(Format::EdgeList), options)?;
+            io::stdout().write_all(text.as_bytes())?;
+            Ok(())
+        }
+    }
+}
+
 fn run_convert(args: ConvertArgs) -> Result<()> {
+    if args.weighted {
+        let g = args.input.load_weighted()?;
+        return write_weighted(
+            &g,
+            Some(&args.output),
+            args.format,
+            &WriteOptions {
+                highlight: &args.highlight,
+            },
+        );
+    }
     let mut graphs = args.input.load_all()?;
     if graphs.len() == 1 {
         let options = WriteOptions {
@@ -512,6 +647,9 @@ fn run_convert(args: ConvertArgs) -> Result<()> {
 }
 
 fn run_info(args: InfoArgs) -> Result<()> {
+    if args.weighted {
+        return info_weighted(&args);
+    }
     let graphs = args.input.load_all()?;
     if graphs.len() != 1 {
         return info_table(&graphs, args.json);
@@ -554,6 +692,51 @@ fn run_info(args: InfoArgs) -> Result<()> {
         println!("degree  count");
         for (d, c) in histogram {
             println!("{d:>6}  {c}");
+        }
+    }
+    Ok(())
+}
+
+fn info_weighted(args: &InfoArgs) -> Result<()> {
+    let g = args.input.load_weighted()?;
+    let mut counts = std::collections::BTreeMap::new();
+    for (_, _, w) in g.edges() {
+        *counts.entry(w).or_insert(0usize) += 1;
+    }
+    let structure = g.structure();
+    let m = g.num_edges();
+    let mean = if m > 0 {
+        g.total_weight() as f64 / m as f64
+    } else {
+        0.0
+    };
+    if args.json {
+        let info = serde_json::json!({
+            "vertices": g.num_vertices(),
+            "edges": m,
+            "total_weight": g.total_weight(),
+            "density": structure.density(),
+            "components": structure.components().1,
+            "weight": {"min": counts.keys().next(), "max": counts.keys().last(), "mean": mean},
+            "weight_counts": counts.iter().map(|(w, c)| [usize::from(*w), *c]).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&info)?);
+        return Ok(());
+    }
+    println!("vertices:     {}", g.num_vertices());
+    println!("edges:        {m}");
+    println!("total weight: {}", g.total_weight());
+    println!("density:      {:.4}", structure.density());
+    println!("components:   {}", structure.components().1);
+    println!(
+        "weights:      min {}, max {}, mean {mean:.2}",
+        counts.keys().next().copied().unwrap_or(0),
+        counts.keys().last().copied().unwrap_or(0)
+    );
+    if args.degrees {
+        println!("weight  edges");
+        for (w, c) in counts {
+            println!("{w:>6}  {c}");
         }
     }
     Ok(())
@@ -647,6 +830,18 @@ fn timing_footer() -> String {
 }
 
 fn run_legacy(cmd: LegacyCommand) -> Result<ExitCode> {
+    if let LegacyCommand::Wggen { args } = &cmd {
+        let mut out = io::BufWriter::new(io::stdout().lock());
+        let result = legacy::wggen(args, &mut out);
+        out.flush()?;
+        return Ok(match result {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("{e}");
+                ExitCode::FAILURE
+            }
+        });
+    }
     let mut input = String::new();
     if io::stdin().is_terminal() {
         eprintln!("reading parameters from stdin (Ctrl-D to finish)...");
@@ -656,6 +851,8 @@ fn run_legacy(cmd: LegacyCommand) -> Result<ExitCode> {
     let result = match cmd {
         LegacyCommand::SubSearch => legacy::sub_search(&input, &mut out, timing_footer),
         LegacyCommand::AsubSearch => legacy::asub_search(&input, &mut out, timing_footer),
+        LegacyCommand::WsubSearch => legacy::wsub_search(&input, &mut out, timing_footer),
+        LegacyCommand::Wggen { .. } => unreachable!(),
         LegacyCommand::Ggen => legacy::ggen(&input, &mut out).map(|()| 0),
     };
     out.flush()?;

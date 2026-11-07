@@ -39,6 +39,11 @@ cells = [
     md("## Tuning\n\n`ss.sweep` reruns a search across values of one parameter."),
     code("sweep = ss.sweep(g, 30, 340, \"div_dur\", [0, 4, 16, 64], experiments=40, max_moves=1500, div_freq=300)\n"
          "viz.plot_sweep(sweep, parameter=\"div_dur\");"),
+    md("## Weighted graphs\n\nUSRA's `wggen` and `wsub_search` work with integer edge weights; the target is then a total weight. "
+       "Here, 15 vertices whose edges weigh 180 in total, in a graph with a mean weight of 0.65 per vertex pair."),
+    code("w = ss.generate_weighted(200, 0.65, seed=1, rng=\"legacy\")  # exactly wggen's `200 65 1`\n"
+         "rw = ss.search(w, 15, 180, experiments=40, max_moves=3000, div_freq=300, div_dur=10)\n"
+         "rw"),
     md("## Formats and other libraries"),
     code("import tempfile, pathlib\nfrom subsearch import convert\n\n"
          "path = pathlib.Path(tempfile.mkdtemp()) / \"g.g6\"\n"

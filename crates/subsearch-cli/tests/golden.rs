@@ -5,14 +5,14 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-fn fixtures(program: &str) -> Vec<PathBuf> {
+fn fixtures(program: &str, input_ext: &str) -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures")
         .join(program);
     let mut inputs: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap()
         .map(|e| e.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|e| e == "in"))
+        .filter(|p| p.extension().is_some_and(|e| e == input_ext))
         .collect();
     inputs.sort();
     assert!(!inputs.is_empty(), "no fixtures in {}", dir.display());
@@ -27,14 +27,25 @@ fn strip_timing(s: &str) -> String {
 }
 
 fn check(program: &str, subcommand: &str) {
+    check_with(program, subcommand, "in");
+}
+
+/// Runs every fixture of `program`. Its inputs are `.in` files fed to stdin or, for programs
+/// that take command-line arguments (`wggen`), `.args` files.
+fn check_with(program: &str, subcommand: &str, input_ext: &str) {
     let mut failures = Vec::new();
-    for input in fixtures(program) {
+    for input in fixtures(program, input_ext) {
         let expected = |ext: &str| std::fs::read_to_string(input.with_extension(ext)).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_subsearch"))
-            .args(["legacy", subcommand])
-            .stdin(Stdio::from(std::fs::File::open(&input).unwrap()))
-            .output()
-            .unwrap();
+        let mut command = Command::new(env!("CARGO_BIN_EXE_subsearch"));
+        command.args(["legacy", subcommand]);
+        if input_ext == "args" {
+            command
+                .args(expected("args").split_whitespace())
+                .stdin(Stdio::null());
+        } else {
+            command.stdin(Stdio::from(std::fs::File::open(&input).unwrap()));
+        }
+        let output = command.output().unwrap();
         let stdout = String::from_utf8(output.stdout).unwrap();
         let stderr = String::from_utf8(output.stderr).unwrap();
         let status = output.status.code().unwrap().to_string();
@@ -71,4 +82,14 @@ fn sub_search_matches_the_c_program() {
 #[test]
 fn asub_search_matches_the_c_program() {
     check("asub_search", "asub-search");
+}
+
+#[test]
+fn wsub_search_matches_the_c_program() {
+    check("wsub_search", "wsub-search");
+}
+
+#[test]
+fn wggen_matches_the_c_program() {
+    check_with("wggen", "wggen", "args");
 }

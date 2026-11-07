@@ -26,6 +26,18 @@ def asub_search(stdin: str) -> tuple[str, int]:
     return _core.legacy_asub_search(stdin)
 
 
+def wsub_search(stdin: str) -> tuple[str, int]:
+    """Runs ``wsub_search`` (``sub_search`` on weighted graphs): entry ``x`` in adjacency list
+    ``i`` is the edge ``{i, x % v}`` with weight ``x // v + 1``, and the target is a total weight."""
+    return _core.legacy_wsub_search(stdin)
+
+
+def wggen(args: str | list[str]) -> str:
+    """Runs ``wggen`` with its command-line arguments (``"VERTICES DENSITY SEED"`` or a list)
+    and returns its output. Raises ``ValueError`` with ``wggen``'s message on invalid arguments."""
+    return _core.legacy_wggen(args.split() if isinstance(args, str) else [str(a) for a in args])
+
+
 def ggen(stdin: str) -> str:
     """Runs ``ggen`` (parameters, plus any input lists and fixed vertices) and returns its output.
     Raises ``ValueError`` with ``ggen``'s error message on invalid input."""

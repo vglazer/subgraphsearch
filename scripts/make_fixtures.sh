@@ -13,11 +13,11 @@ out="$repo_dir/tests/fixtures"
 bin=$(mktemp -d)
 trap 'rm -rf "$bin"' EXIT
 
-for prog in sub_search asub_search ggen; do
+for prog in sub_search asub_search wsub_search ggen wggen; do
   gcc -ansi -pedantic -Wall -O2 "$src/$prog.c" -o "$bin/$prog"
 done
 
-mkdir -p "$out/ggen" "$out/sub_search" "$out/asub_search" "$out/graphs"
+mkdir -p "$out/ggen" "$out/wggen" "$out/sub_search" "$out/asub_search" "$out/wsub_search" "$out/graphs"
 echo "USRA commit: $(git -C "$usra_dir" rev-parse HEAD)" > "$out/SOURCE"
 
 # ---- ggen: name | stdin
@@ -110,5 +110,58 @@ sub_case unreachable       exp_30_300_5    "30 6 900 0 3 40 10 2 3 1"
 sub_case big_seed          exp_30_300_5    "30 6 7 0 30 60 15 3 4000000000 1"
 sub_case err_size          exp_30_300_5    "30 30 7 0 3 40 10 2 3 1"
 sub_case err_freq          exp_30_300_5    "30 6 7 0 3 40 0 2 3 1"
+
+# ---- wggen (arguments, not stdin): name | arguments
+wggen_case() {
+  local name=$1; shift
+  echo "$*" > "$out/wggen/$name.args"
+  set +e
+  # run under a fixed name: wggen prints argv[0] in its messages
+  # shellcheck disable=SC2086
+  (exec -a wggen "$bin/wggen" $* > "$out/wggen/$name.out" 2> "$out/wggen/$name.err")
+  echo $? > "$out/wggen/$name.status"
+  set -e
+}
+
+wggen_case w10_50_3        10 50 3
+wggen_case w30_300_5       30 300 5
+wggen_case w200_65_1       200 65 1
+wggen_case w60_150_3       60 150 3
+wggen_case w2_100_9        2 100 9
+wggen_case w1_50_1         1 50 1
+wggen_case err_seed0       10 50 0
+wggen_case err_vertices    0 5 1
+wggen_case err_weight      10 30000 1
+wggen_case err_usage       5 5
+
+# ---- weighted graphs, and wsub_search: name | graph | parameters | fixed vertices
+wgraph() { "$bin/wggen" "${@:2}" | grep -- '-1$' > "$out/graphs/$1.txt"; }
+wgraph w200_65_1  200 65 1
+wgraph w60_150_3  60 150 3
+wgraph w100_40_7  100 40 7
+
+wsub_case() {
+  local name=$1 g=$2 params=$3 fixed=${4:-}
+  { echo "$params"; cat "$out/graphs/$g.txt"; [[ -n $fixed ]] && echo "$fixed"; } > "$out/wsub_search/$name.in"
+  set +e
+  "$bin/wsub_search" < "$out/wsub_search/$name.in" > "$out/wsub_search/$name.out" 2> "$out/wsub_search/$name.err"
+  echo $? > "$out/wsub_search/$name.status"
+  set -e
+}
+
+wsub_case light          w200_65_1  "200 10 30 0 20 1000 200 5 3 1"
+wsub_case light_adj      w200_65_1  "200 10 30 0 10 1000 200 5 3 -2"
+wsub_case heavy          w200_65_1  "200 15 120 0 10 3000 300 10 8 2"
+wsub_case multi_weights  w60_150_3  "60 8 60 0 20 1500 250 6 21 -3"
+wsub_case zero_weight    w60_150_3  "60 6 0 0 20 1500 250 6 4 1"
+wsub_case fixed          w100_40_7  "100 12 25 2 15 1500 300 8 13 -1" "5 77"
+wsub_case unit_weights   exp_100_600_1 "100 11 55 0 5 100 25 4 72 1"
+wsub_case unit_hard      exp_100_600_1 "100 12 66 0 4 2000 300 8 5 -2"
+wsub_case hard_180       w200_65_1  "200 15 180 0 20 3000 300 10 5 1"
+wsub_case hard_183       w200_65_1  "200 15 183 0 10 3000 300 10 6 -1"
+wsub_case multi_border   w60_150_3  "60 8 90 0 20 3000 300 10 5 3"
+wsub_case unreachable    w100_40_7  "100 6 900 0 3 50 10 2 3 1"
+wsub_case zero_moves     w100_40_7  "100 6 9 0 3 0 10 2 3 1"
+wsub_case err_size       w100_40_7  "100 1 0 0 3 50 10 2 3 1"
 
 echo "fixtures written to $out"

@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from . import _core
-from ._graph import Graph
+from ._graph import Graph, WeightedGraph
 
 NUM_BOXES = 10
 
@@ -50,9 +50,14 @@ class SearchParams:
 class SearchResult:
     """The outcome of :func:`search`: parameters, the graph searched, and every experiment."""
 
-    graph: Graph
+    graph: Graph | WeightedGraph
     params: SearchParams
     experiments: list[Experiment]
+
+    @property
+    def weighted(self) -> bool:
+        """Whether the search was for a total weight in a :class:`WeightedGraph`."""
+        return isinstance(self.graph, WeightedGraph)
 
     @property
     def successes(self) -> int:
@@ -107,7 +112,8 @@ class SearchResult:
     def summary(self) -> str:
         p = self.params
         lines = [
-            f"{self.successes}/{len(self.experiments)} experiments found a {p.size}-vertex subgraph with {p.edges} edges",
+            f"{self.successes}/{len(self.experiments)} experiments found a {p.size}-vertex subgraph with "
+            + (f"total weight {p.edges}" if self.weighted else f"{p.edges} edges"),
             f"relative cost {self.relative_cost:.1f} moves, true cost {self.true_cost:.1f} moves, "
             f"average conflict {self.average_conflict:.3f}",
         ]
@@ -126,7 +132,7 @@ class SearchResult:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_dict(cls, data: dict, graph: Graph) -> SearchResult:
+    def from_dict(cls, data: dict, graph: Graph | WeightedGraph) -> SearchResult:
         """Rebuilds a result from :meth:`to_dict` output or from the JSON the ``subsearch search
         --json`` command writes."""
         p = dict(data["params"])
@@ -148,7 +154,7 @@ class SearchResult:
         return cls(graph, params, exps)
 
     @classmethod
-    def load(cls, path, graph: Graph) -> SearchResult:
+    def load(cls, path, graph: Graph | WeightedGraph) -> SearchResult:
         """Reads a result saved with :meth:`save` or ``subsearch search --json``."""
         with open(path, encoding="utf-8") as f:
             return cls.from_dict(json.load(f), graph)
@@ -167,7 +173,7 @@ class SearchResult:
 
 
 def search(
-    graph: Graph,
+    graph: Graph | WeightedGraph,
     size: int,
     edges: int,
     *,
@@ -181,7 +187,8 @@ def search(
     trace: bool = False,
     aspiration: bool = False,
 ) -> SearchResult:
-    """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges.
+    """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges, or, in
+    a :class:`WeightedGraph`, with total weight ``edges`` (USRA's ``wsub_search``).
 
     Each of ``experiments`` independent runs starts from random vertices (always including
     ``fixed``) and makes up to ``max_moves`` swaps of one subgraph vertex for one outside vertex,

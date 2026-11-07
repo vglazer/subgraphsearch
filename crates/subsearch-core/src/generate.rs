@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
-use crate::graph::{Graph, GraphBuilder};
+use crate::graph::{Graph, GraphBuilder, WeightedGraph};
 use crate::rng::SearchRng;
 
 /// The resolution of random coordinates and probabilities, as in `ggen`.
@@ -124,6 +124,47 @@ pub fn geometric<R: SearchRng>(n: usize, density: u32, rng: &mut R) -> Graph {
     b.build()
 }
 
+/// The largest weight [`weighted`] creates: USRA's `wggen` and `wsub_search` store weights in a
+/// signed `char`.
+pub const MAX_GENERATED_WEIGHT: u8 = 127;
+
+/// A weighted random graph, as USRA's `wggen` makes it: `v * (v - 1) * density / 200` times, a
+/// uniformly random pair of distinct vertices has its weight increased by 1. So `density` is in
+/// percent, and the mean weight per vertex pair is `density / 100`; it may exceed 100. Fails if
+/// any weight would exceed [`MAX_GENERATED_WEIGHT`] or the total weight would not fit an `i32`.
+pub fn weighted<R: SearchRng>(n: usize, density: u32, rng: &mut R) -> Result<WeightedGraph, Error> {
+    if n < 1 {
+        return Err(Error::Invalid(
+            "a weighted graph needs at least 1 vertex".into(),
+        ));
+    }
+    let total = n as f64 * (n as f64 - 1.0) * f64::from(density) / 200.0;
+    if total > f64::from(i32::MAX) {
+        return Err(Error::Invalid(format!(
+            "total weight v * (v - 1) * density / 200 exceeds {}",
+            i32::MAX
+        )));
+    }
+    let mut weights = vec![0u8; n * n];
+    for _ in 0..total as i64 {
+        let j = rng.below(n as u32) as usize;
+        let k = loop {
+            let k = rng.below(n as u32) as usize;
+            if k != j {
+                break k;
+            }
+        };
+        if weights[j * n + k] == MAX_GENERATED_WEIGHT {
+            return Err(Error::Invalid(format!(
+                "edge weight exceeds {MAX_GENERATED_WEIGHT}; lower the density"
+            )));
+        }
+        weights[j * n + k] += 1;
+        weights[k * n + j] += 1;
+    }
+    Ok(WeightedGraph::from_matrix(n, weights))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,6 +179,15 @@ mod tests {
         // l = n - 1 at density 1000, so vertex 0 alone is joined to everyone
         assert_eq!(power(20, 1000, &mut r).num_edges(), 19);
         assert!(generate(Model::Geometric, 5, 1001, &mut r).is_err());
+    }
+
+    #[test]
+    fn weighted_graphs_have_the_requested_total_weight() {
+        let g = weighted(50, 150, &mut Xoshiro::new(2)).unwrap();
+        assert_eq!(g.total_weight(), 50 * 49 * 150 / 200);
+        assert!(g.edges().any(|(_, _, w)| w > 1));
+        assert!(weighted(10, 30_000, &mut Randu::new(1)).is_err());
+        assert!(weighted(0, 5, &mut Randu::new(1)).is_err());
     }
 
     #[test]

@@ -252,6 +252,150 @@ impl Graph {
     }
 }
 
+/// An undirected graph whose edges carry small positive integer weights (1 to 255), as used by
+/// USRA's `wsub_search` and `wggen`. Weights live in an `n x n` byte matrix (O(1) lookup, `n * n`
+/// bytes) alongside sorted neighbour lists.
+#[derive(Clone, PartialEq, Eq)]
+pub struct WeightedGraph {
+    n: usize,
+    weights: Vec<u8>,
+    neighbors: Vec<Vec<u32>>,
+    num_edges: usize,
+    total_weight: u64,
+}
+
+impl std::fmt::Debug for WeightedGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WeightedGraph")
+            .field("vertices", &self.n)
+            .field("edges", &self.num_edges)
+            .field("total_weight", &self.total_weight)
+            .finish()
+    }
+}
+
+impl WeightedGraph {
+    /// Builds a weighted graph from `(u, v, weight)` triples. Weights must be between 1 and
+    /// 255; if an edge is listed more than once, the last weight given wins.
+    pub fn from_weighted_edges<I>(n: usize, edges: I) -> Result<WeightedGraph, Error>
+    where
+        I: IntoIterator<Item = (usize, usize, u32)>,
+    {
+        let mut weights = vec![0u8; n * n];
+        for (u, v, w) in edges {
+            for x in [u, v] {
+                if x >= n {
+                    return Err(Error::VertexOutOfRange {
+                        vertex: x as i64,
+                        n,
+                    });
+                }
+            }
+            if u == v {
+                return Err(Error::SelfLoop(u));
+            }
+            if !(1..=255).contains(&w) {
+                return Err(Error::Invalid(format!(
+                    "edge {{{u}, {v}}} has weight {w}; weights must be between 1 and 255"
+                )));
+            }
+            weights[u * n + v] = w as u8;
+            weights[v * n + u] = w as u8;
+        }
+        Ok(Self::from_matrix(n, weights))
+    }
+
+    /// Every edge of `g` with weight 1.
+    pub fn from_graph(g: &Graph) -> WeightedGraph {
+        let n = g.num_vertices();
+        Self::from_weighted_edges(n, g.edges().map(|(u, v)| (u, v, 1))).unwrap()
+    }
+
+    pub(crate) fn from_matrix(n: usize, weights: Vec<u8>) -> WeightedGraph {
+        let mut neighbors = Vec::with_capacity(n);
+        let (mut twice_edges, mut twice_weight) = (0usize, 0u64);
+        for u in 0..n {
+            let row = &weights[u * n..(u + 1) * n];
+            let list: Vec<u32> = (0..n).filter(|&v| row[v] != 0).map(|v| v as u32).collect();
+            twice_edges += list.len();
+            twice_weight += row.iter().map(|&w| u64::from(w)).sum::<u64>();
+            neighbors.push(list);
+        }
+        WeightedGraph {
+            n,
+            weights,
+            neighbors,
+            num_edges: twice_edges / 2,
+            total_weight: twice_weight / 2,
+        }
+    }
+
+    /// Number of vertices.
+    #[inline]
+    pub fn num_vertices(&self) -> usize {
+        self.n
+    }
+
+    /// Number of edges.
+    #[inline]
+    pub fn num_edges(&self) -> usize {
+        self.num_edges
+    }
+
+    /// Sum of all edge weights.
+    #[inline]
+    pub fn total_weight(&self) -> u64 {
+        self.total_weight
+    }
+
+    /// The weight of `{u, v}`, or 0 if it is not an edge.
+    #[inline]
+    pub fn weight(&self, u: usize, v: usize) -> u8 {
+        self.weights[u * self.n + v]
+    }
+
+    /// Row `u` of the weight matrix.
+    #[inline]
+    pub fn row(&self, u: usize) -> &[u8] {
+        &self.weights[u * self.n..(u + 1) * self.n]
+    }
+
+    /// The neighbours of `u`, in ascending order.
+    #[inline]
+    pub fn neighbors(&self, u: usize) -> &[u32] {
+        &self.neighbors[u]
+    }
+
+    /// Edges `(u, v, weight)` with `u < v`, in lexicographic order.
+    pub fn edges(&self) -> impl Iterator<Item = (usize, usize, u8)> + '_ {
+        self.neighbors
+            .iter()
+            .enumerate()
+            .flat_map(move |(u, list)| {
+                list.iter()
+                    .map(|&v| v as usize)
+                    .filter(move |&v| v > u)
+                    .map(move |v| (u, v, self.weight(u, v)))
+            })
+    }
+
+    /// Total weight of the edges among `vertices`, which must be distinct.
+    pub fn induced_weight(&self, vertices: &[usize]) -> u64 {
+        let mut total = 0;
+        for (i, &u) in vertices.iter().enumerate() {
+            for &v in &vertices[i + 1..] {
+                total += u64::from(self.weight(u, v));
+            }
+        }
+        total
+    }
+
+    /// The underlying unweighted graph.
+    pub fn structure(&self) -> Graph {
+        Graph::from_edges(self.n, self.edges().map(|(u, v, _)| (u, v))).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,6 +423,19 @@ mod tests {
             Graph::from_edges(3, [(1, 1)]),
             Err(Error::SelfLoop(1))
         ));
+    }
+
+    #[test]
+    fn weighted_graphs() {
+        let g = WeightedGraph::from_weighted_edges(4, [(0, 1, 3), (2, 1, 5), (0, 1, 2)]).unwrap();
+        assert_eq!((g.num_edges(), g.total_weight()), (2, 7));
+        assert_eq!((g.weight(1, 0), g.weight(1, 2), g.weight(0, 3)), (2, 5, 0));
+        assert_eq!(g.edges().collect::<Vec<_>>(), vec![(0, 1, 2), (1, 2, 5)]);
+        assert_eq!(g.induced_weight(&[0, 1, 2]), 7);
+        assert_eq!(g.structure().num_edges(), 2);
+        assert_eq!(WeightedGraph::from_graph(&g.structure()).total_weight(), 2);
+        assert!(WeightedGraph::from_weighted_edges(3, [(0, 1, 0)]).is_err());
+        assert!(WeightedGraph::from_weighted_edges(3, [(0, 1, 256)]).is_err());
     }
 
     #[test]

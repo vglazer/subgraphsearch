@@ -15,7 +15,7 @@ from os import PathLike
 
 import numpy as np
 
-from .._graph import Graph
+from .._graph import Graph, WeightedGraph, structure_of
 from .._search import SearchResult
 
 _TEMPLATE = r"""<!doctype html>
@@ -91,14 +91,26 @@ canvas.dragging { cursor: grabbing; }
 const DATA = __DATA__;
 (() => {
   const n = DATA.n, pos = DATA.pos, E = DATA.edges, deg = DATA.degrees, sols = DATA.solutions;
+  const W = DATA.weights;  // per-edge weights, or null for unweighted graphs
+  const wOf = i => (W ? W[i / 2] : 1);
+  const wdeg = new Array(n).fill(0);
+  for (let i = 0; i < E.length; i += 2) { wdeg[E[i]] += wOf(i); wdeg[E[i + 1]] += wOf(i); }
   const canvas = document.getElementById("c"), ctx = canvas.getContext("2d");
   const tip = document.getElementById("tip"), pinned = document.getElementById("pinned");
   const sel = document.getElementById("solution"), dim = document.getElementById("dim");
   document.getElementById("stats").textContent =
-    `${n.toLocaleString()} vertices · ${(E.length / 2).toLocaleString()} edges · density ${DATA.density.toFixed(4)}`;
+    `${n.toLocaleString()} vertices · ${(E.length / 2).toLocaleString()} edges · density ${DATA.density.toFixed(4)}` +
+    (W ? ` · total weight ${W.reduce((a, b) => a + b, 0).toLocaleString()}` : "");
 
-  const adj = Array.from({length: n}, () => []);
-  for (let i = 0; i < E.length; i += 2) { adj[E[i]].push(E[i + 1]); adj[E[i + 1]].push(E[i]); }
+  const adj = Array.from({length: n}, () => []), adjw = Array.from({length: n}, () => []);
+  for (let i = 0; i < E.length; i += 2) {
+    adj[E[i]].push(E[i + 1]); adj[E[i + 1]].push(E[i]);
+    adjw[E[i]].push(wOf(i)); adjw[E[i + 1]].push(wOf(i));
+  }
+  // edges grouped by weight, so each group is one canvas path with its own line width
+  const groups = new Map();
+  for (let i = 0; i < E.length; i += 2) { const w = wOf(i); if (!groups.has(w)) groups.set(w, []); groups.get(w).push(i); }
+  const widthOf = w => (W ? 0.7 + 0.9 * Math.log2(w) : 1);
 
   if (sols.length) {
     sel.add(new Option("none", "-1"));
@@ -136,23 +148,29 @@ const DATA = __DATA__;
     ctx.clearRect(0, 0, size.w, size.h);
     const any = member.some(x => x);
     // edges outside the subgraph
-    ctx.lineWidth = 1; ctx.strokeStyle = c.getPropertyValue("--edge");
+    ctx.strokeStyle = c.getPropertyValue("--edge");
     ctx.globalAlpha = any && dim.checked ? 0.35 : 1;
-    ctx.beginPath();
-    for (let i = 0; i < E.length; i += 2) {
-      const u = E[i], v = E[i + 1];
-      if (member[u] && member[v]) continue;
-      ctx.moveTo(sx(u), sy(u)); ctx.lineTo(sx(v), sy(v));
-    }
-    ctx.stroke(); ctx.globalAlpha = 1;
-    // subgraph edges
-    if (any) {
-      ctx.lineWidth = 2; ctx.strokeStyle = c.getPropertyValue("--accent-edge"); ctx.beginPath();
-      for (let i = 0; i < E.length; i += 2) {
+    for (const [w, idx] of groups) {
+      ctx.lineWidth = widthOf(w); ctx.beginPath();
+      for (const i of idx) {
         const u = E[i], v = E[i + 1];
-        if (member[u] && member[v]) { ctx.moveTo(sx(u), sy(u)); ctx.lineTo(sx(v), sy(v)); }
+        if (member[u] && member[v]) continue;
+        ctx.moveTo(sx(u), sy(u)); ctx.lineTo(sx(v), sy(v));
       }
       ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // subgraph edges
+    if (any) {
+      ctx.strokeStyle = c.getPropertyValue("--accent-edge");
+      for (const [w, idx] of groups) {
+        ctx.lineWidth = 1 + widthOf(w); ctx.beginPath();
+        for (const i of idx) {
+          const u = E[i], v = E[i + 1];
+          if (member[u] && member[v]) { ctx.moveTo(sx(u), sy(u)); ctx.lineTo(sx(v), sy(v)); }
+        }
+        ctx.stroke();
+      }
     }
     // edges of the hovered or pinned vertex
     for (const f of [pin, hover]) {
@@ -192,9 +210,11 @@ const DATA = __DATA__;
   }
   function describe(v) {
     const inSub = adj[v].filter(u => member[u]).length;
+    const wSub = adj[v].reduce((t, u, k) => t + (member[u] ? adjw[v][k] : 0), 0);
     const anySub = member.some(x => x);
     return `<b>vertex ${v}</b>${member[v] ? " · in subgraph" : ""}<br>degree ${deg[v]}` +
-      (anySub ? `<br>${inSub} neighbour${inSub === 1 ? "" : "s"} in the subgraph` : "");
+      (W ? `, total weight ${wdeg[v]}` : "") +
+      (anySub ? `<br>${inSub} neighbour${inSub === 1 ? "" : "s"} in the subgraph` + (W ? ` (weight ${wSub})` : "") : "");
   }
   function showPin() {
     if (pin < 0) { pinned.style.display = "none"; return; }
@@ -204,10 +224,10 @@ const DATA = __DATA__;
   }
   function legend() {
     const any = member.some(x => x), k = member.reduce((a, b) => a + b, 0);
-    let sub = 0;
-    if (any) for (let i = 0; i < E.length; i += 2) if (member[E[i]] && member[E[i + 1]]) sub++;
+    let sub = 0, subw = 0;
+    if (any) for (let i = 0; i < E.length; i += 2) if (member[E[i]] && member[E[i + 1]]) { sub++; subw += wOf(i); }
     document.getElementById("legend").innerHTML =
-      (any ? `<div><span class="dot" style="background:var(--accent)"></span>subgraph: ${k} vertices, ${sub} edges</div>` : "") +
+      (any ? `<div><span class="dot" style="background:var(--accent)"></span>subgraph: ${k} vertices, ${sub} edges${W ? `, total weight ${subw}` : ""}</div>` : "") +
       `<div><span class="dot" style="background:var(--node)"></span>other vertices</div>`;
   }
 
@@ -284,7 +304,7 @@ def _solutions(result: SearchResult | None, highlight: Iterable[int] | None, max
 
 
 def to_html(
-    graph: Graph | SearchResult,
+    graph: Graph | WeightedGraph | SearchResult,
     highlight: Iterable[int] | None = None,
     *,
     result: SearchResult | None = None,
@@ -301,6 +321,8 @@ def to_html(
     """
     if isinstance(graph, SearchResult):
         result, graph = graph, graph.graph
+    weights = graph.edges()[:, 2].tolist() if isinstance(graph, WeightedGraph) else None
+    graph = structure_of(graph)
     pos = graph.layout(layout, seed=seed) if isinstance(layout, str) else np.asarray(layout, dtype=float)
     if pos.shape != (graph.n, 2):
         raise ValueError(f"layout must have shape ({graph.n}, 2), got {pos.shape}")
@@ -314,6 +336,7 @@ def to_html(
         "edges": graph.edges().ravel().tolist(),
         "degrees": graph.degrees().tolist(),
         "solutions": _solutions(result, highlight, max_conflict),
+        "weights": weights,
     }
     title = title or f"Graph on {graph.n} vertices"
     # "</" cannot appear inside the script element

@@ -44,6 +44,11 @@ subsearch search g.g6 -k 30 -m 340 -n 60 --max-conflict 2 --trace --json result.
 uv run python -m subsearch explore g.g6 --result result.json -o result.html   # interactive page
 uv run python -m subsearch report g.g6 --result result.json -o result.png     # figures
 
+# weighted graphs (USRA's wsub_search / wggen): -m is a total weight
+subsearch generate weighted -n 200 -d 0.65 -s 1 -o w.mtx   # mean weight 0.65 per vertex pair
+subsearch search w.mtx --weighted -k 15 -m 180 -n 40
+subsearch info w.mtx --weighted
+
 # files holding many graphs (graph6/sparse6, one per line, e.g. from nauty's geng)
 subsearch info many.g6                                  # one line per graph
 subsearch search many.g6 --all -k 10 -m 30 -q           # search every graph
@@ -71,6 +76,7 @@ found" from success.
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
 | `-s`, `--seed`, `--rng` | random seed; `xoshiro` (default) or `legacy` | 1, xoshiro |
 | `--aspiration` | limited aspiration, as in USRA's `asub_search` (see below) | off |
+| `--weighted` | edges carry weights and `-m` is a total weight, as in USRA's `wsub_search` | off |
 
 Each experiment starts from random vertices and repeatedly swaps one subgraph vertex for one
 outside vertex, choosing at random among the swaps that bring the edge count closest to the
@@ -108,6 +114,8 @@ In Jupyter, graphs and results display as summaries with small charts. See the
 - **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
   `g.induced(vs)`, `g.switch(vs)`, `g.common_neighbourhood(vs)`, `g.layout()`,
   `g.adjacency_matrix()`, `g.laplacian()`.
+- **Weighted graphs:** `ss.WeightedGraph(n, [(u, v, w), ...])`, `ss.generate_weighted(n, mean_weight)`,
+  `ss.WeightedGraph.read(path)`; `ss.search` on one targets a total weight.
 - **Multi-graph files:** `ss.read_all(path)`, `ss.read(path, index=3)`, `ss.write_all(path, graphs)`.
 - **Other libraries:** `subsearch.convert.{to,from}_{networkx,igraph,scipy,numpy}`.
 - **Tuning:** `ss.sweep(g, size, edges, "div_dur", [0, 4, 16])` with `viz.plot_sweep`.
@@ -117,9 +125,9 @@ In Jupyter, graphs and results display as summaries with small charts. See the
 
 ## Compatibility with the original programs
 
-`subsearch legacy sub-search`, `subsearch legacy asub-search` and `subsearch legacy ggen` (and
-`ss.legacy` in Python) read exactly what `sub_search`, `asub_search` and `ggen` read on stdin and
-print exactly what they printed. Only
+`subsearch legacy sub-search`, `asub-search`, `wsub-search`, `ggen` and `wggen` (and `ss.legacy`
+in Python) read exactly what the C programs of the same names read, on stdin or, for `wggen`, the
+command line, and print exactly what they printed. Only
 the CPU time and host name on `sub_search`'s last line can differ. Elsewhere, `--rng legacy`
 gives the same graphs and search runs through the modern interfaces:
 
@@ -129,8 +137,8 @@ subsearch generate exponential -n 100 -d 0.6 -s 1 --rng legacy -o g.g6   # the s
 ```
 
 The fixtures in `tests/fixtures` were recorded from the C programs (see `scripts/make_fixtures.sh`)
-and cover all of `ggen`'s graph types and operations, every `sub_search` and `asub_search`
-output mode, fixed vertices, edge cases and error handling.
+and cover all of `ggen`'s graph types and operations, `wggen`, every output mode of
+`sub_search`, `asub_search` and `wsub_search`, fixed vertices, edge cases and error handling.
 
 The only differences are on invalid input: the port reports problems the C programs silently
 mishandled (out-of-range or duplicate vertices, truncated input), and `sub_search` input may not
@@ -167,11 +175,9 @@ USRA_DIR=~/repos/USRA scripts/make_fixtures.sh        # re-record fixtures from 
 
 ## Roadmap
 
-`sub_search`, `asub_search` (`--aspiration`) and `ggen` are done. The other USRA programs share
-the same engine and come next:
-
-- `wsub_search`: weighted edges, with `wggen` and a weighted format;
-- `reg_search` and `ereg_search`: regular induced subgraphs of a given degree.
+`sub_search`, `asub_search` (`--aspiration`), `wsub_search` (`--weighted`), `ggen` and `wggen`
+are done. Still to come, on the same engine: `reg_search` and `ereg_search`, which look for regular
+induced subgraphs of a given degree.
 
 ## License
 

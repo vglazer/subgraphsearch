@@ -23,11 +23,99 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
-use crate::graph::{Graph, bit};
+use crate::graph::{Graph, WeightedGraph, bit};
 use crate::rng::{Randu, RngKind, SearchRng, Xoshiro};
 
 /// Number of "boxes" in the distribution of moves needed by successful experiments.
 pub const NUM_BOXES: usize = 10;
+
+/// A graph the search can run on: [`Graph`] (`sub_search`), where every edge counts 1, or
+/// [`WeightedGraph`] (`wsub_search`), where an edge counts its weight and the target is a total
+/// weight. The search is compiled separately for each, so the unweighted case pays nothing for
+/// weights.
+pub trait SearchGraph: Sync {
+    /// A row of the adjacency (or weight) matrix.
+    type Row<'a>: AdjacencyRow
+    where
+        Self: 'a;
+
+    fn num_vertices(&self) -> usize;
+    /// Neighbours of `u`, ascending.
+    fn neighbors(&self, u: usize) -> &[u32];
+    fn adjacency_row(&self, u: usize) -> Self::Row<'_>;
+    /// What the edge `{u, v}` contributes to the subgraph's value: its weight, or 0 or 1.
+    fn edge_value(&self, u: usize, v: usize) -> i64;
+    /// [`SearchGraph::edge_value`] for a known neighbour `v` of `u`.
+    fn neighbor_value(&self, u: usize, v: usize) -> i64 {
+        self.edge_value(u, v)
+    }
+    /// The initial "best value so far" of an experiment: the sum of the degrees in
+    /// `sub_search`, the total weight in `wsub_search`.
+    fn objective_bound(&self) -> i64;
+}
+
+/// Constant-time access to one row of an adjacency or weight matrix.
+pub trait AdjacencyRow: Copy {
+    fn value(self, v: usize) -> i64;
+}
+
+impl AdjacencyRow for &[u64] {
+    #[inline(always)]
+    fn value(self, v: usize) -> i64 {
+        bit(self, v) as i64
+    }
+}
+
+impl AdjacencyRow for &[u8] {
+    #[inline(always)]
+    fn value(self, v: usize) -> i64 {
+        i64::from(self[v])
+    }
+}
+
+impl SearchGraph for Graph {
+    type Row<'a> = &'a [u64];
+
+    fn num_vertices(&self) -> usize {
+        Graph::num_vertices(self)
+    }
+    fn neighbors(&self, u: usize) -> &[u32] {
+        Graph::neighbors(self, u)
+    }
+    fn adjacency_row(&self, u: usize) -> &[u64] {
+        self.row(u)
+    }
+    fn edge_value(&self, u: usize, v: usize) -> i64 {
+        i64::from(self.has_edge(u, v))
+    }
+    #[inline(always)]
+    fn neighbor_value(&self, _u: usize, _v: usize) -> i64 {
+        1
+    }
+    fn objective_bound(&self) -> i64 {
+        2 * self.num_edges() as i64
+    }
+}
+
+impl SearchGraph for WeightedGraph {
+    type Row<'a> = &'a [u8];
+
+    fn num_vertices(&self) -> usize {
+        WeightedGraph::num_vertices(self)
+    }
+    fn neighbors(&self, u: usize) -> &[u32] {
+        WeightedGraph::neighbors(self, u)
+    }
+    fn adjacency_row(&self, u: usize) -> &[u8] {
+        self.row(u)
+    }
+    fn edge_value(&self, u: usize, v: usize) -> i64 {
+        i64::from(self.weight(u, v))
+    }
+    fn objective_bound(&self) -> i64 {
+        self.total_weight() as i64
+    }
+}
 
 /// Search parameters. See the module documentation for what they mean.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -179,7 +267,7 @@ impl SearchResult {
 /// Runs a search. With [`RngKind::Xoshiro`], experiments run in parallel, each with its own random
 /// stream, so results depend only on the seed. With [`RngKind::Legacy`], experiments run one after
 /// another and match the C program exactly.
-pub fn search(graph: &Graph, params: &SearchParams) -> Result<SearchResult, Error> {
+pub fn search<G: SearchGraph>(graph: &G, params: &SearchParams) -> Result<SearchResult, Error> {
     params.validate(graph.num_vertices())?;
     let experiments = match params.rng {
         RngKind::Legacy => {
@@ -211,8 +299,8 @@ pub fn search(graph: &Graph, params: &SearchParams) -> Result<SearchResult, Erro
 /// by all experiments, and state (the permutation used to pick starting subgraphs, the best
 /// subgraph seen) carried over from one experiment to the next. With [`RngKind::Xoshiro`] the
 /// results equal those of [`search`].
-pub fn search_sequential<F>(
-    graph: &Graph,
+pub fn search_sequential<G: SearchGraph, F>(
+    graph: &G,
     params: &SearchParams,
     mut on_experiment: F,
 ) -> Result<(), Error>
@@ -244,8 +332,8 @@ where
 /// search's hot loop; taking separate slices lets the compiler keep everything in registers.
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
-fn scan_row(
-    row: &[u64],
+fn scan_row<R: AdjacencyRow>(
+    row: R,
     cols: &[usize],
     sub_degs: &[i32],
     degree: i64,
@@ -258,7 +346,7 @@ fn scan_row(
     let cap = sub_opt.len().min(rest_opt.len());
     let (mut best, mut count) = (*opt_val, *opt_mov);
     for &t in cols {
-        let val = (degree - bit(row, t) as i64 + i64::from(sub_degs[t])).abs();
+        let val = (degree - row.value(t) + i64::from(sub_degs[t])).abs();
         if val <= best {
             if val < best {
                 best = val;
@@ -308,13 +396,13 @@ struct Workspace {
 }
 
 impl Workspace {
-    fn new(graph: &Graph, params: &SearchParams) -> Self {
+    fn new<G: SearchGraph>(graph: &G, params: &SearchParams) -> Self {
         let v = graph.num_vertices();
         let v_fix = params.fixed.len();
         let mut ws = Workspace {
             v_sub: params.size - v_fix,
             v_rest: v - params.size,
-            e: graph.degrees().iter().sum::<usize>() as i64,
+            e: graph.objective_bound(),
             sub_degs: vec![0; v],
             sub_verts: vec![0; params.size - v_fix],
             rest_verts: vec![0; v - params.size],
@@ -344,9 +432,9 @@ impl Workspace {
     /// Lists the aspiration moves: swaps involving the two vertices just swapped (`rest_vert` now
     /// inside the subgraph, `sub_vert` now outside) that would beat the best value so far,
     /// `g_opt_val`. At most `v` are kept. Mirrors `asub_search.c`.
-    fn aspiration_moves(
+    fn aspiration_moves<G: SearchGraph>(
         &mut self,
-        graph: &Graph,
+        graph: &G,
         new_min_val: i64,
         g_opt_val: i64,
         sub_vert: usize,
@@ -356,10 +444,10 @@ impl Workspace {
         let mut asp_mov = 0;
         // swap rest_vert back out for any outside vertex
         let degree = new_min_val - i64::from(self.sub_degs[rest_vert]);
-        let row = graph.row(rest_vert);
+        let row = graph.adjacency_row(rest_vert);
         for k in 0..self.v_rest {
             let vert = self.rest_verts[k];
-            let val = (degree - bit(row, vert) as i64 + i64::from(self.sub_degs[vert])).abs();
+            let val = (degree - row.value(vert) + i64::from(self.sub_degs[vert])).abs();
             if val < g_opt_val && asp_mov < cap {
                 self.sub_asp[asp_mov] = rest_vert;
                 self.rest_asp[asp_mov] = vert;
@@ -368,13 +456,13 @@ impl Workspace {
         }
         // swap sub_vert back in for any subgraph vertex
         let degree = new_min_val + i64::from(self.sub_degs[sub_vert]);
-        let row = graph.row(sub_vert);
+        let row = graph.adjacency_row(sub_vert);
         for k in 0..self.v_sub {
             let vert = self.sub_verts[k];
             if vert == rest_vert {
                 continue;
             }
-            let val = (degree - bit(row, vert) as i64 - i64::from(self.sub_degs[vert])).abs();
+            let val = (degree - row.value(vert) - i64::from(self.sub_degs[vert])).abs();
             if val < g_opt_val && asp_mov < cap {
                 self.sub_asp[asp_mov] = vert;
                 self.rest_asp[asp_mov] = sub_vert;
@@ -399,9 +487,9 @@ impl Workspace {
     /// One experiment. Mirrors the body of the experiment loop in `sub_search.c` (or, with
     /// `params.aspiration`, `asub_search.c`) statement by statement, so that random numbers are
     /// drawn in exactly the same order.
-    fn run<R: SearchRng>(
+    fn run<G: SearchGraph, R: SearchRng>(
         &mut self,
-        graph: &Graph,
+        graph: &G,
         params: &SearchParams,
         rng: &mut R,
     ) -> Experiment {
@@ -432,7 +520,7 @@ impl Workspace {
         for j in 0..v {
             if self.sub_ch[j] != 0 {
                 for &x in graph.neighbors(j) {
-                    self.sub_degs[x as usize] += 1;
+                    self.sub_degs[x as usize] += graph.neighbor_value(j, x as usize) as i32;
                 }
             } else {
                 self.vert_inds[j] = l;
@@ -473,7 +561,7 @@ impl Workspace {
 
             new_min_val += i64::from(self.sub_degs[rest_vert])
                 - i64::from(self.sub_degs[sub_vert])
-                - i64::from(graph.has_edge(sub_vert, rest_vert));
+                - graph.edge_value(sub_vert, rest_vert);
             let obj_val = new_min_val.abs();
             if let Some(t) = trace.as_mut() {
                 t.push(obj_val.min(u32::MAX as i64) as u32);
@@ -482,12 +570,12 @@ impl Workspace {
             // update subgraph degrees; mark vertices adjacent to exactly one of the two swapped
             for &x in graph.neighbors(sub_vert) {
                 let x = x as usize;
-                self.sub_degs[x] -= 1;
+                self.sub_degs[x] -= graph.neighbor_value(sub_vert, x) as i32;
                 self.u_ch[x] = 1;
             }
             for &x in graph.neighbors(rest_vert) {
                 let x = x as usize;
-                self.sub_degs[x] += 1;
+                self.sub_degs[x] += graph.neighbor_value(rest_vert, x) as i32;
                 self.u_ch[x] = 1 - self.u_ch[x];
             }
 
@@ -553,7 +641,7 @@ impl Workspace {
                 };
                 let degree = new_min_val - i64::from(self.sub_degs[vert]);
                 scan_row(
-                    graph.row(vert),
+                    graph.adjacency_row(vert),
                     &self.u_list[..w_cols],
                     &self.sub_degs,
                     degree,

@@ -16,10 +16,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from ._graph import Graph
+    from ._graph import Graph, WeightedGraph
     from ._search import SearchResult
 
 ACCENT = "#d6336c"
+#: Small drawings are only worth showing (and storing in notebooks) for graphs up to this size.
+DRAW_MAX_VERTICES, DRAW_MAX_EDGES = 200, 3000
 MUTED = "#8c959f"
 
 _STYLE = (
@@ -71,6 +73,10 @@ def _bars(title: str, labels: list[str], values: list[int], width: int = 260, he
     return f"<div><div style='font-weight:600;margin-bottom:4px'>{html.escape(title)}</div>{img}</div>"
 
 
+def _drawable(graph: Graph) -> bool:
+    return 0 < graph.n <= DRAW_MAX_VERTICES and graph.m <= DRAW_MAX_EDGES
+
+
 def _drawing(graph: Graph, highlight: set[int] | None = None, size: int = 220) -> str:
     """A small node-link drawing, for graphs with at most a few hundred vertices."""
     pos = graph.layout("spring", iterations=100) * (size - 16) + 8
@@ -100,7 +106,7 @@ def graph_html(graph: Graph) -> str:
         ("degree min / mean / max", f"{d.min() if len(d) else 0} / {d.mean() if len(d) else 0:.1f} / {d.max() if len(d) else 0}"),
     ]
     blocks = [_table("Graph", rows)]
-    if 0 < graph.n <= 200:
+    if _drawable(graph):
         blocks.append(_drawing(graph))
     if graph.n > 0:
         counts = np.bincount(d)
@@ -112,8 +118,10 @@ def graph_html(graph: Graph) -> str:
 def search_html(result: SearchResult) -> str:
     p = result.params
     fmt = lambda x: "–" if np.isnan(x) else f"{x:.1f}"  # noqa: E731
+    from ._graph import structure_of
+
     rows = [
-        ("target", f"{p.size} vertices, {p.edges} edges"),
+        ("target", f"{p.size} vertices, " + (f"total weight {p.edges}" if result.weighted else f"{p.edges} edges")),
         ("experiments", f"{len(result.experiments)} × ≤{p.max_moves} moves"),
         ("successes", f"{result.successes} ({result.success_rate:.0%})"),
         ("relative cost", fmt(result.relative_cost) + " moves"),
@@ -133,6 +141,28 @@ def search_html(result: SearchResult) -> str:
         items = "".join(f"<li><code>{' '.join(map(str, s))}</code></li>" for s in sols[:5])
         more = f"<div style='opacity:.7'>… and {len(sols) - 5} more</div>" if len(sols) > 5 else ""
         blocks.append(f"<div><div style='font-weight:600;margin-bottom:4px'>Solutions ({len(sols)} distinct)</div><ul style='margin:0;padding-left:18px'>{items}</ul>{more}</div>")
-    if 0 < result.graph.n <= 200 and result.best is not None:
-        blocks.append(_drawing(result.graph, set(result.best.vertices)))
+    if _drawable(structure_of(result.graph)) and result.best is not None:
+        blocks.append(_drawing(structure_of(result.graph), set(result.best.vertices)))
+    return f"<div style='{_STYLE}'>{''.join(blocks)}</div>"
+
+
+def weighted_graph_html(graph: WeightedGraph) -> str:
+    e = graph.edges()
+    structure = graph.structure
+    _, components = structure.components()
+    w = e[:, 2] if len(e) else np.zeros(0, int)
+    rows = [
+        ("vertices", f"{graph.n:,}"),
+        ("edges", f"{graph.m:,}"),
+        ("total weight", f"{graph.total_weight:,}"),
+        ("density", f"{structure.density:.4f}"),
+        ("components", f"{components:,}"),
+        ("weight min / mean / max", f"{w.min() if len(w) else 0} / {w.mean() if len(w) else 0:.2f} / {w.max() if len(w) else 0}"),
+    ]
+    blocks = [_table("Weighted graph", rows)]
+    if _drawable(structure):
+        blocks.append(_drawing(structure))
+    if len(w):
+        counts = np.bincount(w)
+        blocks.append(_bars("edge weights", [f"weight {i}" for i in range(1, len(counts))], counts[1:].tolist()))
     return f"<div style='{_STYLE}'>{''.join(blocks)}</div>"

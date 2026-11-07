@@ -12,7 +12,18 @@ networkx / igraph / SciPy, and visualisation.
 """
 
 from ._core import __version__
-from ._graph import MODELS, Graph, dumps_all, generate, parse_all, read, read_all, write_all
+from ._graph import (
+    MODELS,
+    Graph,
+    WeightedGraph,
+    dumps_all,
+    generate,
+    generate_weighted,
+    parse_all,
+    read,
+    read_all,
+    write_all,
+)
 from ._search import Experiment, SearchParams, SearchResult, search, sweep
 from . import convert, legacy, viz  # noqa: E402
 from . import _core
@@ -30,11 +41,13 @@ __all__ = [
     "Graph",
     "SearchParams",
     "SearchResult",
+    "WeightedGraph",
     "__version__",
     "convert",
     "dumps_all",
     "formats",
     "generate",
+    "generate_weighted",
     "legacy",
     "parse_all",
     "read",

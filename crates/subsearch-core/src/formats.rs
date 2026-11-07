@@ -9,12 +9,18 @@
 //! | [`Format::MatrixMarket`] | yes | yes | `coordinate pattern symmetric`; read by SciPy, MATLAB, Julia |
 //! | [`Format::Dot`] | no | yes | Graphviz, optionally highlighting a vertex set |
 //! | [`Format::GraphML`] | no | yes | Gephi, Cytoscape, yEd, networkx, igraph |
+//! | [`Format::WeightedLists`] | yes | yes | USRA's weighted lists (`wggen`, `wsub_search`): entry `x` in row `i` is edge `{i, x % n}` of weight `x / n + 1` |
+//!
+//! Weighted graphs ([`WeightedGraph`]) are read with [`parse_weighted`] and written with
+//! [`to_string_weighted`]: weights are the third column of an edge list, the values of a Matrix
+//! Market file, or encoded in weighted lists. Formats without weights read as unit weights, and
+//! writing a weighted graph to one is an error.
 
 use std::fmt::Write as _;
 use std::path::Path;
 
 use crate::Error;
-use crate::graph::{Graph, GraphBuilder};
+use crate::graph::{Graph, GraphBuilder, WeightedGraph};
 use crate::legacy::Scanner;
 
 /// A graph file format.
@@ -27,11 +33,12 @@ pub enum Format {
     MatrixMarket,
     Dot,
     GraphML,
+    WeightedLists,
 }
 
 impl Format {
     /// All formats, with their names.
-    pub const ALL: [(Format, &'static str); 7] = [
+    pub const ALL: [(Format, &'static str); 8] = [
         (Format::Lists, "lists"),
         (Format::EdgeList, "edgelist"),
         (Format::Graph6, "graph6"),
@@ -39,6 +46,7 @@ impl Format {
         (Format::MatrixMarket, "mtx"),
         (Format::Dot, "dot"),
         (Format::GraphML, "graphml"),
+        (Format::WeightedLists, "wlists"),
     ];
 
     /// The format's name.
@@ -79,6 +87,7 @@ impl std::str::FromStr for Format {
             "s6" => "sparse6",
             "matrixmarket" | "mm" => "mtx",
             "gv" | "graphviz" => "dot",
+            "weighted-lists" | "wusra" => "wlists",
             other => other,
         };
         Format::ALL
@@ -122,6 +131,7 @@ pub fn parse(text: &str, format: Format) -> Result<Graph, Error> {
 pub fn parse_all(text: &str, format: Format) -> Result<Vec<Graph>, Error> {
     match format {
         Format::Lists => Ok(vec![parse_lists(text)?]),
+        Format::WeightedLists => Ok(vec![parse_weighted_lists(text)?.structure()]),
         Format::EdgeList => Ok(vec![parse_edge_list(text)?]),
         Format::MatrixMarket => Ok(vec![parse_matrix_market(text)?]),
         Format::Graph6 | Format::Sparse6 => {
@@ -197,7 +207,288 @@ pub fn to_string(g: &Graph, format: Format, options: &WriteOptions) -> String {
         Format::MatrixMarket => write_matrix_market(g),
         Format::Dot => write_dot(g, options.highlight),
         Format::GraphML => write_graphml(g, options.highlight),
+        Format::WeightedLists => write_weighted_lists(&WeightedGraph::from_graph(g)),
     }
+}
+
+/// Whether `format` can store edge weights.
+pub fn holds_weights(format: Format) -> bool {
+    matches!(
+        format,
+        Format::EdgeList
+            | Format::MatrixMarket
+            | Format::WeightedLists
+            | Format::Dot
+            | Format::GraphML
+    )
+}
+
+/// Parses a weighted graph. Formats without weights (graph6, sparse6, USRA lists, edge lists
+/// with two columns, `pattern` Matrix Market files) give every edge weight 1.
+pub fn parse_weighted(text: &str, format: Format) -> Result<WeightedGraph, Error> {
+    match format {
+        Format::WeightedLists => parse_weighted_lists(text),
+        Format::EdgeList => parse_weighted_edge_list(text),
+        Format::MatrixMarket => parse_weighted_matrix_market(text),
+        _ => Ok(WeightedGraph::from_graph(&parse(text, format)?)),
+    }
+}
+
+/// Serialises a weighted graph; fails for formats that cannot store weights.
+pub fn to_string_weighted(
+    g: &WeightedGraph,
+    format: Format,
+    options: &WriteOptions,
+) -> Result<String, Error> {
+    Ok(match format {
+        Format::WeightedLists => write_weighted_lists(g),
+        Format::EdgeList => {
+            let mut s = format!(
+                "# vertices: {}\n# edges: {}\n# total weight: {}\n",
+                g.num_vertices(),
+                g.num_edges(),
+                g.total_weight()
+            );
+            for (u, v, w) in g.edges() {
+                writeln!(s, "{u} {v} {w}").unwrap();
+            }
+            s
+        }
+        Format::MatrixMarket => {
+            let n = g.num_vertices();
+            let mut s = format!(
+                "%%MatrixMarket matrix coordinate integer symmetric\n{n} {n} {}\n",
+                g.num_edges()
+            );
+            for (u, v, w) in g.edges() {
+                writeln!(s, "{} {} {w}", v + 1, u + 1).unwrap();
+            }
+            s
+        }
+        Format::Dot | Format::GraphML => {
+            let base = to_string(&g.structure(), format, options);
+            add_weights(&base, g, format)
+        }
+        other => {
+            return Err(Error::Invalid(format!(
+                "{} cannot store edge weights; use edgelist, mtx or wlists",
+                other.name()
+            )));
+        }
+    })
+}
+
+/// Reads a weighted graph from a file, using `format` or else guessing it from the extension.
+pub fn read_weighted_file(path: &Path, format: Option<Format>) -> Result<WeightedGraph, Error> {
+    let format = format.or_else(|| Format::from_path(path)).ok_or_else(|| {
+        Error::Invalid(format!(
+            "cannot tell the format of {} from its extension; specify it",
+            path.display()
+        ))
+    })?;
+    parse_weighted(&std::fs::read_to_string(path)?, format)
+}
+
+/// Writes a weighted graph to a file, using `format` or else guessing it from the extension.
+pub fn write_weighted_file(
+    g: &WeightedGraph,
+    path: &Path,
+    format: Option<Format>,
+    options: &WriteOptions,
+) -> Result<(), Error> {
+    let format = format.or_else(|| Format::from_path(path)).ok_or_else(|| {
+        Error::Invalid(format!(
+            "cannot tell the format of {} from its extension; specify it",
+            path.display()
+        ))
+    })?;
+    std::fs::write(path, to_string_weighted(g, format, options)?)?;
+    Ok(())
+}
+
+/// Adds weights to DOT (edge labels and widths) or GraphML (a `weight` edge attribute) output
+/// written for the unweighted structure, whose edges appear in the same order.
+fn add_weights(base: &str, g: &WeightedGraph, format: Format) -> String {
+    let mut weights = g.edges().map(|(_, _, w)| w);
+    let mut out = String::with_capacity(base.len() + g.num_edges() * 24);
+    for line in base.lines() {
+        let t = line.trim_start();
+        let is_edge = match format {
+            Format::Dot => t.contains(" -- "),
+            _ => t.starts_with("<edge "),
+        };
+        if format == Format::GraphML && t.starts_with("<graph ") {
+            out.push_str(
+                "  <key id=\"weight\" for=\"edge\" attr.name=\"weight\" attr.type=\"int\"/>\n",
+            );
+        }
+        if is_edge {
+            let w = weights.next().unwrap();
+            if format == Format::Dot {
+                let attrs = format!("label=\"{w}\", penwidth={}", 1.0 + f64::from(w).ln());
+                if let Some(stripped) = line.strip_suffix("];") {
+                    writeln!(out, "{stripped}, {attrs}];").unwrap();
+                } else {
+                    writeln!(out, "{} [{attrs}];", line.trim_end_matches(';')).unwrap();
+                }
+            } else {
+                let open = line.trim_end_matches("/>");
+                writeln!(out, "{open}><data key=\"weight\">{w}</data></edge>").unwrap();
+            }
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+fn parse_weighted_lists(text: &str) -> Result<WeightedGraph, Error> {
+    let mut sc = Scanner::new(text);
+    let mut rows: Vec<Vec<i64>> = vec![Vec::new()];
+    while let Some(x) = sc.next_int() {
+        if x == -1 {
+            rows.push(Vec::new());
+        } else {
+            rows.last_mut().unwrap().push(x);
+        }
+    }
+    if !rows.pop().unwrap().is_empty() {
+        return Err(Error::Parse {
+            line: None,
+            msg: "the last adjacency list is not terminated by -1".into(),
+        });
+    }
+    let n = rows.len() as i64;
+    let mut edges = Vec::new();
+    for (i, row) in rows.iter().enumerate() {
+        for &x in row {
+            if x < 0 {
+                return Err(parse_error(i + 1, format!("invalid entry {x}")));
+            }
+            let (v, w) = ((x % n) as usize, x / n + 1);
+            if w > 255 {
+                return Err(parse_error(
+                    i + 1,
+                    format!("entry {x} encodes weight {w}; weights must be at most 255"),
+                ));
+            }
+            edges.push((i, v, w as u32));
+        }
+    }
+    WeightedGraph::from_weighted_edges(rows.len(), edges)
+}
+
+fn write_weighted_lists(g: &WeightedGraph) -> String {
+    // wggen's layout: every entry followed by a space, then -1
+    let n = g.num_vertices();
+    let mut s = String::new();
+    for u in 0..n {
+        for &v in g.neighbors(u).iter().filter(|&&v| v as usize > u) {
+            let w = usize::from(g.weight(u, v as usize));
+            write!(s, "{} ", v as usize + (w - 1) * n).unwrap();
+        }
+        s.push_str("-1\n");
+    }
+    s
+}
+
+fn parse_weighted_edge_list(text: &str) -> Result<WeightedGraph, Error> {
+    let mut declared = None;
+    let mut edges = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if let Some(comment) = line.strip_prefix('#').or_else(|| line.strip_prefix('%')) {
+            if let Some(n) = comment.trim().strip_prefix("vertices:") {
+                declared = Some(
+                    n.trim()
+                        .parse::<usize>()
+                        .map_err(|_| parse_error(i + 1, "bad vertex count"))?,
+                );
+            }
+            continue;
+        }
+        if line.is_empty() {
+            continue;
+        }
+        let fields: Vec<&str> = line
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .filter(|f| !f.is_empty())
+            .collect();
+        if fields.len() < 2 {
+            return Err(parse_error(
+                i + 1,
+                "expected two vertices and an optional weight",
+            ));
+        }
+        let num = |f: &str| {
+            f.parse::<usize>()
+                .map_err(|_| parse_error(i + 1, format!("'{f}' is not a vertex number")))
+        };
+        let w = match fields.get(2) {
+            None => 1,
+            Some(f) => f.parse::<u32>().map_err(|_| {
+                parse_error(i + 1, format!("'{f}' is not a positive integer weight"))
+            })?,
+        };
+        edges.push((num(fields[0])?, num(fields[1])?, w));
+    }
+    let n = declared.unwrap_or_else(|| {
+        edges
+            .iter()
+            .map(|&(u, v, _)| u.max(v) + 1)
+            .max()
+            .unwrap_or(0)
+    });
+    WeightedGraph::from_weighted_edges(n, edges)
+}
+
+fn parse_weighted_matrix_market(text: &str) -> Result<WeightedGraph, Error> {
+    let header = text.lines().next().unwrap_or("").to_ascii_lowercase();
+    if header.split_whitespace().nth(3) == Some("pattern") {
+        return Ok(WeightedGraph::from_graph(&parse_matrix_market(text)?));
+    }
+    let mut size = None;
+    let mut edges = Vec::new();
+    for (i, line) in text.lines().enumerate().skip(1) {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('%') {
+            continue;
+        }
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let num = |s: &str| {
+            s.parse::<usize>()
+                .map_err(|_| parse_error(i + 1, format!("'{s}' is not an index")))
+        };
+        match size {
+            None => size = Some(num(f.first().copied().unwrap_or(""))?),
+            Some(n) => {
+                if f.len() < 3 {
+                    return Err(parse_error(i + 1, "expected 'row column value'"));
+                }
+                let (r, c) = (num(f[0])?, num(f[1])?);
+                if r == 0 || c == 0 || r > n || c > n {
+                    return Err(parse_error(i + 1, format!("index out of range [1, {n}]")));
+                }
+                let value: f64 = f[2]
+                    .parse()
+                    .map_err(|_| parse_error(i + 1, format!("'{}' is not a number", f[2])))?;
+                if value == 0.0 || r == c {
+                    continue;
+                }
+                if value.fract() != 0.0 || !(1.0..=255.0).contains(&value) {
+                    return Err(parse_error(
+                        i + 1,
+                        format!("weight {value} is not an integer between 1 and 255"),
+                    ));
+                }
+                edges.push((r - 1, c - 1, value as u32));
+            }
+        }
+    }
+    // checks the header and the size line the same way as the unweighted reader
+    parse_matrix_market(text)?;
+    WeightedGraph::from_weighted_edges(size.unwrap_or(0), edges)
 }
 
 /// Reads a graph from a file, using `format` or else guessing it from the extension.
@@ -760,6 +1051,57 @@ mod tests {
             parse("", Format::Graph6),
             Err(Error::Parse { .. })
         ));
+    }
+
+    #[test]
+    fn weighted_round_trips() {
+        let g = WeightedGraph::from_weighted_edges(
+            9,
+            [(0, 1, 3), (0, 2, 1), (5, 6, 127), (7, 8, 2), (2, 8, 255)],
+        )
+        .unwrap();
+        for format in [
+            Format::WeightedLists,
+            Format::EdgeList,
+            Format::MatrixMarket,
+        ] {
+            let text = to_string_weighted(&g, format, &WriteOptions::default()).unwrap();
+            assert_eq!(
+                parse_weighted(&text, format).unwrap(),
+                g,
+                "{format:?}: {text}"
+            );
+        }
+        // wggen's encoding: weight w to vertex j is written j + (w - 1) * n
+        let lists =
+            to_string_weighted(&g, Format::WeightedLists, &WriteOptions::default()).unwrap();
+        assert_eq!(lists.lines().next().unwrap(), "19 2 -1");
+        // unweighted formats read as unit weights, and cannot store weights
+        assert_eq!(
+            parse_weighted("DQc", Format::Graph6)
+                .unwrap()
+                .total_weight(),
+            4
+        );
+        assert!(to_string_weighted(&g, Format::Graph6, &WriteOptions::default()).is_err());
+        // unweighted readers see just the structure
+        assert_eq!(parse(&lists, Format::WeightedLists).unwrap(), g.structure());
+        let dot =
+            to_string_weighted(&g, Format::Dot, &WriteOptions { highlight: &[5, 6] }).unwrap();
+        assert!(
+            dot.contains("5 -- 6 [color=red, penwidth=2, label=\"127\"")
+                && dot.contains("0 -- 1 [label=\"3\""),
+            "{dot}"
+        );
+        let gml = to_string_weighted(&g, Format::GraphML, &WriteOptions::default()).unwrap();
+        assert_eq!(gml.matches("<data key=\"weight\">").count(), 5);
+        assert!(
+            parse_weighted(
+                "%%MatrixMarket matrix coordinate real symmetric\n3 3 1\n2 1 1.5\n",
+                Format::MatrixMarket
+            )
+            .is_err()
+        );
     }
 
     #[test]
