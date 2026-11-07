@@ -1,0 +1,11 @@
+/target
+.venv/
+__pycache__/
+*.so
+*.pyd
+.pytest_cache/
+python/subsearch/_core*.so
+*.egg-info/
+.DS_Store
+.ipynb_checkpoints/
+/out/

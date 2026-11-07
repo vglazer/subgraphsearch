@@ -1,0 +1,13 @@
+[package]
+name = "subsearch-core"
+description = "Randomised restricted local search for induced subgraphs with a prescribed edge count, plus graph generators and formats"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+rayon = "1.12.0"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.21"

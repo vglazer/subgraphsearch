@@ -1,0 +1,26 @@
+"""The original USRA programs' interfaces, reproduced byte for byte.
+
+These take exactly the text the C programs read on stdin and return what they printed, which is
+useful for re-running old experiments or scripts.
+
+>>> out = ggen("2 10 0 500 42 0 0 0")
+>>> out.splitlines()[0]
+'2 10 0 500 42  0 0  0'
+"""
+
+from __future__ import annotations
+
+from . import _core
+
+
+def sub_search(stdin: str) -> tuple[str, int]:
+    """Runs ``sub_search``: parameters, '-1'-terminated adjacency lists and any fixed vertices.
+    Returns ``(stdout, exit status)``. The final ``T> ... H> ...`` timing line reports elapsed
+    time and the host name ``python`` instead of CPU time and the real host name."""
+    return _core.legacy_sub_search(stdin)
+
+
+def ggen(stdin: str) -> str:
+    """Runs ``ggen`` (parameters, plus any input lists and fixed vertices) and returns its output.
+    Raises ``ValueError`` with ``ggen``'s error message on invalid input."""
+    return _core.legacy_ggen(stdin)

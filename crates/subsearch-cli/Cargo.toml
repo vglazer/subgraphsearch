@@ -1,0 +1,20 @@
+[package]
+name = "subsearch-cli"
+description = "Command-line interface for subsearch, including byte-compatible emulation of the original USRA sub_search and ggen programs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "subsearch"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+libc = "0.2.191"
+rayon = "1.12.0"
+serde_json = "1.0.154"
+subsearch-core = { version = "0.1.0", path = "../subsearch-core" }

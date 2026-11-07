@@ -1,0 +1,17 @@
+[package]
+name = "subsearch-py"
+description = "Python bindings for subsearch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.30.1", features = ["extension-module", "abi3-py39"] }
+subsearch-core = { version = "0.1.0", path = "../subsearch-core" }

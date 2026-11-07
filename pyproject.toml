@@ -1,0 +1,41 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "subsearch"
+description = "Find induced subgraphs with a prescribed number of edges by randomised restricted local search (a Rust port of USRA's sub_search), with graph generators, standard formats and visualisation"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Victor Glazer" }]
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+viz = ["matplotlib>=3.7"]
+interop = ["networkx>=3.1", "scipy>=1.10"]
+igraph = ["igraph>=0.11"]
+jupyter = ["ipython>=8"]
+all = ["subsearch[viz,interop,igraph,jupyter]"]
+
+[dependency-groups]
+dev = ["pytest>=8", "maturin>=1.9,<2", "matplotlib>=3.7", "networkx>=3.1", "scipy>=1.10", "igraph>=0.11", "ipython>=8", "nbformat>=5", "nbclient>=0.10", "ipykernel>=6"]
+
+[tool.maturin]
+manifest-path = "crates/subsearch-py/Cargo.toml"
+python-source = "python"
+module-name = "subsearch._core"
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+
+[tool.uv]
+# rebuild the Rust extension whenever Rust sources change
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "crates/**/*.rs" }, { file = "crates/**/Cargo.toml" }]

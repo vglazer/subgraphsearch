@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/subsearch-core", "crates/subsearch-cli", "crates/subsearch-py"]
+# the Python extension is built by maturin (it needs Python's linker flags), not by plain cargo
+default-members = ["crates/subsearch-core", "crates/subsearch-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Victor Glazer"]
+repository = "https://github.com/vglazer/subsearch"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
