@@ -4,7 +4,7 @@ name: Release
 # source distribution, then publishes them with PyPI Trusted Publishing (no stored tokens). Releases
 # then publish the Rust crates to crates.io, also with Trusted Publishing.
 #
-# - To release: bump the version in Cargo.toml, then create a release on GitHub
+# - To release: bump the version (python scripts/bump_version.py X.Y.Z), commit and push, then create a release on GitHub
 #   (https://github.com/vglazer/subgraphsearch/releases/new) with a new tag `v` followed by that
 #   version, e.g. v0.2.2. Publishing the release publishes to PyPI and crates.io.
 # - To rehearse: run it by hand (Actions > Release > Run workflow), which publishes to TestPyPI.
