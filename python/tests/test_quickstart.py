@@ -8,6 +8,7 @@ versions. Skipped unless nbformat, nbclient and ipykernel are installed.
 from pathlib import Path
 
 import pytest
+
 import subgraphsearch
 
 nbformat = pytest.importorskip("nbformat")

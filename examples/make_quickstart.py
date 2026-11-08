@@ -108,7 +108,7 @@ Success falls off sharply around the limit: one edge fewer is found by every exp
 none.
 """),
     code("""
-settings = dict(experiments=60, max_moves=2000, div_freq=300, div_dur=8, seed=5)
+settings = {"experiments": 60, "max_moves": 2000, "div_freq": 300, "div_dur": 8, "seed": 5}
 {m: ss.search(g, 30, m, **settings).successes for m in (345, 346, 350)}
 """),
     md("""
@@ -182,6 +182,7 @@ between $\\lambda_1$ and the smallest degree. Here that means between 46 and 48,
 """),
     code("""
 import networkx as nx
+
 from subgraphsearch import convert
 
 fiedler = viz.spectral_summary(g)["algebraic_connectivity"]

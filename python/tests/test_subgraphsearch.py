@@ -133,7 +133,7 @@ def test_search_validation(g100):
 
 
 def test_legacy_search_matches_the_c_program_fixtures():
-    strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
+    strip = lambda s: re.sub(r"T> .*", "T>", s)
     for name in ["readme_cliques", "fixed_cliques", "approx_adj", "complement"]:
         out, status = ss.legacy.sub_search((FIXTURES / "sub_search" / f"{name}.in").read_text(encoding="utf-8"))
         assert strip(out) == strip((FIXTURES / "sub_search" / f"{name}.out").read_text(encoding="utf-8")), name
@@ -141,7 +141,7 @@ def test_legacy_search_matches_the_c_program_fixtures():
 
 
 def test_legacy_asub_search_matches_the_c_program_fixtures():
-    strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
+    strip = lambda s: re.sub(r"T> .*", "T>", s)
     for name in ["readme_cliques", "one_step_show", "approx_adj", "geometric"]:
         out, status = ss.legacy.asub_search((FIXTURES / "asub_search" / f"{name}.in").read_text(encoding="utf-8"))
         assert strip(out) == strip((FIXTURES / "asub_search" / f"{name}.out").read_text(encoding="utf-8")), name
@@ -352,7 +352,7 @@ def test_weighted_round_trips(tmp_path, w200, fmt, ext):
 
 
 def test_weighted_interop(w200):
-    nx = pytest.importorskip("networkx")
+    pytest.importorskip("networkx")
     pytest.importorskip("scipy")
     G = convert.to_networkx(w200)
     assert G.size(weight="weight") == w200.total_weight
@@ -378,9 +378,9 @@ def test_weighted_search(w200):
 
 
 def test_legacy_weighted_programs():
-    strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
+    strip = lambda s: re.sub(r"T> .*", "T>", s)
     for name in ["light_adj", "multi_weights", "hard_183", "fixed", "unit_weights"]:
-        out, status = ss.legacy.wsub_search((FIXTURES / "wsub_search" / f"{name}.in").read_text(encoding="utf-8"))
+        out, _ = ss.legacy.wsub_search((FIXTURES / "wsub_search" / f"{name}.in").read_text(encoding="utf-8"))
         assert strip(out) == strip((FIXTURES / "wsub_search" / f"{name}.out").read_text(encoding="utf-8")), name
     for name in ["w10_50_3", "w60_150_3"]:
         args = (FIXTURES / "wggen" / f"{name}.args").read_text(encoding="utf-8")
@@ -431,7 +431,7 @@ def test_regular_search():
 
 
 def test_legacy_regular_programs():
-    strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
+    strip = lambda s: re.sub(r"T> .*", "T>", s)
     for program in ("reg_search", "ereg_search"):
         for name in ["paley_4reg", "paley_6reg", "dense_5reg", "doc_4cycles", "geometric"]:
             out, status = getattr(ss.legacy, program)((FIXTURES / program / f"{name}.in").read_text(encoding="utf-8"))
@@ -454,7 +454,7 @@ def test_command_line_ships_with_the_package(tmp_path):
     import sys
 
     def cli(*args):
-        return subprocess.run([sys.executable, "-m", "subgraphsearch._cli", *args], capture_output=True, text=True, encoding="utf-8")
+        return subprocess.run([sys.executable, "-m", "subgraphsearch._cli", *args], check=False, capture_output=True, text=True, encoding="utf-8")
 
     assert cli("--version").stdout.strip() == f"subgraphsearch {ss.__version__}"
     path = tmp_path / "g.g6"

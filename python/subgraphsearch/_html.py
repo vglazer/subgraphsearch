@@ -117,7 +117,7 @@ def graph_html(graph: Graph) -> str:
 
 def search_html(result: SearchResult) -> str:
     p = result.params
-    fmt = lambda x: "–" if np.isnan(x) else f"{x:.1f}"  # noqa: E731
+    fmt = lambda x: "–" if np.isnan(x) else f"{x:.1f}"
     from ._graph import structure_of
 
     rows = [

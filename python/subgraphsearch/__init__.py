@@ -11,6 +11,7 @@ standard formats, conversions to networkx / igraph / SciPy, and visualization.
 5
 """
 
+from . import _core, convert, designs, legacy, viz
 from ._core import __version__
 from ._graph import (
     MODELS,
@@ -25,8 +26,6 @@ from ._graph import (
     write_all,
 )
 from ._search import Experiment, SearchParams, SearchResult, search, sweep
-from . import convert, designs, legacy, viz  # noqa: E402
-from . import _core
 
 
 def formats() -> dict[str, bool]:

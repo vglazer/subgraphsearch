@@ -125,8 +125,8 @@ class SearchResult:
         p = self.params
         lines = [
             f"{self.successes}/{len(self.experiments)} experiments found a {p.size}-vertex subgraph {self.target}",
-            f"relative cost {self.relative_cost:.1f} moves, true cost {self.true_cost:.1f} moves, "
-            f"average conflict {self.average_conflict:.3f}",
+            (f"relative cost {self.relative_cost:.1f} moves, true cost {self.true_cost:.1f} moves, "
+             f"average conflict {self.average_conflict:.3f}"),
         ]
         return "\n".join(lines)
 

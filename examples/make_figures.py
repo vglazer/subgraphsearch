@@ -5,10 +5,10 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt
 
-import subgraphsearch as ss  # noqa: E402
-from subgraphsearch import viz  # noqa: E402
+import subgraphsearch as ss
+from subgraphsearch import viz
 
 OUT = Path(__file__).resolve().parents[1] / "assets"
 
