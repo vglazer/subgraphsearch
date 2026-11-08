@@ -336,7 +336,9 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
 
 Wall-clock times on an Apple M3 Max laptop with 16 cores, using all of them, for searches started
 from Python (the command runs the same engine). Settings are given as experiments × maximum moves
-per experiment. An experiment stops at its first solution, so the moves actually made, not the
+per experiment.
+
+An experiment stops at its first solution, so the moves actually made, not the
 maximum, determine the time.
 
 | Search | Settings | Moves made | Time | Successes |
@@ -351,8 +353,9 @@ maximum, determine the time.
 
 A search that misses its target makes every move it is allowed, so its time is the cost of a move
 times the number of moves. The cost of a move grows in proportion to the number of vertices, and a
-little less than in proportion to the size of the subgraph. Here are 40 × 250 = 10,000 moves looking
-for 30 vertices in random graphs of density 0.5:
+little less than in proportion to the size of the subgraph.
+
+Here are 40 × 250 = 10,000 moves looking for 30 vertices in random graphs of density 0.5:
 
 | Graph | All 16 cores | One thread |
 | --- | --- | --- |
