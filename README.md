@@ -71,6 +71,23 @@ is a full tour.
 - **Tuning:** `ss.sweep(g, size, edges, "div_dur", [0, 4, 16])` with `viz.plot_sweep`.
 - **Spectra:** `viz.laplacian_spectrum` and `viz.spectral_summary`.
 
+## Rust
+
+The search, generators and formats are also a Rust library,
+[`subgraphsearch-core`](https://docs.rs/subgraphsearch-core) (Rust 1.87 or later):
+
+```rust
+use subgraphsearch_core::{Graph, SearchParams, search};
+
+// find induced 4-vertex paths (3 edges) in a 12-cycle
+let g = Graph::from_edges(12, (0..12).map(|i| (i, (i + 1) % 12))).unwrap();
+let result = search(&g, &SearchParams::new(4, 3)).unwrap();
+let found = result.experiments.iter().find(|e| e.success).unwrap();
+assert_eq!(g.induced_edge_count(&found.vertices), 3);
+```
+
+With a Rust toolchain, `cargo install subgraphsearch` builds the command below.
+
 ## Command line
 
 ```sh
@@ -102,22 +119,6 @@ subgraphsearch op complement g.g6 gc.g6                           # complements,
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
-
-## Rust
-
-With a Rust toolchain (1.87 or later), `cargo install subgraphsearch` builds the same
-`subgraphsearch` command. The search, generators and formats are also a library,
-[`subgraphsearch-core`](https://docs.rs/subgraphsearch-core):
-
-```rust
-use subgraphsearch_core::{Graph, SearchParams, search};
-
-// find induced 4-vertex paths (3 edges) in a 12-cycle
-let g = Graph::from_edges(12, (0..12).map(|i| (i, (i + 1) % 12))).unwrap();
-let result = search(&g, &SearchParams::new(4, 3)).unwrap();
-let found = result.experiments.iter().find(|e| e.success).unwrap();
-assert_eq!(g.induced_edge_count(&found.vertices), 3);
-```
 
 ## How the search works
 
