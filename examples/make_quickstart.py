@@ -1,5 +1,7 @@
-"""Builds and executes examples/quickstart.ipynb (run: uv run python examples/make_quickstart.py)."""
+"""Builds and executes examples/quickstart.ipynb, and writes an output-free copy into the package for
+`python -m subgraphsearch quickstart` (run: uv run python examples/make_quickstart.py)."""
 
+import copy
 from pathlib import Path
 
 import nbformat
@@ -9,9 +11,9 @@ from nbclient import NotebookClient
 md, code = nbformat.v4.new_markdown_cell, nbformat.v4.new_code_cell
 cells = [
     md("# subgraphsearch quickstart\n\n"
-       "`subgraphsearch` finds **induced subgraphs with a prescribed number of vertices and edges** using the randomized "
-       "restricted local search of the original `sub_search`, ported to Rust. This notebook walks through generating graphs, "
-       "searching them, reading the results, and the visualizations."),
+       "`subgraphsearch` finds **induced subgraphs with a given number of vertices and edges** (cliques, independent sets "
+       "and everything in between), regular subgraphs, and subgraphs of a given total weight, by a fast randomized local "
+       "search. This notebook walks through generating graphs, searching them, reading the results, and the visualizations."),
     code("import subgraphsearch as ss\nfrom subgraphsearch import viz\n\nss.__version__"),
     md("## Graphs\n\nGenerate one of `ggen`'s random models, or read graph6, sparse6, Matrix Market, edge lists or `sub_search` adjacency lists. "
        "In a notebook a graph shows a summary, its degree distribution and, when small, a drawing."),
@@ -65,6 +67,11 @@ cells = [
     code("print(ss.legacy.ggen(\"2 10 0 500 42 0 0 0\"))"),
 ]
 nb = nbformat.v4.new_notebook(cells=cells, metadata={"kernelspec": {"name": "python3", "display_name": "Python 3 (ipykernel)", "language": "python"}})
+# the packaged copy has no outputs: about 12 KB instead of over a megabyte of embedded images, and
+# its cells are meant to be run anyway
+packaged = Path(__file__).resolve().parents[1] / "python" / "subgraphsearch" / "quickstart.ipynb"
+nbformat.write(copy.deepcopy(nb), packaged)
+print(packaged, f"{packaged.stat().st_size // 1024} KB")
 NotebookClient(nb, timeout=600, kernel_name="python3").execute()
 # Sign the notebook, as `jupyter trust` would, so that its saved outputs (inline charts, the
 # interactive viewer) display on this machine instead of being stripped as untrusted HTML.

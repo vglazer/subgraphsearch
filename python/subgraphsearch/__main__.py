@@ -1,10 +1,12 @@
-"""Command-line access to the Python-side visualizations.
+"""Command-line access to the Python-side visualizations and the quickstart notebook.
 
     python -m subgraphsearch explore GRAPH [--result RESULT.json] [-o PAGE.html]
     python -m subgraphsearch report GRAPH [--result RESULT.json] [-o FIGURE.png]
+    python -m subgraphsearch quickstart [DIR] [--no-open]
 
 GRAPH is any readable graph file; RESULT.json comes from ``subgraphsearch search --json`` (the Rust
-CLI) or ``SearchResult.save``.
+CLI) or ``SearchResult.save``. ``quickstart`` copies the quickstart notebook into DIR (default: the
+current directory) and opens it in JupyterLab, if installed.
 """
 
 from __future__ import annotations
@@ -23,6 +25,9 @@ def main(argv: list[str] | None = None) -> int:
 
     explore = sub.add_parser("explore", help="write an interactive HTML page for a graph and search result")
     report = sub.add_parser("report", help="write a figure summarizing a graph and, if given, a search result")
+    quickstart = sub.add_parser("quickstart", help="copy the quickstart notebook here and open it in JupyterLab")
+    quickstart.add_argument("dir", type=Path, nargs="?", default=Path("."), help="where to put quickstart.ipynb")
+    quickstart.add_argument("--no-open", action="store_true", help="only copy the notebook")
     for p in (explore, report):
         p.add_argument("graph", type=Path, help="graph file")
         p.add_argument("--format", help="graph format, if not implied by the extension")
@@ -33,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     explore.add_argument("--layout", default="spring", choices=["spring", "spectral", "circle"])
 
     args = parser.parse_args(argv)
+    if args.command == "quickstart":
+        return run_quickstart(args.dir, open_it=not args.no_open)
     graph = WeightedGraph.read(args.graph, args.format) if args.weighted else Graph.read(args.graph, args.format)
     result = SearchResult.load(args.result, graph) if args.result else None
 
@@ -57,6 +64,30 @@ def main(argv: list[str] | None = None) -> int:
             out = Path(f"{stem}-graph{out.suffix}"), Path(f"{stem}-search{out.suffix}")
     print(*(out if isinstance(out, tuple) else (out,)), sep="\n")
     return 0
+
+
+def run_quickstart(directory: Path, open_it: bool = True) -> int:
+    """Copies the notebook (without outputs) unless one is already there, then opens it."""
+    import importlib.util
+    import subprocess
+    from importlib.resources import files
+
+    path = directory / "quickstart.ipynb"
+    if path.exists():
+        print(f"{path} already exists; opening it as it is", flush=True)
+    else:
+        directory.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(files("subgraphsearch").joinpath("quickstart.ipynb").read_bytes())
+        print(f"wrote {path}", flush=True)
+    if not open_it:
+        return 0
+    if importlib.util.find_spec("jupyterlab") is None:
+        print('JupyterLab is not installed here; install it with the plotting extras, as in\n'
+              '    pip install "subgraphsearch[all]" jupyterlab\n'
+              f"then run: jupyter lab {path}")
+        return 1
+    # run JupyterLab from this environment, so the notebook's kernel can import subgraphsearch
+    return subprocess.call([sys.executable, "-m", "jupyterlab", str(path)])
 
 
 if __name__ == "__main__":

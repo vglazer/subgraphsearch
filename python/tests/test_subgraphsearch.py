@@ -466,3 +466,18 @@ def test_command_line_ships_with_the_package(tmp_path):
     assert cli("no-such-command").returncode == 2
     converted = cli("convert", str(path), "-", "--to", "edgelist")
     assert converted.returncode == 0 and converted.stdout.startswith("# vertices: 100")
+
+
+def test_quickstart_notebook_ships_with_the_package(tmp_path):
+    from subgraphsearch.__main__ import main
+
+    assert main(["quickstart", str(tmp_path), "--no-open"]) == 0
+    packaged = json.loads((tmp_path / "quickstart.ipynb").read_text())
+    executed = json.loads((Path(__file__).resolve().parents[2] / "examples" / "quickstart.ipynb").read_text())
+    # the same cells as the executed notebook in the repo (rerun examples/make_quickstart.py), no outputs
+    assert [c["source"] for c in packaged["cells"]] == [c["source"] for c in executed["cells"]]
+    assert all(not c.get("outputs") for c in packaged["cells"])
+    # an existing notebook, perhaps edited, is never overwritten
+    (tmp_path / "quickstart.ipynb").write_text("mine")
+    assert main(["quickstart", str(tmp_path), "--no-open"]) == 0
+    assert (tmp_path / "quickstart.ipynb").read_text() == "mine"

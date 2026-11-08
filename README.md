@@ -33,6 +33,13 @@ pipx run subgraphsearch info g.g6    # or run the command without installing it
 Prebuilt wheels cover Linux (including Alpine), macOS and Windows (including ARM) for Python 3.10
 and later.
 
+To copy the quickstart notebook into the current directory and open it in JupyterLab:
+
+```sh
+uv run --with "subgraphsearch[all]" --with jupyterlab python -m subgraphsearch quickstart   # with uv
+pip install "subgraphsearch[all]" jupyterlab && python -m subgraphsearch quickstart       # with pip
+```
+
 ## Python
 
 ```python
@@ -288,7 +295,7 @@ values. Formats without weights read as weight 1, and writing a weighted graph t
 ```sh
 cargo test --release                              # Rust tests
 uv run pytest                                     # Python tests (build the CLI first)
-uv run python examples/make_quickstart.py         # rebuild the quickstart notebook
+uv run python examples/make_quickstart.py         # rebuild the quickstart notebooks
 uv run python examples/make_figures.py            # redraw the README figures
 USRA_DIR=~/repos/USRA scripts/make_fixtures.sh    # re-record test fixtures from the C programs
 ```
