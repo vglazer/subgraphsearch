@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 import numpy as np
 
@@ -18,13 +18,15 @@ def plot_graph(
     layout: str | np.ndarray = "spring",
     seed: int = 1,
     node_size: float | None = None,
+    labels: Mapping[int, str] | None = None,
     title: str | None = None,
 ):
     """Draws ``graph`` with the vertices in ``highlight`` and the edges among them in color.
 
     ``layout`` is a method name for :meth:`Graph.layout` (``"spring"``, ``"spectral"`` or
     ``"circle"``) or an ``(n, 2)`` array of positions. Edges outside the highlighted subgraph are
-    drawn faintly, more so for larger graphs, so the subgraph stands out.
+    drawn faintly, more so for larger graphs, so the subgraph stands out. ``labels`` maps vertices
+    to text drawn beside them, for example names for the highlighted vertices.
     """
     from matplotlib.collections import LineCollection
 
@@ -47,6 +49,20 @@ def plot_graph(
     size = node_size if node_size is not None else max(6.0, min(60.0, 3000.0 / max(g.n, 1)))
     ax.scatter(pos[~marked, 0], pos[~marked, 1], s=size, color=NEUTRAL, zorder=3, linewidths=0)
     ax.scatter(pos[marked, 0], pos[marked, 1], s=size * 2.2, color=ACCENT, zorder=4, edgecolors="white", linewidths=0.8)
+    if labels:
+        # place each label away from the center of the labeled vertices, so labels around a
+        # group fan outward instead of piling up
+        labeled = np.array([int(v) for v in labels])
+        center = pos[labeled].mean(axis=0)
+        for v, text in labels.items():
+            x, y = pos[int(v)]
+            dx, dy = x - center[0], y - center[1]
+            norm = float(np.hypot(dx, dy)) or 1.0
+            ux, uy = dx / norm, dy / norm
+            ax.annotate(str(text), (x, y), xytext=(9 * ux, 9 * uy), textcoords="offset points", fontsize=8,
+                        ha="left" if ux > 0.3 else "right" if ux < -0.3 else "center",
+                        va="bottom" if uy > 0.3 else "top" if uy < -0.3 else "center", zorder=5, color="#343a40",
+                        bbox={"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none", "alpha": 0.75})
     ax.set_aspect("equal")
     ax.margins(0.03)
     ax.set_axis_off()

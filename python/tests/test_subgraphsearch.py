@@ -196,6 +196,8 @@ def test_plots_render(g100):
     for layout in ("spring", "circle", "spectral"):
         viz.plot_graph(g100, best, layout=layout, title="x")
     viz.plot_graph(ss.WeightedGraph.from_graph(cycle(10)), [0, 1, 2])
+    ax = viz.plot_graph(cycle(6), [0, 1], labels={0: "a", 1: "b"})
+    assert [t.get_text() for t in ax.texts] == ["a", "b"]
     with pytest.raises(ValueError, match="layout must have shape"):
         viz.plot_graph(g100, layout=np.zeros((3, 2)))
     import matplotlib.pyplot as plt
