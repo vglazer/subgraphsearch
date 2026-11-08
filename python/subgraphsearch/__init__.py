@@ -1,12 +1,12 @@
-"""subgraphsearch: find induced subgraphs with a prescribed number of edges.
+"""subgraphsearch: find induced subgraphs with a given number of vertices and edges.
 
-A Rust port of the original ``sub_search`` randomized restricted local search, with the graph
-generators and operations of its companion ``ggen``, standard graph formats, conversions to
-networkx / igraph / SciPy, and visualization.
+Cliques, independent sets and everything in between, regular subgraphs, and subgraphs of a given
+total weight, by a fast randomized local search; with random graph generators, graph operations,
+standard formats, conversions to networkx / igraph / SciPy, and visualization.
 
 >>> import subgraphsearch as ss
 >>> g = ss.generate("exponential", 100, 0.6, seed=1)
->>> r = ss.search(g, size=8, edges=0, experiments=5, max_moves=200)
+>>> r = ss.search(g, size=8, edges=28, experiments=5, max_moves=200)  # 8-cliques
 >>> r.successes
 5
 """
