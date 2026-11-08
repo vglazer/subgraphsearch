@@ -86,9 +86,10 @@ let found = result.experiments.iter().find(|e| e.success).unwrap();
 assert_eq!(g.induced_edge_count(&found.vertices), 3);
 ```
 
-With a Rust toolchain, `cargo install subgraphsearch` builds the command below.
-
 ## Command line
+
+The `subgraphsearch` command comes with the Python package (see [Install](#install)); with a Rust
+toolchain, `cargo install subgraphsearch` builds the same command.
 
 ```sh
 subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6    # a random graph
