@@ -387,6 +387,10 @@ values. Formats without weights read as weight 1, and writing a weighted graph t
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for setting up, testing, the scripts and releasing.
 
+## Porting notes
+
+subgraphsearch reimplements a set of C programs written in 2002. See [PORTING.md](PORTING.md) for how they map onto it, how to reproduce their runs exactly and how the port is tested against them.
+
 ## License
 
 MIT
