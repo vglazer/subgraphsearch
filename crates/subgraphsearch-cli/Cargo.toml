@@ -7,6 +7,11 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
+keywords = ["graph", "subgraph", "clique", "tabu-search", "cli"]
+categories = ["command-line-utilities", "mathematics", "science"]
+# the golden tests read fixtures from the repository root, which the package does not contain
+exclude = ["tests/golden.rs"]
 
 [lib]
 name = "subgraphsearch"

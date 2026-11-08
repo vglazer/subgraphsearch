@@ -11,6 +11,7 @@ rust-version = "1.87"
 license = "MIT"
 authors = ["Victor Glazer"]
 repository = "https://github.com/vglazer/subgraphsearch"
+homepage = "https://github.com/vglazer/subgraphsearch"
 
 [profile.release]
 lto = "thin"
