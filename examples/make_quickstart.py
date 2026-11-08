@@ -302,6 +302,113 @@ switched = rook.switch(two_regular)
 print("rook's graph:", srg_parameters(rook), "| switched:", srg_parameters(switched))
 print("isomorphic:", nx.is_isomorphic(convert.to_networkx(rook), convert.to_networkx(switched)))
 """),
+    md(f"""
+## Block designs
+
+An [incidence structure]({W}Incidence_structure) is a set of points with a family of subsets called
+*blocks*. In a [block design]({W}Block_design) with parameters $(v, k, \\lambda)$ there are $v$ points,
+every block has $k$ of them, and every two points lie together in exactly $\\lambda$ blocks. Two graphs
+come from any incidence structure: the *point graph* joins two points that lie together in some number of
+blocks (`ss.Graph.point_graph`), and the *block graph* joins two blocks that share some number of points
+(`ss.Graph.block_graph`), one by default in both cases.
+
+The [Fano plane]({W}Fano_plane) is the smallest projective plane, a $(7, 3, 1)$ design: 7 points and 7 lines
+of 3 points each. In the usual picture the points are a triangle's corners, the midpoints of its sides and its
+center; six lines are straight, and the seventh is the circle through the midpoints.
+"""),
+    code("""
+fano = ss.designs.FANO_PLANE   # the 7 lines, labeled as in the picture
+print(fano)
+viz.plot_fano_plane();
+"""),
+    md("""
+Every two points lie on exactly one line and every two lines meet in exactly one point, so both of its graphs
+are complete:
+"""),
+    code("""
+print("point graph:", ss.Graph.point_graph(fano), "| block graph:", ss.Graph.block_graph(fano))
+"""),
+    md(f"""
+### From a design to strongly regular graphs
+
+Designs, regular subgraph searches and switching combine into a way to construct
+[strongly regular graphs]({W}Strongly_regular_graph):
+
+1. **Build a graph from a design** with `ss.Graph.block_graph` or `ss.Graph.point_graph`, and check that it is
+   strongly regular.
+2. **Search it for regular subgraphs** with `ss.search(g, k, degree=d)`, or for independent sets with
+   `ss.search(g, k, 0)`.
+3. **Switch** with respect to each subgraph found (`g.switch(vertices)`), and keep the switched graphs that are
+   still strongly regular but not isomorphic to the original or to each other.
+
+As an example, take every pair of 8 points as a block. Its block graph joins two pairs that share a point: the
+[triangular graph]({W}Triangular_graph) $T(8)$, strongly regular with parameters $(28, 12, 6, 4)$. Every
+triangular graph $T(n)$ is the only graph with its parameters except $T(8)$, which shares them with the three
+[Chang graphs]({W}Chang_graphs), so these steps have something to find.
+"""),
+    code("""
+# 1. build a graph from a design: the block graph of all pairs of 8 points
+pairs = [(i, j) for i in range(8) for j in range(i + 1, 8)]
+t8 = ss.Graph.block_graph(pairs)
+print("T(8):", srg_parameters(t8))
+"""),
+    md("""
+Each Chang graph is $T(8)$ switched with respect to a set of pairs: four disjoint pairs, eight pairs forming an
+8-cycle on the points, or a triangle plus a 5-cycle. In $T(8)$ these are independent sets of 4 vertices and
+2-regular subgraphs on 8 vertices, so the search looks for both:
+"""),
+    code("""
+# 2. search for regular subgraphs: independent sets of 4 vertices, and 2-regular subgraphs on 8
+independent = ss.search(t8, 4, 0, experiments=20).solutions()
+two_regular = ss.search(t8, 8, degree=2, experiments=200).solutions()
+print(len(independent), "independent sets and", len(two_regular), "2-regular subgraphs found")
+"""),
+    md("""
+Switching with respect to each one gives a graph to check. To tell the switched graphs apart, the cell compares
+the sizes of their maximal cliques. Relabeling vertices cannot change them, so graphs whose clique sizes differ
+cannot be isomorphic. This takes milliseconds, where testing isomorphism directly takes about 0.1 seconds per
+pair of these graphs:
+"""),
+    code("""
+# 3. switch, and keep the strongly regular graphs not isomorphic to T(8) or to each other
+def clique_sizes(g):
+    \"\"\"The sizes of all maximal cliques, sorted: isomorphic graphs have the same.\"\"\"
+    return sorted(len(c) for c in nx.find_cliques(convert.to_networkx(g)))
+
+
+def described(vertices):
+    \"\"\"What the pairs at these vertices of T(8) form on the 8 points.\"\"\"
+    on_points = nx.Graph([pairs[v] for v in vertices])
+    cycles = tuple(sorted(len(c) for c in nx.connected_components(on_points)))
+    return {(2, 2, 2, 2): "4 disjoint pairs", (8,): "an 8-cycle", (3, 5): "a triangle and a 5-cycle"}.get(cycles, f"cycles {cycles}")
+
+
+seen = [clique_sizes(t8)]
+chang = []   # (description, switched vertices, graph), one per isomorphism class
+for vertices in independent + two_regular:
+    switched = t8.switch(vertices)
+    if srg_parameters(switched) != (28, 12, 6, 4):
+        continue
+    sizes = clique_sizes(switched)
+    if sizes not in seen:
+        seen.append(sizes)
+        chang.append((described(vertices), vertices, switched))
+
+for how, _, g in chang:
+    print(f"switching T(8) with respect to {how}: {srg_parameters(g)}, not isomorphic to T(8) or the others")
+"""),
+    md("""
+The top row draws each set of pairs on the 8 points, and the bottom row the graph it gives, with the switched
+vertices first on the ring. Switching leaves the edges among them alone, so they still form the same cycles.
+"""),
+    code("""
+viz.plot_switchings(
+    t8, [vertices for _, vertices, _ in chang],
+    graph_title="T(8): pairs that share a point", titles=[f"Chang graph {i}" for i in range(1, len(chang) + 1)],
+    above=[ss.Graph(8, pairs)] + [ss.Graph(8, [pairs[v] for v in vertices]) for _, vertices, _ in chang],
+    above_titles=["all 28 pairs of 8 points"] + [f"switch with respect to {how}" for how, _, _ in chang],
+);
+"""),
     md("""
 ## Formats and other libraries
 

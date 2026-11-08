@@ -63,6 +63,31 @@ class Graph:
             return _pick(parse_all(text, format), index, "the text")
         return Graph(_core.Graph.parse(text, format))
 
+    @staticmethod
+    def point_graph(blocks: Iterable[Iterable[int]], k: int = 1, *, points: int | None = None) -> Graph:
+        """The graph on the points of an incidence structure (for example a block design), in which
+        two points are adjacent when exactly ``k`` of the ``blocks`` contain both.
+
+        ``points`` is the number of points, by default one more than the largest listed.
+
+        >>> fano = [(0, 1, 2), (0, 3, 4), (0, 5, 6), (1, 3, 5), (1, 4, 6), (2, 3, 6), (2, 4, 5)]
+        >>> Graph.point_graph(fano).num_edges   # every two points share a line: K7
+        21
+        """
+        return Graph(_core.incidence_graph(_blocks(blocks), int(k), False, points))
+
+    @staticmethod
+    def block_graph(blocks: Iterable[Iterable[int]], k: int = 1, *, points: int | None = None) -> Graph:
+        """The graph on the ``blocks`` of an incidence structure, in which two blocks are adjacent
+        when they share exactly ``k`` points.
+
+        >>> pairs = [(i, j) for i in range(8) for j in range(i + 1, 8)]
+        >>> t8 = Graph.block_graph(pairs)   # the triangular graph T(8)
+        >>> t8.num_vertices, set(t8.degrees().tolist())
+        (28, {12})
+        """
+        return Graph(_core.incidence_graph(_blocks(blocks), int(k), True, points))
+
     def dumps(self, format: str, highlight: Iterable[int] = ()) -> str:
         """Serializes the graph. ``highlight`` marks vertices in ``dot`` and ``graphml`` output."""
         return self._g.dumps(format, [int(v) for v in highlight])
@@ -421,3 +446,7 @@ def generate_weighted(n: int, mean_weight: float, *, seed: int = 1, rng: str = "
 def structure_of(graph) -> Graph:
     """The unweighted graph underlying ``graph`` (which may already be unweighted)."""
     return graph.structure if isinstance(graph, WeightedGraph) else graph
+
+
+def _blocks(blocks: Iterable[Iterable[int]]) -> list[list[int]]:
+    return [[int(p) for p in block] for block in blocks]

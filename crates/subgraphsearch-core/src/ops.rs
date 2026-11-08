@@ -90,6 +90,31 @@ pub fn switch(g: &Graph, set: &[usize]) -> Result<Graph, Error> {
     Ok(b.build())
 }
 
+/// Reads an [incidence structure](https://en.wikipedia.org/wiki/Incidence_structure) as text: one
+/// block per line, its points as numbers separated by spaces or commas. Blank lines and lines
+/// starting with `#` are skipped.
+pub fn parse_blocks(text: &str) -> Result<Vec<Vec<usize>>, Error> {
+    let mut blocks = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let block = line
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|t| !t.is_empty())
+            .map(|t| {
+                t.parse::<usize>().map_err(|_| Error::Parse {
+                    line: Some(i + 1),
+                    msg: format!("{t:?} is not a point number"),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        blocks.push(block);
+    }
+    Ok(blocks)
+}
+
 /// A family of `sets` over the symbols `0..symbols` (an incidence structure).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Incidence {
@@ -118,6 +143,13 @@ impl Incidence {
             symbols,
             sets: rows,
         })
+    }
+
+    /// An incidence structure on `points` points, or, if `None`, on one more point than the
+    /// largest listed.
+    pub fn from_blocks(points: Option<usize>, blocks: &[Vec<usize>]) -> Result<Self, Error> {
+        let points = points.unwrap_or_else(|| blocks.iter().flatten().max().map_or(0, |&p| p + 1));
+        Incidence::new(points, blocks)
     }
 
     /// Number of symbols.
@@ -204,5 +236,20 @@ mod tests {
         assert_eq!(inc.set_graph(1).num_edges(), 21);
         assert_eq!(inc.symbol_graph(1).num_edges(), 21);
         assert_eq!(inc.symbol_graph(2).num_edges(), 0);
+    }
+
+    #[test]
+    fn triangular_graph_from_pairs() {
+        // the block graph of all pairs from 8 points is the triangular graph T(8), strongly
+        // regular with parameters (28, 12, 6, 4)
+        let text: String = (0..8)
+            .flat_map(|i| (i + 1..8).map(move |j| format!("{i} {j}\n")))
+            .collect();
+        let blocks = parse_blocks(&format!("# pairs\n{text}\n")).unwrap();
+        let t8 = Incidence::from_blocks(None, &blocks).unwrap().set_graph(1);
+        assert_eq!((t8.num_vertices(), t8.num_edges()), (28, 28 * 12 / 2));
+        assert!((0..28).all(|v| t8.degree(v) == 12));
+        assert!(parse_blocks("0 1\n2 x\n").is_err());
+        assert_eq!(parse_blocks("0,1, 2\n").unwrap(), vec![vec![0, 1, 2]]);
     }
 }

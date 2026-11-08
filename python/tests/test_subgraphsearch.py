@@ -483,3 +483,57 @@ def test_quickstart_notebook_ships_with_the_package(tmp_path):
     assert (tmp_path / "quickstart.ipynb").read_text(encoding="utf-8") == "mine"
     assert main(["quickstart", str(tmp_path), "--no-open", "--force"]) == 0
     assert json.loads((tmp_path / "quickstart.ipynb").read_text(encoding="utf-8")) == packaged
+
+
+def srg_parameters(g):
+    """(n, k, λ, μ) if g is strongly regular, else None."""
+    a = g.adjacency_matrix().astype(int)
+    common, n = a @ a, len(a)
+    degrees = set(a.sum(axis=1).tolist())
+    lam = {int(common[i, j]) for i in range(n) for j in range(i + 1, n) if a[i, j]}
+    mu = {int(common[i, j]) for i in range(n) for j in range(i + 1, n) if not a[i, j]}
+    return (n, *degrees, *lam, *mu) if len(degrees) == len(lam) == len(mu) == 1 else None
+
+
+def test_incidence_graphs_and_chang_graphs():
+    import networkx as nx
+
+    fano = [(0, 1, 2), (0, 3, 4), (0, 5, 6), (1, 3, 5), (1, 4, 6), (2, 3, 6), (2, 4, 5)]
+    assert ss.Graph.point_graph(fano).num_edges == 21          # every two points share a line
+    assert ss.Graph.block_graph(fano).num_edges == 21          # every two lines meet in a point
+    assert ss.Graph.point_graph(fano, k=2).num_edges == 0
+    assert ss.Graph.point_graph([(0, 1)], points=5).num_vertices == 5
+    with pytest.raises(ValueError):
+        ss.Graph.point_graph([(0, 1)], points=1)
+
+    # the block graph of all pairs from 8 points is the triangular graph T(8), srg(28, 12, 6, 4);
+    # switching it with respect to four disjoint pairs (an independent 4-set the search finds)
+    # gives a Chang graph: strongly regular with the same parameters, but not isomorphic to T(8)
+    t8 = ss.Graph.block_graph([(i, j) for i in range(8) for j in range(i + 1, 8)])
+    assert srg_parameters(t8) == (28, 12, 6, 4)
+    matching = ss.search(t8, 4, 0, experiments=10).best.vertices
+    chang = t8.switch(matching)
+    assert srg_parameters(chang) == (28, 12, 6, 4)
+    assert not nx.is_isomorphic(convert.to_networkx(t8), convert.to_networkx(chang))
+
+
+def test_fano_plane_and_switching_drawings():
+    import matplotlib.pyplot as plt
+
+    fano = ss.designs.FANO_PLANE
+    # a (7, 3, 1) design: 7 lines of 3 points, every two points on exactly one line
+    assert len(fano) == 7 and all(len(line) == 3 for line in fano)
+    assert all(sum(a in line and b in line for line in fano) == 1 for a in range(7) for b in range(a + 1, 7))
+    ax = viz.plot_fano_plane()
+    assert len(ax.lines) == 6 and len(ax.patches) == 1   # six straight lines and the circle
+    plt.close("all")
+
+    pairs = [(i, j) for i in range(8) for j in range(i + 1, 8)]
+    t8 = ss.Graph.block_graph(pairs)
+    sets = [[0, 13, 22, 27], list(range(8))]
+    fig = viz.plot_switchings(t8, sets, titles=["a", "b"], above=[t8, t8, t8])
+    assert len(fig.axes) == 6
+    assert len(viz.plot_switchings(t8, sets).axes) == 3
+    with pytest.raises(ValueError):
+        viz.plot_switchings(t8, sets, above=[t8])
+    plt.close("all")

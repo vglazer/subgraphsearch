@@ -206,3 +206,41 @@ fn stops_quietly_when_the_reader_goes_away() {
     assert!(o.status.success(), "{:?}: {}", o.status, stderr(&o));
     assert_eq!(stderr(&o), "");
 }
+
+#[test]
+fn builds_graphs_from_incidence_structures() {
+    let dir = std::env::temp_dir().join(format!(
+        "subgraphsearch-cli-incidence-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    // all pairs from 8 points: the block graph is the triangular graph T(8), 12-regular on 28
+    let pairs: String = (0..8)
+        .flat_map(|i| (i + 1..8).map(move |j| format!("{i},{j}\n")))
+        .collect();
+    std::fs::write(dir.join("pairs.txt"), format!("# all pairs\n{pairs}")).unwrap();
+    let o = run(
+        &dir,
+        &["incidence", "pairs.txt", "--on", "blocks", "-o", "t8.g6"],
+    );
+    assert!(o.status.success(), "{}", stderr(&o));
+    let info = run(&dir, &["info", "t8.g6", "--json"]);
+    let json: serde_json::Value = serde_json::from_str(&stdout(&info)).unwrap();
+    assert_eq!(
+        (json["vertices"].as_u64(), json["edges"].as_u64()),
+        (Some(28), Some(168))
+    );
+    assert_eq!(
+        (
+            json["degree"]["min"].as_u64(),
+            json["degree"]["max"].as_u64()
+        ),
+        (Some(12), Some(12))
+    );
+    // on the points, every two points lie in exactly one pair: the complete graph K8
+    let o = run(&dir, &["incidence", "pairs.txt", "-o", "k8.g6"]);
+    assert!(o.status.success(), "{}", stderr(&o));
+    assert!(stdout(&run(&dir, &["info", "k8.g6"])).contains("edges:      28"));
+    let bad = run(&dir, &["incidence", "pairs.txt", "--points", "3"]);
+    assert!(!bad.status.success());
+}

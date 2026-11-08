@@ -25,8 +25,10 @@ tested against them.
 - **Fixed types** 1, -1, 2, -2 and 3 are `op induce`, `op remove`, `op common-neighbors`,
   `op common-non-neighbors` and `op switch` (`g.induced`, `g.common_neighborhood`, `g.switch`, ...).
   The complementation flag is `op complement` (`g.complement()`).
-- **Incidence lists** (graph type 1): graphs from incidence structures are available in the Rust
-  library (`ops::Incidence`) and through `legacy ggen`, but not in the modern command or Python API.
+- **Incidence lists** (graph type 1) are `subgraphsearch incidence` and `ss.Graph.point_graph` /
+  `ss.Graph.block_graph`: `ggen`'s primal graph is the point graph and its dual the block graph,
+  with `ggen`'s density parameter as `k`. The new commands take one block per line instead of
+  `-1`-terminated lists.
 
 The `lists` and `wlists` formats are the programs' `-1`-terminated adjacency lists. In `wlists`,
 entry `x` in row `i` is the edge `{i, x % n}` with weight `x / n + 1`, as `wggen` writes and

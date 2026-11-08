@@ -8,10 +8,15 @@ Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with 
 vertices and edges**: [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)),
 [independent sets](https://en.wikipedia.org/wiki/Independent_set_(graph_theory)) and everything in
 between. It can also find [regular](https://en.wikipedia.org/wiki/Regular_graph) subgraphs of a
-given degree, and subgraphs of a given total weight in weighted graphs. A search can be required to
-include given vertices or confined to the neighborhood of chosen vertices, and reports near misses
-as well as exact solutions. Searches are fast, reproducible from a seed, and come with diagnostics
-for tuning them.
+given degree, and subgraphs of a given total weight in weighted graphs. Graphs can be built from
+[block designs](https://en.wikipedia.org/wiki/Block_design) and other incidence structures, and
+[switched](https://en.wikipedia.org/wiki/Two-graph#Switching_and_graphs) with respect to the
+subgraphs a search finds, which produces other
+[strongly regular graphs](https://en.wikipedia.org/wiki/Strongly_regular_graph) with the same
+parameters, such as all three [Chang graphs](https://en.wikipedia.org/wiki/Chang_graphs) from the
+triangular graph T(8). A search can be required to include given vertices or confined to the
+neighborhood of chosen vertices, and reports near misses as well as exact solutions. Searches are
+fast, reproducible from a seed, and come with diagnostics for tuning them.
 
 ![Searches drawn with viz.plot_graph: an induced 12-cycle (a 2-regular subgraph) in a random graph; a dense 10-vertex, 32-edge subgraph found within the neighborhood of a fixed vertex of a random geometric graph; and one graph three times, with 6 vertices spanning 0 edges (an independent set), 7 edges, and all 15 (a clique)](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
 
@@ -75,7 +80,8 @@ is a full tour.
   `max_conflict` in `r.solutions(max_conflict=2)` also returns near misses.
 - **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
   `g.induced(vs)`, `g.switch(vs)`, `g.common_neighborhood(vs)`, `g.adjacency_matrix()`,
-  `g.laplacian()`, `g.layout()`.
+  `g.laplacian()`, `g.layout()`, and from an incidence structure, `ss.Graph.point_graph(blocks)`
+  and `ss.Graph.block_graph(blocks)`.
 - **Random graphs:** `ss.generate("exponential" | "power" | "geometric", n, density)` and
   `ss.generate_weighted(n, mean_weight)`.
 - **Weighted graphs:** `ss.WeightedGraph(n, [(u, v, w), ...])`, `ss.WeightedGraph.read(path)`.
@@ -84,6 +90,8 @@ is a full tour.
 - **Other libraries:** `subgraphsearch.convert.{to,from}_{networkx,igraph,scipy,numpy}`.
 - **Tuning:** `ss.sweep(g, size, edges, "div_dur", [0, 4, 16])` with `viz.plot_sweep`.
 - **Spectra:** `viz.laplacian_spectrum` and `viz.spectral_summary`.
+- **Designs and switching:** `ss.designs.FANO_PLANE`, `viz.plot_fano_plane()`, and
+  `viz.plot_switchings(g, sets)` to draw a graph switched with respect to each of several vertex sets.
 
 ## Rust
 
@@ -120,6 +128,7 @@ subgraphsearch search many.g6 --all -k 10 -m 30 -q                # every graph 
 subgraphsearch info g.g6                                          # statistics
 subgraphsearch convert g.g6 g.dot --highlight 3,17,42             # draw a subgraph with Graphviz
 subgraphsearch op complement g.g6 gc.g6                           # complements, induced subgraphs, ...
+subgraphsearch incidence blocks.txt --on blocks -o b.g6           # a graph from a block design
 
 subgraphsearch search g.g6 -k 11 -m 55 --json result.json         # save the full results
 python -m subgraphsearch explore g.g6 --result result.json        # explore them in an interactive page
@@ -252,6 +261,19 @@ is sparse and cheaper to work with. Inducing a subgraph on the common neighborho
 restricts the search to vertices adjacent to all of them, and `switch` performs Seidel switching
 (see [Variants](#variants)) with respect to a vertex set, such as a regular subgraph found by the
 search.
+
+Graphs can also be built from an
+[incidence structure](https://en.wikipedia.org/wiki/Incidence_structure), a set of points with a
+family of subsets called blocks, such as a
+[block design](https://en.wikipedia.org/wiki/Block_design). Its *point graph* joins two points when
+exactly $`k`$ blocks contain both, and its *block graph* joins two blocks when they share exactly
+$`k`$ points (`subgraphsearch incidence`, with one block per line; `ss.Graph.point_graph` and
+`ss.Graph.block_graph` in Python). Many strongly regular graphs arise this way. The block graph of
+all pairs from 8 points is the [triangular graph](https://en.wikipedia.org/wiki/Triangular_graph)
+$`T(8)`$, with parameters $`(28, 12, 6, 4)`$, and switching it with respect to four disjoint pairs,
+an independent set the search finds, gives one of the
+[Chang graphs](https://en.wikipedia.org/wiki/Chang_graphs): strongly regular with the same
+parameters, but not isomorphic to $`T(8)`$.
 
 ## Choosing a search and its settings
 

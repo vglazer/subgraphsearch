@@ -25,7 +25,7 @@ from ._graph import (
     write_all,
 )
 from ._search import Experiment, SearchParams, SearchResult, search, sweep
-from . import convert, legacy, viz  # noqa: E402
+from . import convert, designs, legacy, viz  # noqa: E402
 from . import _core
 
 
@@ -44,6 +44,7 @@ __all__ = [
     "WeightedGraph",
     "__version__",
     "convert",
+    "designs",
     "dumps_all",
     "formats",
     "generate",

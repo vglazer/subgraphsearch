@@ -4,7 +4,8 @@
   :func:`plot_success_times`, :func:`plot_conflicts`, :func:`plot_search_summary`,
   :func:`plot_sweep`.
 - Graph drawings: :func:`plot_graph` draws a graph with a vertex set, such as a search result,
-  highlighted.
+  highlighted; :func:`plot_switchings` draws a graph switched with respect to several vertex sets;
+  :func:`plot_fano_plane` draws the Fano plane.
 - Graph structure: :func:`plot_degree_distribution`, :func:`plot_spectrum`,
   :func:`plot_adjacency`, :func:`plot_graph_summary`, plus :func:`laplacian_spectrum` and
   :func:`spectral_summary` for the numbers.
@@ -23,7 +24,7 @@ from .diagnostics import (
     plot_sweep,
     plot_traces,
 )
-from .drawing import plot_graph
+from .drawing import plot_fano_plane, plot_graph, plot_switchings
 from .interactive import save_html, show, to_html
 from .spectral import (
     laplacian_spectrum,
@@ -39,7 +40,9 @@ __all__ = [
     "plot_adjacency",
     "plot_conflicts",
     "plot_degree_distribution",
+    "plot_fano_plane",
     "plot_graph",
+    "plot_switchings",
     "plot_graph_summary",
     "plot_run_time_distribution",
     "plot_search_summary",

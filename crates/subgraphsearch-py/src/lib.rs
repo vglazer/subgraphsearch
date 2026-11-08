@@ -379,6 +379,30 @@ fn generate_graph(model: &str, n: usize, density: u32, seed: i64, rng: &str) -> 
     Ok(PyGraph::wrap(g.map_err(err)?))
 }
 
+/// The graph of an incidence structure: on its points (adjacent when exactly `k` blocks contain
+/// both) or, with `on_blocks`, on its blocks (adjacent when they share exactly `k` points).
+#[pyfunction]
+#[pyo3(signature = (blocks, k, on_blocks, points = None))]
+fn incidence_graph(
+    py: Python<'_>,
+    blocks: Vec<Vec<usize>>,
+    k: usize,
+    on_blocks: bool,
+    points: Option<usize>,
+) -> PyResult<PyGraph> {
+    let g = py
+        .detach(move || {
+            let incidence = subgraphsearch_core::ops::Incidence::from_blocks(points, &blocks)?;
+            Ok::<_, subgraphsearch_core::Error>(if on_blocks {
+                incidence.set_graph(k)
+            } else {
+                incidence.symbol_graph(k)
+            })
+        })
+        .map_err(err)?;
+    Ok(PyGraph::wrap(g))
+}
+
 type ExperimentTuple = (i64, usize, bool, Vec<usize>, Option<Vec<u32>>);
 
 /// Runs a search; returns one (best_conflict, moves, success, vertices, trace) per experiment.
@@ -541,8 +565,8 @@ mod _core {
     #[pymodule_export]
     use super::{
         PyGraph, PyWeightedGraph, cli_main, dumps_all, formats_list, generate_graph,
-        generate_weighted, legacy_asub_search, legacy_ereg_search, legacy_ggen, legacy_reg_search,
-        legacy_sub_search, legacy_wggen, legacy_wsub_search, search,
+        generate_weighted, incidence_graph, legacy_asub_search, legacy_ereg_search, legacy_ggen,
+        legacy_reg_search, legacy_sub_search, legacy_wggen, legacy_wsub_search, search,
     };
 
     #[pymodule_init]

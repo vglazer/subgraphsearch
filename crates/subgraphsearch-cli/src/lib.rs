@@ -32,6 +32,8 @@ enum Command {
     Info(InfoArgs),
     /// Apply an operation (complement, induced subgraph, switching, ...) to a graph.
     Op(OpArgs),
+    /// Build a graph from an incidence structure (blocks of points), such as a block design.
+    Incidence(IncidenceArgs),
     /// Run the original programs' interface: same stdin, same stdout.
     #[command(subcommand)]
     Legacy(LegacyCommand),
@@ -229,6 +231,35 @@ struct GenerateArgs {
     format: Option<Format>,
 }
 
+#[derive(Args)]
+struct IncidenceArgs {
+    /// File of blocks ('-' for stdin): one block per line, its points as numbers separated by
+    /// spaces or commas; blank lines and lines starting with '#' are skipped.
+    blocks: PathBuf,
+    /// The graph's vertices: 'points' (adjacent when exactly K blocks contain both) or 'blocks'
+    /// (adjacent when they share exactly K points).
+    #[arg(long, value_enum, default_value_t = IncidenceOn::Points)]
+    on: IncidenceOn,
+    /// The number of shared blocks or points that makes two vertices adjacent.
+    #[arg(short, default_value_t = 1)]
+    k: usize,
+    /// Number of points (default: one more than the largest listed).
+    #[arg(long)]
+    points: Option<usize>,
+    /// Output file ('-' or omitted for stdout).
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// Output format, if it cannot be inferred from the file extension (default: graph6).
+    #[arg(id = "to", long = "to", value_parser = parse_format)]
+    format: Option<Format>,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum IncidenceOn {
+    Points,
+    Blocks,
+}
+
 #[derive(Clone, Copy)]
 enum GenModel {
     Unweighted(Model),
@@ -318,6 +349,30 @@ fn read_stdin(format: Option<Format>) -> Result<(String, Format)> {
     let mut text = String::new();
     io::stdin().read_to_string(&mut text)?;
     Ok((text, format))
+}
+
+fn run_incidence(args: IncidenceArgs) -> Result<()> {
+    let text = if args.blocks == Path::new("-") {
+        let mut text = String::new();
+        io::stdin().read_to_string(&mut text)?;
+        text
+    } else {
+        std::fs::read_to_string(&args.blocks)
+            .with_context(|| format!("reading {}", args.blocks.display()))?
+    };
+    let blocks =
+        ops::parse_blocks(&text).with_context(|| format!("reading {}", args.blocks.display()))?;
+    let incidence = ops::Incidence::from_blocks(args.points, &blocks)?;
+    let graph = match args.on {
+        IncidenceOn::Points => incidence.symbol_graph(args.k),
+        IncidenceOn::Blocks => incidence.set_graph(args.k),
+    };
+    write_graph(
+        &graph,
+        args.output.as_deref(),
+        args.format,
+        &WriteOptions::default(),
+    )
 }
 
 fn read_graph(path: &Path, format: Option<Format>) -> Result<Graph> {
@@ -946,6 +1001,7 @@ where
         Command::Convert(a) => run_convert(a).map(|()| 0),
         Command::Info(a) => run_info(a).map(|()| 0),
         Command::Op(a) => run_op(a).map(|()| 0),
+        Command::Incidence(a) => run_incidence(a).map(|()| 0),
         Command::Legacy(c) => run_legacy(c),
     };
     match result.and_then(|status| Ok(io::stdout().flush().map(|()| status)?)) {
