@@ -1,6 +1,7 @@
 # subgraphsearch
 
 [![CI](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml/badge.svg)](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/subgraphsearch)](https://pypi.org/project/subgraphsearch/)
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of
 vertices and edges**: [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)),
@@ -15,7 +16,8 @@ for tuning them.
 
 ## Install
 
-With [uv](https://docs.astral.sh/uv/):
+subgraphsearch is [on PyPI](https://pypi.org/project/subgraphsearch/) and requires Python 3.10 or
+later and NumPy 1.24 or later. With [uv](https://docs.astral.sh/uv/):
 
 ```sh
 uv add subgraphsearch                # add the package to your project
@@ -33,8 +35,8 @@ pipx install subgraphsearch          # just the command, in its own environment
 pipx run subgraphsearch info g.g6    # or run the command without installing it
 ```
 
-Prebuilt wheels cover Linux (including Alpine), macOS and Windows (including ARM) for Python 3.10
-and later.
+Prebuilt wheels cover Linux (including Alpine), macOS and Windows (including ARM), so installing
+needs no compiler.
 
 To copy the quickstart notebook into the current directory and open it in JupyterLab:
 
