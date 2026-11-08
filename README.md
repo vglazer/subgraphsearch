@@ -133,10 +133,10 @@ python -m subgraphsearch explore g.g6 --result result.json        # explore them
 
 The subgraph *induced* by a set of vertices consists of those vertices and every edge of the graph
 between them, so choosing the vertices determines the edges. A *clique* is a set of vertices that
-are all adjacent, an *independent set* one with no edges at all, and a graph is *`d`-regular* when
-every vertex has exactly `d` neighbors.
+are all adjacent, an *independent set* one with no edges at all, and a graph is *$`d`$-regular* when
+every vertex has exactly $`d`$ neighbors.
 
-Finding a `k`-vertex induced subgraph with exactly `m` edges is NP-hard (it includes finding
+Finding a $`k`$-vertex induced subgraph with exactly $`m`$ edges is NP-hard (it includes finding
 cliques), so `subgraphsearch` uses a randomized local search, specifically a *tabu search*: a
 local search that forbids undoing recent moves for a while, so that it keeps exploring instead of
 cycling. It cannot prove that no solution exists, but in practice it finds solutions quickly when
@@ -144,13 +144,14 @@ they are not too rare.
 
 ### Moves
 
-The search minimizes the *conflict* `|e - m|`, where `e` is the number of edges the current
-`k` vertices induce; a conflict of 0 is a solution. Each move swaps one subgraph vertex `u` for
-one outside vertex `w`. Keeping every vertex's degree within the subgraph, `d(v)`, makes each swap
-cheap to evaluate: the edge count becomes `e - d(u) + d(w) - [u ~ w]`, where `[u ~ w]` is 1 if
-`u` and `w` are adjacent and 0 otherwise. Removing `u` loses its `d(u)` edges and adding `w` gains
-its `d(w)`, but an edge between them is counted in `d(w)` and leaves with `u`. The search takes one
-of the best swaps at random.
+Write $`S`$ for the current set of $`k`$ vertices, $`e`$ for the number of edges they induce, and
+$`d_S(v)`$ for the number of neighbors a vertex $`v`$ has in $`S`$. The search minimizes the
+*conflict* $`|e - m|`$; a conflict of 0 is a solution. Each move swaps one vertex $`u`$ of $`S`$
+for one outside vertex $`w`$. Keeping $`d_S(v)`$ up to date for every vertex makes each swap cheap
+to evaluate: the edge count becomes $`e - d_S(u) + d_S(w) - [u \sim w]`$, where $`[u \sim w]`$ is 1
+if $`u`$ and $`w`$ are adjacent and 0 otherwise. Removing $`u`$ loses its $`d_S(u)`$ edges and
+adding $`w`$ gains its $`d_S(w)`$, but an edge between them is counted in $`d_S(w)`$ and leaves
+with $`u`$. The search takes one of the best swaps at random.
 
 Two refinements make this fast and effective:
 
@@ -183,27 +184,27 @@ Each experiment reports the best conflict it reached and the moves it needed:
   **true cost** divides all moves made by the number of successes, so it also counts failures.
 - **Average conflict** is the mean best conflict. Near misses are useful in their own right: with
   `--max-conflict n` the search doubles as an approximation algorithm, returning subgraphs
-  within `n` edges of the target.
+  within $`n`$ edges of the target.
 
 ### Variants
 
 - **Weighted graphs** (`--weighted`): edges carry integer weights and the target is a total
   weight. With all weights 1 it behaves like the plain search.
 - **Regular subgraphs** (`--degree d`): the conflict becomes the total deviation from regularity,
-  the sum of `|d(v) - d|` over the subgraph. Each vertex's neighbor list is kept partitioned,
-  subgraph neighbors first, so that swaps stay cheap to evaluate. The intended use is finding
-  regular subgraphs of strongly regular graphs. A graph is *strongly regular* with parameters
-  `(n, k, λ, μ)` when it has `n` vertices, is `k`-regular, every two adjacent vertices have
-  exactly `λ` common neighbors, and every two non-adjacent vertices exactly `μ`; the 5-cycle,
-  the Petersen graph and the Paley graphs are examples. *Seidel switching* a graph with respect to
-  a vertex set `S` swaps edges and non-edges between `S` and the rest of the graph, leaving edges
-  within `S` and within the rest unchanged. Switching a strongly regular graph with respect to a
-  suitable regular subgraph can give another strongly regular graph with the same parameters,
-  sometimes one not isomorphic to the original: switching the 4×4 rook's graph, `(16, 6, 2, 2)`,
-  with respect to a 2-regular subgraph on 8 vertices gives the Shrikhande graph. The search can
-  find cliques and independent sets too, but the plain search does that much faster.
+  $`\sum_{v \in S} |d_S(v) - d|`$. Each vertex's neighbor list is kept partitioned, subgraph
+  neighbors first, so that swaps stay cheap to evaluate. The intended use is finding regular
+  subgraphs of strongly regular graphs. A graph is *strongly regular* with parameters
+  $`(n, k, \lambda, \mu)`$ when it has $`n`$ vertices, is $`k`$-regular, every two adjacent vertices
+  have exactly $`\lambda`$ common neighbors, and every two non-adjacent vertices exactly $`\mu`$;
+  the 5-cycle, the Petersen graph and the Paley graphs are examples. *Seidel switching* a graph with
+  respect to a vertex set $`S`$ swaps edges and non-edges between $`S`$ and the rest of the graph,
+  leaving edges within $`S`$ and within the rest unchanged. Switching a strongly regular graph with
+  respect to a suitable regular subgraph can give another strongly regular graph with the same
+  parameters, sometimes one not isomorphic to the original: switching the 4×4 rook's graph,
+  $`(16, 6, 2, 2)`$, with respect to a 2-regular subgraph on 8 vertices gives the Shrikhande graph.
+  The search can find cliques and independent sets too, but the plain search does that much faster.
 - **Two phases** (`--degree d --two-phase`): first find a subgraph with the right number of edges
-  (`k d / 2`), then make it regular using only swaps that keep the edge count. It usually finds
+  ($`kd/2`$), then make it regular using only swaps that keep the edge count. It usually finds
   regular subgraphs about 1.5 to 3.5 times faster than `--degree` alone. With `--fixed`, it
   computes the edge target from the non-fixed vertices only, as the original program did, so it
   rarely succeeds; use `--degree` alone there.
@@ -226,8 +227,8 @@ Each experiment reports the best conflict it reached and the moves it needed:
 - **weighted**: random pairs of vertices have their weight increased by 1 until the mean weight
   per pair is reached, so weights above 1 are common once it approaches 1.
 
-Graph operations help focus a search. Searching the complement is equivalent, since `k` vertices
-with `m` edges become `k` vertices with `k (k - 1) / 2 - m`, and for a dense graph the complement
+Graph operations help focus a search. Searching the complement is equivalent, since $`k`$ vertices
+with $`m`$ edges become $`k`$ vertices with $`k(k-1)/2 - m`$, and for a dense graph the complement
 is sparse and cheaper to work with. Inducing a subgraph on the common neighborhood of some
 vertices restricts the search to vertices adjacent to all of them, and `switch` performs Seidel
 switching (see [Variants](#variants)) with respect to a vertex set, such as a regular subgraph
@@ -243,25 +244,25 @@ interfaces above.
 
 | Goal | Search |
 | --- | --- |
-| `k` vertices with exactly `m` edges | `-k k -m m` (`size=k, edges=m`) |
-| a `k`-clique, a `k`-vertex independent set | `-m` set to `k (k - 1) / 2`, or to 0 |
-| the densest (or sparsest) `k` vertices | raise (or lower) `-m` until successes stop; the threshold is sharp |
+| $`k`$ vertices with exactly $`m`$ edges | `-k k -m m` (`size=k, edges=m`) |
+| a $`k`$-clique, a $`k`$-vertex independent set | `-m` set to $`k(k-1)/2`$, or to 0 |
+| the densest (or sparsest) $`k`$ vertices | raise (or lower) `-m` until successes stop; the threshold is sharp |
 | subgraphs close to a target | add `--max-conflict n` (`r.solutions(max_conflict=n)`) |
 | subgraphs containing given vertices | `--fixed`, or for cliques, search their common neighborhood (below) |
-| regular subgraphs of degree `d` | `--degree d --two-phase`, or `--degree d` alone with `--fixed` |
+| regular subgraphs of degree $`d`$ | `--degree d --two-phase`, or `--degree d` alone with `--fixed` |
 | a total weight in a weighted graph | `--weighted -m w` |
 
 Some reformulations make a search easier:
 
 - **Restrict to a neighborhood.** A subgraph whose vertices must all be adjacent to some vertices
-  `S` (a clique through `S`, for example) lies in their common neighborhood. Searching
-  `g.induced(nbrs)`, with `nbrs = g.common_neighborhood(S)`, for `k - |S|` vertices, instead of
-  fixing `S` in the whole graph, is typically about 3 times faster for cliques through a given
+  $`F`$ (a clique through $`F`$, for example) lies in their common neighborhood. Searching
+  `g.induced(nbrs)`, with `nbrs = g.common_neighborhood(F)`, for $`k - |F|`$ vertices, instead of
+  fixing $`F`$ in the whole graph, is typically about 3 times faster for cliques through a given
   vertex. Vertex `i` of the result is `nbrs[i]` of the original graph.
-- **Search the complement of a dense graph.** `k` vertices with `m` edges become `k` vertices
-  with `k (k - 1) / 2 - m` in the complement, which is sparse when the graph is dense.
-- **Find the limit by bisection.** To find the most edges `k` vertices can span, search a few
-  values of `m`: the switch from always found to never found is abrupt (in a 100-vertex graph of
+- **Search the complement of a dense graph.** $`k`$ vertices with $`m`$ edges become $`k`$ vertices
+  with $`k(k-1)/2 - m`$ in the complement, which is sparse when the graph is dense.
+- **Find the limit by bisection.** To find the most edges $`k`$ vertices can span, search a few
+  values of $`m`$: the switch from always found to never found is abrupt (in a 100-vertex graph of
   density 0.6, for example, 30 vertices spanning 345 edges are easy to find and 350 are out of
   reach), and near-misses (`--max-conflict`) show how close a failed target came.
 
@@ -278,12 +279,12 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   success-time distribution, or `viz.plot_run_time_distribution`), and set `--moves` to two or
   three times the median, using the rest of the time for more `--experiments`. Raise `--moves` if
   successes cluster near the limit; do not go far below the size of the subgraph, since a random
-  start may need about `k` swaps to reach a solution.
+  start may need about $`k`$ swaps to reach a solution.
 - **Use more experiments to find more solutions.** The success rate estimates how hard a target is,
   and more experiments find more distinct solutions, although many repeat
   (`r.solutions()` lists each once).
 - **Leave diversification at its defaults.** Short bursts of random moves make little difference.
-  Bursts of `k` to `2k` random moves help long runs that stall, because they act as restarts
+  Bursts of $`k`$ to $`2k`$ random moves help long runs that stall, because they act as restarts
   within an experiment, but shorter runs with more experiments do the same more simply. `--div-dur
   0` gives a pure local search.
 - **Aspiration** rarely makes a difference; try it on searches that stall.
