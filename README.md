@@ -20,7 +20,7 @@ triangular graph T(8).
 
 A search can be required to include given vertices or confined to the
 neighborhood of chosen vertices, and reports near misses as well as exact solutions. Searches are
-fast, reproducible from a seed, and come with diagnostics for tuning them.
+[fast](#performance), reproducible from a seed, and come with diagnostics for tuning them.
 
 ![Searches drawn with viz.plot_graph: an induced 12-cycle (a 2-regular subgraph) in a random graph; a dense 10-vertex, 32-edge subgraph found within the neighborhood of a fixed vertex of a random geometric graph; and one graph three times, with 6 vertices spanning 0 edges (an independent set), 7 edges, and all 15 (a clique)](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
 
@@ -331,6 +331,40 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
 - **Aspiration** rarely makes a difference; try it on searches that stall.
 - **Seeds:** results depend only on the seed and the settings, not on the number of threads, so a
   search can be repeated exactly; change the seed for independent runs.
+
+## Performance
+
+Wall-clock times on an Apple M3 Max laptop with 16 cores, using all of them, for searches started
+from Python (the command runs the same engine). Settings are given as experiments × moves.
+
+| Search | Settings | Time | Successes |
+| --- | --- | --- | --- |
+| 11-cliques in a random graph on 100 vertices, density 0.6 | 40 × 250 (defaults) | 0.3 ms | 40 of 40 |
+| 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 14 ms | 21 of 60 |
+| 13-cliques in a random graph on 1,000 vertices, density 0.5 | 200 × 2000 | 13 ms | 200 of 200 |
+| 14-cliques in the same graph | 200 × 2000 | 130 ms | 182 of 200 |
+| 15-cliques in the same graph | 200 × 2000 | 400 ms | 4 of 200 |
+| 8-regular subgraphs on 20 vertices of the [Paley graph](https://en.wikipedia.org/wiki/Paley_graph) on 61 vertices | 100 × 2000, two phases | 49 ms | 11 of 100 |
+| 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 1 ms | 40 of 40 |
+
+A search that misses its target makes every move it is allowed, so its time is the cost of a move
+times the number of moves. The cost of a move grows in proportion to the number of vertices, and a
+little less than in proportion to the size of the subgraph. Here are 40 × 250 = 10,000 moves looking
+for 30 vertices in random graphs of density 0.5:
+
+| Graph | All 16 cores | One thread |
+| --- | --- | --- |
+| 100 vertices | 1.7 ms | 20 ms |
+| 1,000 vertices | 19 ms | 230 ms |
+| 10,000 vertices (25 million edges) | 210 ms | 2.4 s |
+
+On 1,000 vertices, the same 10,000 moves take 14 ms for 20-vertex subgraphs and 61 ms for 100-vertex
+subgraphs. Experiments run in parallel, so on 16 cores a search is 11 to 12 times faster than on
+one thread (`--threads 1`). Once every core is busy, which 40 experiments already ensure here, the
+time grows in proportion to the total number of moves: 160 experiments take four times as long.
+
+A graph on 10,000 vertices with 25 million edges takes about 330 MB of memory. Generating it takes
+0.24 s, writing it as graph6 0.05 s, and reading it back 0.28 s.
 
 ## Graph formats
 
