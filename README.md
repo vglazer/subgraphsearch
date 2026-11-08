@@ -389,7 +389,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for setting up, testing, the scripts and re
 
 ## Porting notes
 
-subgraphsearch reimplements a set of C programs written in 2002. See [PORTING.md](PORTING.md) for how they map onto it, how to reproduce their runs exactly and how the port is tested against them.
+subgraphsearch is a port of an earlier set of C programs. See [PORTING.md](PORTING.md) for how they map onto it, how to reproduce their runs exactly and how the port is tested against them.
 
 ## License
 
