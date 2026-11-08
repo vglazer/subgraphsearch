@@ -1,10 +1,10 @@
 # Porting notes
 
-`subgraphsearch` reimplements `sub_search`, a set of C programs written in 2002, together with
-their graph generators. The C sources and the original reports are in
-[vglazer/USRA](https://github.com/vglazer/USRA/tree/master/subgraph_finding). These notes cover how
-the programs map onto `subgraphsearch`, how to reproduce their runs exactly, and how the port is
-tested against them.
+`subgraphsearch` reimplements `sub_search`,
+[a set of C programs written in 2002](https://github.com/vglazer/USRA/tree/master/subgraph_finding)
+together with their graph generators; the original reports are there too. These notes cover how the
+programs map onto `subgraphsearch`, how to reproduce their runs exactly, and how the port is tested
+against them.
 
 ## The original programs
 
@@ -75,10 +75,11 @@ adjacency matrix with 32-bit indices, where `subgraphsearch` reads a bitset with
 ## Tests against the original programs
 
 `tests/fixtures` holds the output of the original programs on a set of inputs, recorded by
-`scripts/make_fixtures.sh` from a checkout of the C sources:
+`scripts/make_fixtures.sh` from a clone of the
+[repository holding the original](https://github.com/vglazer/USRA/tree/master/subgraph_finding):
 
 ```sh
-USRA_DIR=~/repos/USRA scripts/make_fixtures.sh
+ORIGINAL_DIR=~/repos/USRA scripts/make_fixtures.sh
 ```
 
 `tests/fixtures/SOURCE` records the commit the fixtures came from. The golden tests in

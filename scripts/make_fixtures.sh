@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Regenerate the golden fixtures used to check that `subgraphsearch legacy ...` reproduces the
-# original C programs byte for byte. Requires a checkout of https://github.com/vglazer/USRA.
+# original C programs byte for byte. Requires a clone of the repository holding the original
+# (https://github.com/vglazer/USRA/tree/master/subgraph_finding); see PORTING.md.
 #
-# Usage: USRA_DIR=~/repos/USRA scripts/make_fixtures.sh
+# Usage: ORIGINAL_DIR=~/repos/USRA scripts/make_fixtures.sh
 
 set -euo pipefail
 
-usra_dir=${USRA_DIR:?set USRA_DIR to a checkout of the USRA repo}
-src="$usra_dir/subgraph_finding/src"
+original_dir=${ORIGINAL_DIR:?set ORIGINAL_DIR to a clone of the repository holding the original}
+src="$original_dir/subgraph_finding/src"
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 out="$repo_dir/tests/fixtures"
 bin=$(mktemp -d)
@@ -18,7 +19,7 @@ for prog in sub_search asub_search wsub_search reg_search ereg_search ggen wggen
 done
 
 mkdir -p "$out/ggen" "$out/wggen" "$out/sub_search" "$out/asub_search" "$out/wsub_search" "$out/reg_search" "$out/ereg_search" "$out/graphs"
-echo "USRA commit: $(git -C "$usra_dir" rev-parse HEAD)" > "$out/SOURCE"
+echo "Original commit: $(git -C "$original_dir" rev-parse HEAD)" > "$out/SOURCE"
 
 # ---- ggen: name | stdin
 ggen_case() {
