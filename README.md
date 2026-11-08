@@ -2,11 +2,14 @@
 
 [![CI](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml/badge.svg)](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml)
 
-Find **induced subgraphs with a given number of vertices and edges**: cliques, independent sets and
-everything in between. It can also find regular subgraphs of a given degree, and subgraphs of a
-given total weight in weighted graphs. A search can be required to include given vertices or
-confined to the neighborhood of chosen vertices, and reports near misses as well as exact
-solutions. Searches are fast, reproducible from a seed, and come with diagnostics for tuning them.
+Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of
+vertices and edges**: [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)),
+[independent sets](https://en.wikipedia.org/wiki/Independent_set_(graph_theory)) and everything in
+between. It can also find [regular](https://en.wikipedia.org/wiki/Regular_graph) subgraphs of a
+given degree, and subgraphs of a given total weight in weighted graphs. A search can be required to
+include given vertices or confined to the neighborhood of chosen vertices, and reports near misses
+as well as exact solutions. Searches are fast, reproducible from a seed, and come with diagnostics
+for tuning them.
 
 ![Searches drawn with viz.plot_graph: an induced 12-cycle (a 2-regular subgraph) in a random graph; a dense 10-vertex, 32-edge subgraph found within the neighborhood of a fixed vertex of a random geometric graph; and one graph three times, with 6 vertices spanning 0 edges (an independent set), 7 edges, and all 15 (a clique)](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
 
@@ -73,7 +76,8 @@ is a full tour.
 - **Random graphs:** `ss.generate("exponential" | "power" | "geometric", n, density)` and
   `ss.generate_weighted(n, mean_weight)`.
 - **Weighted graphs:** `ss.WeightedGraph(n, [(u, v, w), ...])`, `ss.WeightedGraph.read(path)`.
-- **Many graphs per file:** `ss.read_all(path)`, `ss.read(path, index=3)`, `ss.write_all(path, graphs)`.
+- **Many graphs per file:** `ss.read_all(path)`, `ss.read(path, index=3)`,
+  `ss.write_all(path, graphs)`.
 - **Other libraries:** `subgraphsearch.convert.{to,from}_{networkx,igraph,scipy,numpy}`.
 - **Tuning:** `ss.sweep(g, size, edges, "div_dur", [0, 4, 16])` with `viz.plot_sweep`.
 - **Spectra:** `viz.laplacian_spectrum` and `viz.spectral_summary`.
@@ -131,10 +135,13 @@ python -m subgraphsearch explore g.g6 --result result.json        # explore them
 
 ## How the search works
 
-The subgraph *induced* by a set of vertices consists of those vertices and every edge of the graph
-between them, so choosing the vertices determines the edges. A *clique* is a set of vertices that
-are all adjacent, an *independent set* one with no edges at all, and a graph is *$`d`$-regular* when
-every vertex has exactly $`d`$ neighbors.
+The subgraph *[induced](https://en.wikipedia.org/wiki/Induced_subgraph)* by a set of vertices
+consists of those vertices and every edge of the graph between them, so choosing the vertices
+determines the edges. A *[clique](https://en.wikipedia.org/wiki/Clique_(graph_theory))* is a set of
+vertices that are all adjacent, an
+*[independent set](https://en.wikipedia.org/wiki/Independent_set_(graph_theory))* one with no edges
+at all, and a graph is *[$`d`$-regular](https://en.wikipedia.org/wiki/Regular_graph)* when every
+vertex has exactly $`d`$ neighbors.
 
 Finding a $`k`$-vertex induced subgraph with exactly $`m`$ edges is NP-hard (it includes finding
 cliques), so `subgraphsearch` uses a randomized local search, specifically a *tabu search*: a
@@ -191,16 +198,22 @@ Each experiment reports the best conflict it reached and the moves it needed:
 - **Regular subgraphs** (`--degree d`): the conflict becomes the total deviation from regularity,
   $`\sum_{v \in S} |d_S(v) - d|`$. Each vertex's neighbor list is kept partitioned, subgraph
   neighbors first, so that swaps stay cheap to evaluate. The intended use is finding regular
-  subgraphs of strongly regular graphs. A graph is *strongly regular* with parameters
+  subgraphs of strongly regular graphs. A graph is
+  *[strongly regular](https://en.wikipedia.org/wiki/Strongly_regular_graph)* with parameters
   $`(n, k, \lambda, \mu)`$ when it has $`n`$ vertices, is $`k`$-regular, every two adjacent vertices
   have exactly $`\lambda`$ common neighbors, and every two non-adjacent vertices exactly $`\mu`$;
-  the 5-cycle, the Petersen graph and the Paley graphs are examples. *Seidel switching* a graph with
+  the [5-cycle](https://en.wikipedia.org/wiki/Cycle_graph), the
+  [Petersen graph](https://en.wikipedia.org/wiki/Petersen_graph) and the
+  [Paley graphs](https://en.wikipedia.org/wiki/Paley_graph) are examples.
+  *[Seidel switching](https://en.wikipedia.org/wiki/Two-graph#Switching_and_graphs)* a graph with
   respect to a vertex set $`S`$ swaps edges and non-edges between $`S`$ and the rest of the graph,
   leaving edges within $`S`$ and within the rest unchanged. Switching a strongly regular graph with
   respect to a suitable regular subgraph can give another strongly regular graph with the same
-  parameters, sometimes one not isomorphic to the original: switching the 4×4 rook's graph,
-  $`(16, 6, 2, 2)`$, with respect to a 2-regular subgraph on 8 vertices gives the Shrikhande graph.
-  The search can find cliques and independent sets too, but the plain search does that much faster.
+  parameters, sometimes one not isomorphic to the original: switching the 4×4
+  [rook's graph](https://en.wikipedia.org/wiki/Rook%27s_graph), $`(16, 6, 2, 2)`$, with respect to a
+  2-regular subgraph on 8 vertices gives the
+  [Shrikhande graph](https://en.wikipedia.org/wiki/Shrikhande_graph). The search can find cliques
+  and independent sets too, but the plain search does that much faster.
 - **Two phases** (`--degree d --two-phase`): first find a subgraph with the right number of edges
   ($`kd/2`$), then make it regular using only swaps that keep the edge count. It usually finds
   regular subgraphs about 1.5 to 3.5 times faster than `--degree` alone. With `--fixed`, it
@@ -213,24 +226,26 @@ Each experiment reports the best conflict it reached and the moves it needed:
 
 ### Random graphs and operations
 
-- **exponential**: Erdős–Rényi; each pair of vertices is an edge independently with probability
-  equal to the density.
-- **geometric**: random points in the unit square, joined when within a distance chosen so that
-  the disc around a point covers a fraction of the square equal to the density. There is no
-  wrap-around, so vertices near the edges have fewer neighbors and the actual density is lower.
-- **power**: each vertex is joined to the same number of randomly chosen higher-numbered
-  vertices. Degrees spread more widely than in exponential graphs but have no heavy tail, so
-  despite the name these are not scale-free graphs. Power and geometric graphs only make sense
-  for densities below about 0.5.
+- **exponential**: [Erdős–Rényi](https://en.wikipedia.org/wiki/Erd%C5%91s%E2%80%93R%C3%A9nyi_model);
+  each pair of vertices is an edge independently with probability equal to the density.
+- **geometric**: a [random geometric graph](https://en.wikipedia.org/wiki/Random_geometric_graph):
+  random points in the unit square, joined when within a distance chosen so that the disc around a
+  point covers a fraction of the square equal to the density. There is no wrap-around, so vertices
+  near the edges have fewer neighbors and the actual density is lower.
+- **power**: each vertex is joined to the same number of randomly chosen higher-numbered vertices.
+  Degrees spread more widely than in exponential graphs but have no heavy tail, so despite the name
+  these are not [scale-free](https://en.wikipedia.org/wiki/Scale-free_network) graphs. Power and
+  geometric graphs only make sense for densities below about 0.5.
 - **weighted**: random pairs of vertices have their weight increased by 1 until the mean weight
   per pair is reached, so weights above 1 are common once it approaches 1.
 
-Graph operations help focus a search. Searching the complement is equivalent, since $`k`$ vertices
+Graph operations help focus a search. Searching the
+[complement](https://en.wikipedia.org/wiki/Complement_graph) is equivalent, since $`k`$ vertices
 with $`m`$ edges become $`k`$ vertices with $`k(k-1)/2 - m`$, and for a dense graph the complement
-is sparse and cheaper to work with. Inducing a subgraph on the common neighborhood of some
-vertices restricts the search to vertices adjacent to all of them, and `switch` performs Seidel
-switching (see [Variants](#variants)) with respect to a vertex set, such as a regular subgraph
-found by the search.
+is sparse and cheaper to work with. Inducing a subgraph on the common neighborhood of some vertices
+restricts the search to vertices adjacent to all of them, and `switch` performs Seidel switching
+(see [Variants](#variants)) with respect to a vertex set, such as a regular subgraph found by the
+search.
 
 ## Choosing a search and its settings
 
