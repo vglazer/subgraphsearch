@@ -65,12 +65,12 @@ def test_known_graph6_and_write_only_formats(tmp_path):
     dot = g.dumps("dot", highlight=[0, 2])
     assert "0 -- 2 [color=red" in dot
     g.write(tmp_path / "g.graphml", highlight=[1])
-    assert "in_subgraph" in (tmp_path / "g.graphml").read_text()
+    assert "in_subgraph" in (tmp_path / "g.graphml").read_text(encoding="utf-8")
     assert ss.formats()["dot"] is False
 
 
 def test_legacy_graphs_match_ggen():
-    lists = (FIXTURES / "graphs" / "exp_100_600_1.txt").read_text()
+    lists = (FIXTURES / "graphs" / "exp_100_600_1.txt").read_text(encoding="utf-8")
     assert ss.Graph.parse(lists, "lists") == ss.generate("exponential", 100, 0.6, seed=1, rng="legacy")
     assert ss.generate("power", 300, 0.2, seed=52, rng="legacy") == ss.read(FIXTURES / "graphs" / "pow_300_200_52.txt")
     assert ss.generate("geometric", 400, 0.15, seed=1, rng="legacy") == ss.read(FIXTURES / "graphs" / "geo_400_150_1.txt")
@@ -135,16 +135,16 @@ def test_search_validation(g100):
 def test_legacy_search_matches_the_c_program_fixtures():
     strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
     for name in ["readme_cliques", "fixed_cliques", "approx_adj", "complement"]:
-        out, status = ss.legacy.sub_search((FIXTURES / "sub_search" / f"{name}.in").read_text())
-        assert strip(out) == strip((FIXTURES / "sub_search" / f"{name}.out").read_text()), name
+        out, status = ss.legacy.sub_search((FIXTURES / "sub_search" / f"{name}.in").read_text(encoding="utf-8"))
+        assert strip(out) == strip((FIXTURES / "sub_search" / f"{name}.out").read_text(encoding="utf-8")), name
         assert status == 0
 
 
 def test_legacy_asub_search_matches_the_c_program_fixtures():
     strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
     for name in ["readme_cliques", "one_step_show", "approx_adj", "geometric"]:
-        out, status = ss.legacy.asub_search((FIXTURES / "asub_search" / f"{name}.in").read_text())
-        assert strip(out) == strip((FIXTURES / "asub_search" / f"{name}.out").read_text()), name
+        out, status = ss.legacy.asub_search((FIXTURES / "asub_search" / f"{name}.in").read_text(encoding="utf-8"))
+        assert strip(out) == strip((FIXTURES / "asub_search" / f"{name}.out").read_text(encoding="utf-8")), name
         assert status == 0
 
 
@@ -162,7 +162,7 @@ def test_aspiration_search(g100):
 
 
 def test_legacy_ggen_and_errors():
-    assert ss.legacy.ggen((FIXTURES / "ggen" / "exp_10_500_42.in").read_text()) == (FIXTURES / "ggen" / "exp_10_500_42.out").read_text()
+    assert ss.legacy.ggen((FIXTURES / "ggen" / "exp_10_500_42.in").read_text(encoding="utf-8")) == (FIXTURES / "ggen" / "exp_10_500_42.out").read_text(encoding="utf-8")
     with pytest.raises(ValueError, match="seed must be a positive integer"):
         ss.legacy.ggen("2 6 0 500 0 0 0 0")
 
@@ -225,7 +225,7 @@ def test_interactive_html(tmp_path, g100):
     assert data["n"] == 100 and len(data["edges"]) == 2 * g100.m and len(data["pos"]) == 200
     assert len(data["solutions"]) == 5 and data["solutions"][0]["vertices"] == list(r.best.vertices)
     path = viz.save_html(tmp_path / "g.html", g100, highlight=[1, 2, 3], title="</script> test")
-    text = Path(path).read_text()
+    text = Path(path).read_text(encoding="utf-8")
     assert "&lt;/script&gt; test" in text and text.count("</script>") == 1
     pytest.importorskip("IPython")
     assert "srcdoc" in viz.show(g100).data
@@ -372,7 +372,7 @@ def test_weighted_search(w200):
             assert w200.induced_weight(e.vertices) == 180
     # legacy rng reproduces the C wsub_search fixture
     legacy = ss.search(w200, 10, 30, experiments=20, max_moves=1000, div_freq=200, div_dur=5, seed=3, rng="legacy")
-    expected = (FIXTURES / "wsub_search" / "light.out").read_text()
+    expected = (FIXTURES / "wsub_search" / "light.out").read_text(encoding="utf-8")
     for e in legacy.experiments:
         assert " ".join(map(str, e.vertices)) + " " in expected
 
@@ -380,11 +380,11 @@ def test_weighted_search(w200):
 def test_legacy_weighted_programs():
     strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
     for name in ["light_adj", "multi_weights", "hard_183", "fixed", "unit_weights"]:
-        out, status = ss.legacy.wsub_search((FIXTURES / "wsub_search" / f"{name}.in").read_text())
-        assert strip(out) == strip((FIXTURES / "wsub_search" / f"{name}.out").read_text()), name
+        out, status = ss.legacy.wsub_search((FIXTURES / "wsub_search" / f"{name}.in").read_text(encoding="utf-8"))
+        assert strip(out) == strip((FIXTURES / "wsub_search" / f"{name}.out").read_text(encoding="utf-8")), name
     for name in ["w10_50_3", "w60_150_3"]:
-        args = (FIXTURES / "wggen" / f"{name}.args").read_text()
-        assert ss.legacy.wggen(args) == (FIXTURES / "wggen" / f"{name}.out").read_text()
+        args = (FIXTURES / "wggen" / f"{name}.args").read_text(encoding="utf-8")
+        assert ss.legacy.wggen(args) == (FIXTURES / "wggen" / f"{name}.out").read_text(encoding="utf-8")
     with pytest.raises(ValueError, match="edge weight exceeds 127"):
         ss.legacy.wggen([10, 30000, 1])
 
@@ -434,8 +434,8 @@ def test_legacy_regular_programs():
     strip = lambda s: re.sub(r"T> .*", "T>", s)  # noqa: E731
     for program in ("reg_search", "ereg_search"):
         for name in ["paley_4reg", "paley_6reg", "dense_5reg", "doc_4cycles", "geometric"]:
-            out, status = getattr(ss.legacy, program)((FIXTURES / program / f"{name}.in").read_text())
-            assert strip(out) == strip((FIXTURES / program / f"{name}.out").read_text()), (program, name)
+            out, status = getattr(ss.legacy, program)((FIXTURES / program / f"{name}.in").read_text(encoding="utf-8"))
+            assert strip(out) == strip((FIXTURES / program / f"{name}.out").read_text(encoding="utf-8")), (program, name)
             assert status == 0
 
 
@@ -443,7 +443,7 @@ def test_regular_search_matches_c_through_the_modern_api():
     # rng="legacy" reproduces reg_search's experiments: the same subgraphs, in order
     g = paley(61)
     r = ss.search(g, 10, degree=4, experiments=20, max_moves=2000, div_freq=300, div_dur=8, seed=13, rng="legacy")
-    expected = (FIXTURES / "reg_search" / "paley_4reg.out").read_text()
+    expected = (FIXTURES / "reg_search" / "paley_4reg.out").read_text(encoding="utf-8")
     blocks = [b.strip() for b in expected.split("\n\n") if re.fullmatch(r"[0-9 ]+", b.strip()) and len(b.split()) == 10]
     assert [" ".join(map(str, e.vertices)) for e in r.experiments] == blocks
 
@@ -454,14 +454,14 @@ def test_command_line_ships_with_the_package(tmp_path):
     import sys
 
     def cli(*args):
-        return subprocess.run([sys.executable, "-m", "subgraphsearch._cli", *args], capture_output=True, text=True)
+        return subprocess.run([sys.executable, "-m", "subgraphsearch._cli", *args], capture_output=True, text=True, encoding="utf-8")
 
     assert cli("--version").stdout.strip() == f"subgraphsearch {ss.__version__}"
     path = tmp_path / "g.g6"
     assert cli("generate", "exponential", "-n", "100", "-d", "0.6", "-s", "1", "-o", str(path)).returncode == 0
     found = cli("search", str(path), "-k", "11", "-m", "55", "--json", str(tmp_path / "r.json"))
     assert found.returncode == 0 and "40/40 experiments" in found.stdout
-    assert json.loads((tmp_path / "r.json").read_text())["experiments"]
+    assert json.loads((tmp_path / "r.json").read_text(encoding="utf-8"))["experiments"]
     assert cli("search", str(path), "-k", "11", "-m", "900", "-n", "2", "--moves", "20", "-q").returncode == 2
     assert cli("no-such-command").returncode == 2
     converted = cli("convert", str(path), "-", "--to", "edgelist")
@@ -472,12 +472,12 @@ def test_quickstart_notebook_ships_with_the_package(tmp_path):
     from subgraphsearch.__main__ import main
 
     assert main(["quickstart", str(tmp_path), "--no-open"]) == 0
-    packaged = json.loads((tmp_path / "quickstart.ipynb").read_text())
-    executed = json.loads((Path(__file__).resolve().parents[2] / "examples" / "quickstart.ipynb").read_text())
+    packaged = json.loads((tmp_path / "quickstart.ipynb").read_text(encoding="utf-8"))
+    executed = json.loads((Path(__file__).resolve().parents[2] / "examples" / "quickstart.ipynb").read_text(encoding="utf-8"))
     # the same cells as the executed notebook in the repo (rerun examples/make_quickstart.py), no outputs
     assert [c["source"] for c in packaged["cells"]] == [c["source"] for c in executed["cells"]]
     assert all(not c.get("outputs") for c in packaged["cells"])
     # an existing notebook, perhaps edited, is never overwritten
-    (tmp_path / "quickstart.ipynb").write_text("mine")
+    (tmp_path / "quickstart.ipynb").write_text("mine", encoding="utf-8")
     assert main(["quickstart", str(tmp_path), "--no-open"]) == 0
-    assert (tmp_path / "quickstart.ipynb").read_text() == "mine"
+    assert (tmp_path / "quickstart.ipynb").read_text(encoding="utf-8") == "mine"

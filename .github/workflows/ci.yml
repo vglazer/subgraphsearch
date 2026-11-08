@@ -54,4 +54,5 @@ jobs:
       - name: Build the CLI (for the CLI-to-Python round-trip test)
         run: cargo build --release -p subgraphsearch
       - name: Tests
-        run: uv run pytest -v
+        # fail on text I/O that relies on the platform's default encoding (cp1252 on Windows)
+        run: uv run python -X warn_default_encoding -m pytest -v -W error::EncodingWarning
