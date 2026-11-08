@@ -26,7 +26,7 @@ anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
 rayon = "1.12.0"
 serde_json = "1.0.154"
-subgraphsearch-core = { version = "1.0.3", path = "../subgraphsearch-core" }
+subgraphsearch-core = { version = "1.0.4", path = "../subgraphsearch-core" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.191"
