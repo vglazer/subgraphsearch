@@ -179,3 +179,30 @@ fn degree_searches_for_regular_subgraphs() {
         stderr(&o)
     );
 }
+
+#[test]
+fn stops_quietly_when_the_reader_goes_away() {
+    // as in `subgraphsearch generate ... | head -1`: far more output than a pipe buffers
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_subgraphsearch"))
+        .args([
+            "generate",
+            "exponential",
+            "-n",
+            "3000",
+            "-d",
+            "0.5",
+            "--to",
+            "lists",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut start = [0u8; 16];
+    child.stdout.take().unwrap().read_exact(&mut start).unwrap(); // then close the pipe
+    let o = child.wait_with_output().unwrap();
+    assert!(o.status.success(), "{:?}: {}", o.status, stderr(&o));
+    assert_eq!(stderr(&o), "");
+}

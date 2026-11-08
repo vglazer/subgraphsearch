@@ -666,6 +666,7 @@ fn run_convert(args: ConvertArgs) -> Result<()> {
 }
 
 fn run_info(args: InfoArgs) -> Result<()> {
+    let mut out = io::stdout().lock();
     if args.weighted {
         return info_weighted(&args);
     }
@@ -699,24 +700,25 @@ fn run_info(args: InfoArgs) -> Result<()> {
             "degree": {"min": min, "max": max, "mean": mean},
             "degree_counts": histogram.iter().map(|(d, c)| [*d, *c]).collect::<Vec<_>>(),
         });
-        println!("{}", serde_json::to_string_pretty(&info)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&info)?)?;
         return Ok(());
     }
-    println!("vertices:   {n}");
-    println!("edges:      {}", g.num_edges());
-    println!("density:    {:.4}", g.density());
-    println!("components: {components}");
-    println!("degrees:    min {min}, max {max}, mean {mean:.2}");
+    writeln!(out, "vertices:   {n}")?;
+    writeln!(out, "edges:      {}", g.num_edges())?;
+    writeln!(out, "density:    {:.4}", g.density())?;
+    writeln!(out, "components: {components}")?;
+    writeln!(out, "degrees:    min {min}, max {max}, mean {mean:.2}")?;
     if args.degrees {
-        println!("degree  count");
+        writeln!(out, "degree  count")?;
         for (d, c) in histogram {
-            println!("{d:>6}  {c}");
+            writeln!(out, "{d:>6}  {c}")?;
         }
     }
     Ok(())
 }
 
 fn info_weighted(args: &InfoArgs) -> Result<()> {
+    let mut out = io::stdout().lock();
     let g = args.input.load_weighted()?;
     let mut counts = std::collections::BTreeMap::new();
     for (_, _, w) in g.edges() {
@@ -739,23 +741,24 @@ fn info_weighted(args: &InfoArgs) -> Result<()> {
             "weight": {"min": counts.keys().next(), "max": counts.keys().last(), "mean": mean},
             "weight_counts": counts.iter().map(|(w, c)| [usize::from(*w), *c]).collect::<Vec<_>>(),
         });
-        println!("{}", serde_json::to_string_pretty(&info)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&info)?)?;
         return Ok(());
     }
-    println!("vertices:     {}", g.num_vertices());
-    println!("edges:        {m}");
-    println!("total weight: {}", g.total_weight());
-    println!("density:      {:.4}", structure.density());
-    println!("components:   {}", structure.components().1);
-    println!(
+    writeln!(out, "vertices:     {}", g.num_vertices())?;
+    writeln!(out, "edges:        {m}")?;
+    writeln!(out, "total weight: {}", g.total_weight())?;
+    writeln!(out, "density:      {:.4}", structure.density())?;
+    writeln!(out, "components:   {}", structure.components().1)?;
+    writeln!(
+        out,
         "weights:      min {}, max {}, mean {mean:.2}",
         counts.keys().next().copied().unwrap_or(0),
         counts.keys().last().copied().unwrap_or(0)
-    );
+    )?;
     if args.degrees {
-        println!("weight  edges");
+        writeln!(out, "weight  edges")?;
         for (w, c) in counts {
-            println!("{w:>6}  {c}");
+            writeln!(out, "{w:>6}  {c}")?;
         }
     }
     Ok(())
@@ -763,6 +766,7 @@ fn info_weighted(args: &InfoArgs) -> Result<()> {
 
 /// One line per graph, for multi-graph files.
 fn info_table(graphs: &[Graph], json: bool) -> Result<()> {
+    let mut out = io::stdout().lock();
     let rows: Vec<_> = graphs
         .iter()
         .map(|g| {
@@ -785,21 +789,25 @@ fn info_table(graphs: &[Graph], json: bool) -> Result<()> {
                 serde_json::json!({"graph": i, "vertices": n, "edges": m, "density": density, "components": comps, "degree": {"min": dmin, "max": dmax}})
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&list)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&list)?)?;
         return Ok(());
     }
-    println!("{} graphs", graphs.len());
-    println!(
+    writeln!(out, "{} graphs", graphs.len())?;
+    writeln!(
+        out,
         "{:>6} {:>9} {:>10} {:>8} {:>10} {:>11}",
         "graph", "vertices", "edges", "density", "components", "degrees"
-    );
+    )?;
     for (i, (n, m, density, comps, dmin, dmax)) in rows.into_iter().enumerate() {
         let degrees = if dmin == dmax {
             format!("{dmin} (regular)")
         } else {
             format!("{dmin}-{dmax}")
         };
-        println!("{i:>6} {n:>9} {m:>10} {density:>8.4} {comps:>10} {degrees:>11}");
+        writeln!(
+            out,
+            "{i:>6} {n:>9} {m:>10} {density:>8.4} {comps:>10} {degrees:>11}"
+        )?;
     }
     Ok(())
 }
@@ -903,6 +911,14 @@ fn run_legacy(cmd: LegacyCommand) -> Result<u8> {
     }
 }
 
+fn is_broken_pipe(e: &anyhow::Error) -> bool {
+    e.chain().any(|cause| {
+        cause
+            .downcast_ref::<io::Error>()
+            .is_some_and(|e| e.kind() == io::ErrorKind::BrokenPipe)
+    })
+}
+
 /// Runs the command line given by `args` (the program name first, as in `std::env::args_os`) and
 /// returns the process exit status: 0 on success, 2 when a search finds nothing or the arguments
 /// are invalid, 1 on other errors.
@@ -932,12 +948,15 @@ where
         Command::Op(a) => run_op(a).map(|()| 0),
         Command::Legacy(c) => run_legacy(c),
     };
-    let status = result.unwrap_or_else(|e| {
-        eprintln!("subgraphsearch: {e:#}");
-        1
-    });
-    let _ = io::stdout().flush();
-    status
+    match result.and_then(|status| Ok(io::stdout().flush().map(|()| status)?)) {
+        Ok(status) => status,
+        // the reader went away (`subgraphsearch ... | head`): stop quietly, as other tools do
+        Err(e) if is_broken_pipe(&e) => 0,
+        Err(e) => {
+            eprintln!("subgraphsearch: {e:#}");
+            1
+        }
+    }
 }
 
 #[cfg(test)]
