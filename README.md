@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml/badge.svg)](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/subgraphsearch)](https://pypi.org/project/subgraphsearch/)
-[![crates.io](https://img.shields.io/crates/v/subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
+[![crates.io: subgraphsearch](https://img.shields.io/crates/v/subgraphsearch?label=crates.io%3A%20subgraphsearch)](https://crates.io/crates/subgraphsearch)
+[![crates.io: subgraphsearch-core](https://img.shields.io/crates/v/subgraphsearch-core?label=crates.io%3A%20subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of
 vertices and edges**: cliques, independent sets and everything in
