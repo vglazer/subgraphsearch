@@ -147,8 +147,10 @@ they are not too rare.
 The search minimizes the *conflict* `|e - m|`, where `e` is the number of edges the current
 `k` vertices induce; a conflict of 0 is a solution. Each move swaps one subgraph vertex `u` for
 one outside vertex `w`. Keeping every vertex's degree within the subgraph, `d(v)`, makes each swap
-cheap to evaluate: the edge count becomes `e - d(u) + d(w) - [u ~ w]`. The search takes one of
-the best swaps at random.
+cheap to evaluate: the edge count becomes `e - d(u) + d(w) - [u ~ w]`, where `[u ~ w]` is 1 if
+`u` and `w` are adjacent and 0 otherwise. Removing `u` loses its `d(u)` edges and adding `w` gains
+its `d(w)`, but an edge between them is counted in `d(w)` and leaves with `u`. The search takes one
+of the best swaps at random.
 
 Two refinements make this fast and effective:
 
