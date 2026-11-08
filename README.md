@@ -12,14 +12,26 @@ solutions. Searches are fast, reproducible from a seed, and come with diagnostic
 
 ## Install
 
+With [uv](https://docs.astral.sh/uv/):
+
 ```sh
-pip install subgraphsearch          # the Python package and the `subgraphsearch` command
-pip install "subgraphsearch[all]"   # also plotting and conversions to networkx, igraph and SciPy
+uv add subgraphsearch                # add the package to your project
+uv add "subgraphsearch[all]"         # also plotting and conversions to networkx, igraph and SciPy
+uv tool install subgraphsearch       # just the `subgraphsearch` command, on your PATH
+uvx subgraphsearch info g.g6         # or run the command without installing it
+```
+
+With pip:
+
+```sh
+pip install subgraphsearch           # the package and the `subgraphsearch` command
+pip install "subgraphsearch[all]"    # also plotting and conversions to networkx, igraph and SciPy
+pipx install subgraphsearch          # just the command, in its own environment
+pipx run subgraphsearch info g.g6    # or run the command without installing it
 ```
 
 Prebuilt wheels cover Linux (including Alpine), macOS and Windows (including ARM) for Python 3.10
-and later. To install only the command, use `pipx install subgraphsearch` or
-`uv tool install subgraphsearch`.
+and later.
 
 ## Python
 
