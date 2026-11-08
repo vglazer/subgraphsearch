@@ -1,15 +1,18 @@
 name: Release
 
 # Builds wheels for Linux (glibc and musl), macOS and Windows (x64 and ARM) plus a source
-# distribution, then publishes them with PyPI Trusted Publishing (no stored tokens).
+# distribution, then publishes them with PyPI Trusted Publishing (no stored tokens). Tag releases
+# then publish the Rust crates to crates.io, also with Trusted Publishing.
 #
 # - Run it by hand (Actions > Release > Run workflow) to publish to TestPyPI, as a rehearsal. Each
 #   rehearsal publishes its own development release, VERSION.devN with N the run number, since an
 #   index accepts each version only once.
-# - Push a tag `vX.Y.Z` matching the package version to publish to PyPI.
+# - Push a tag `vX.Y.Z` matching the package version to publish to PyPI and crates.io.
 #
 # One-time setup: add this repository as a trusted publisher on pypi.org and test.pypi.org
-# (owner vglazer, repository subgraphsearch, workflow release.yml, environment pypi or testpypi).
+# (owner vglazer, repository subgraphsearch, workflow release.yml, environment pypi or testpypi),
+# and on crates.io for both subgraphsearch and subgraphsearch-core (same owner, repository and
+# workflow, environment cratesio).
 
 on:
   push:
@@ -140,3 +143,23 @@ jobs:
       - name: Publish to PyPI
         if: github.event_name == 'push' || inputs.index == 'pypi'
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  crates:
+    name: Publish to crates.io
+    # tag releases only, once the PyPI release (which checks the tag against the version) succeeded
+    if: github.event_name == 'push'
+    needs: [publish]
+    runs-on: ubuntu-latest
+    environment:
+      name: cratesio
+    permissions:
+      id-token: write # for Trusted Publishing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      # the library first, then the command; the Python bindings crate is not published
+      - run: cargo publish --workspace
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
