@@ -63,12 +63,18 @@ jobs:
           assert r.successes == 5, r
           print(ss.__version__, r)
           PY
+          subgraphsearch --version
+          subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6
+          subgraphsearch search g.g6 -k 11 -m 55 -q
       - name: Smoke-test the wheel on Alpine
         if: matrix.alpine
         run: |
           docker run --rm -v "$PWD/dist:/dist" python:3.12-alpine sh -c '
             pip install --quiet --find-links /dist subgraphsearch &&
-            python -c "import subgraphsearch as ss; g = ss.generate(\"exponential\", 100, 0.6, seed=1, rng=\"legacy\"); r = ss.search(g, 11, 55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng=\"legacy\"); assert r.successes == 5, r; print(ss.__version__, r)"'
+            python -c "import subgraphsearch as ss; g = ss.generate(\"exponential\", 100, 0.6, seed=1, rng=\"legacy\"); r = ss.search(g, 11, 55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng=\"legacy\"); assert r.successes == 5, r; print(ss.__version__, r)" &&
+            subgraphsearch --version &&
+            subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o /tmp/g.g6 &&
+            subgraphsearch search /tmp/g.g6 -k 11 -m 55 -q'
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.os }}-${{ matrix.target }}-${{ matrix.manylinux || 'native' }}

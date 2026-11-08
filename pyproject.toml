@@ -23,6 +23,9 @@ classifiers = [
 ]
 dynamic = ["version"]
 
+[project.scripts]
+subgraphsearch = "subgraphsearch._cli:main"
+
 [project.urls]
 Homepage = "https://github.com/vglazer/subgraphsearch"
 Repository = "https://github.com/vglazer/subgraphsearch"

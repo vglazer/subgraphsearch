@@ -446,3 +446,23 @@ def test_regular_search_matches_c_through_the_modern_api():
     expected = (FIXTURES / "reg_search" / "paley_4reg.out").read_text()
     blocks = [b.strip() for b in expected.split("\n\n") if re.fullmatch(r"[0-9 ]+", b.strip()) and len(b.split()) == 10]
     assert [" ".join(map(str, e.vertices)) for e in r.experiments] == blocks
+
+
+def test_command_line_ships_with_the_package(tmp_path):
+    # the `subgraphsearch` command installed by pip runs the Rust CLI inside the extension
+    import subprocess
+    import sys
+
+    def cli(*args):
+        return subprocess.run([sys.executable, "-m", "subgraphsearch._cli", *args], capture_output=True, text=True)
+
+    assert cli("--version").stdout.strip() == f"subgraphsearch {ss.__version__}"
+    path = tmp_path / "g.g6"
+    assert cli("generate", "exponential", "-n", "100", "-d", "0.6", "-s", "1", "-o", str(path)).returncode == 0
+    found = cli("search", str(path), "-k", "11", "-m", "55", "--json", str(tmp_path / "r.json"))
+    assert found.returncode == 0 and "40/40 experiments" in found.stdout
+    assert json.loads((tmp_path / "r.json").read_text())["experiments"]
+    assert cli("search", str(path), "-k", "11", "-m", "900", "-n", "2", "--moves", "20", "-q").returncode == 2
+    assert cli("no-such-command").returncode == 2
+    converted = cli("convert", str(path), "-", "--to", "edgelist")
+    assert converted.returncode == 0 and converted.stdout.startswith("# vertices: 100")

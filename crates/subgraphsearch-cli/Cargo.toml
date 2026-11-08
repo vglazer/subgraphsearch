@@ -8,6 +8,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lib]
+name = "subgraphsearch"
+path = "src/lib.rs"
+
 [[bin]]
 name = "subgraphsearch"
 path = "src/main.rs"

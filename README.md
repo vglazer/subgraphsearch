@@ -13,12 +13,13 @@ solutions. Searches are fast, reproducible from a seed, and come with diagnostic
 ## Install
 
 ```sh
-pip install subgraphsearch              # the Python package; add [all] for plotting and interop
-cargo install subgraphsearch            # the `subgraphsearch` command (needs Rust 1.87+)
+pip install subgraphsearch          # the Python package and the `subgraphsearch` command
+pip install "subgraphsearch[all]"   # also plotting and conversions to networkx, igraph and SciPy
 ```
 
 Prebuilt wheels cover Linux (including Alpine), macOS and Windows (including ARM) for Python 3.10
-and later.
+and later. To install only the command, use `pipx install subgraphsearch` or
+`uv tool install subgraphsearch`.
 
 ## Python
 
@@ -89,6 +90,22 @@ subgraphsearch op complement g.g6 gc.g6                           # complements,
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
+
+## Rust
+
+With a Rust toolchain (1.87 or later), `cargo install subgraphsearch` builds the same
+`subgraphsearch` command. The search, generators and formats are also a library,
+[`subgraphsearch-core`](https://docs.rs/subgraphsearch-core):
+
+```rust
+use subgraphsearch_core::{Graph, SearchParams, search};
+
+// find induced 4-vertex paths (3 edges) in a 12-cycle
+let g = Graph::from_edges(12, (0..12).map(|i| (i, (i + 1) % 12))).unwrap();
+let result = search(&g, &SearchParams::new(4, 3)).unwrap();
+let found = result.experiments.iter().find(|e| e.success).unwrap();
+assert_eq!(g.induced_edge_count(&found.vertices), 3);
+```
 
 ## How the search works
 

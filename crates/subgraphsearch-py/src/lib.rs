@@ -529,13 +529,20 @@ fn formats_list() -> Vec<(&'static str, bool)> {
         .collect()
 }
 
+/// Runs the `subgraphsearch` command line (`argv`, program name first) on the process's stdin,
+/// stdout and stderr, without the GIL; returns the exit status.
+#[pyfunction]
+fn cli_main(py: Python<'_>, argv: Vec<String>) -> u8 {
+    py.detach(move || subgraphsearch::run(argv))
+}
+
 #[pymodule]
 mod _core {
     #[pymodule_export]
     use super::{
-        PyGraph, PyWeightedGraph, dumps_all, formats_list, generate_graph, generate_weighted,
-        legacy_asub_search, legacy_ereg_search, legacy_ggen, legacy_reg_search, legacy_sub_search,
-        legacy_wggen, legacy_wsub_search, search,
+        PyGraph, PyWeightedGraph, cli_main, dumps_all, formats_list, generate_graph,
+        generate_weighted, legacy_asub_search, legacy_ereg_search, legacy_ggen, legacy_reg_search,
+        legacy_sub_search, legacy_wggen, legacy_wsub_search, search,
     };
 
     #[pymodule_init]
