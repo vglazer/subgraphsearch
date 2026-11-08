@@ -341,7 +341,7 @@ per experiment.
 An experiment stops at its first solution, so the moves actually made, not the
 maximum, determine the time.
 
-| Search | Settings | Moves made | Time | Successes |
+| Search | Settings | Moves&nbsp;made | Time | Successes |
 | --- | --- | --- | --- | --- |
 | 11-cliques in a random graph on 100 vertices, density 0.6 | 40 × 250 (defaults) | 1,652 | 0.4&nbsp;ms | 40 of 40 |
 | 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 81,539 | 14&nbsp;ms | 21 of 60 |
