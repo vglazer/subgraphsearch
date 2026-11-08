@@ -3,7 +3,9 @@ name: Release
 # Builds wheels for Linux (glibc and musl), macOS and Windows (x64 and ARM) plus a source
 # distribution, then publishes them with PyPI Trusted Publishing (no stored tokens).
 #
-# - Run it by hand (Actions > Release > Run workflow) to publish to TestPyPI, as a rehearsal.
+# - Run it by hand (Actions > Release > Run workflow) to publish to TestPyPI, as a rehearsal. Each
+#   rehearsal publishes its own development release, VERSION.devN with N the run number, since an
+#   index accepts each version only once.
 # - Push a tag `vX.Y.Z` matching the package version to publish to PyPI.
 #
 # One-time setup: add this repository as a trusted publisher on pypi.org and test.pypi.org
@@ -48,6 +50,9 @@ jobs:
           python-version: "3.12"
       - name: Use PyPI's copy of the README (math as plain text, links to GitHub)
         run: python scripts/make_pypi_readme.py --apply
+      - name: Give a TestPyPI rehearsal its own version (VERSION.devRUN)
+        if: github.event_name == 'workflow_dispatch' && inputs.index == 'testpypi'
+        run: python scripts/set_dev_version.py ${{ github.run_number }}
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
@@ -57,7 +62,7 @@ jobs:
         if: matrix.smoke
         shell: bash
         run: |
-          python -m pip install --find-links dist subgraphsearch
+          python -m pip install --pre --find-links dist subgraphsearch
           python - <<'PY'
           import subgraphsearch as ss
           g = ss.generate("exponential", 100, 0.6, seed=1, rng="legacy")
@@ -72,7 +77,7 @@ jobs:
         if: matrix.alpine
         run: |
           docker run --rm -v "$PWD/dist:/dist" python:3.12-alpine sh -c '
-            pip install --quiet --find-links /dist subgraphsearch &&
+            pip install --quiet --pre --find-links /dist subgraphsearch &&
             python -c "import subgraphsearch as ss; g = ss.generate(\"exponential\", 100, 0.6, seed=1, rng=\"legacy\"); r = ss.search(g, 11, 55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng=\"legacy\"); assert r.successes == 5, r; print(ss.__version__, r)" &&
             subgraphsearch --version &&
             subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o /tmp/g.g6 &&
@@ -92,6 +97,9 @@ jobs:
           python-version: "3.12"
       - name: Use PyPI's copy of the README (math as plain text, links to GitHub)
         run: python scripts/make_pypi_readme.py --apply
+      - name: Give a TestPyPI rehearsal its own version (VERSION.devRUN)
+        if: github.event_name == 'workflow_dispatch' && inputs.index == 'testpypi'
+        run: python scripts/set_dev_version.py ${{ github.run_number }}
       - uses: PyO3/maturin-action@v1
         with:
           command: sdist
