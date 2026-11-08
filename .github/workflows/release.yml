@@ -1,13 +1,15 @@
 name: Release
 
-# Builds wheels for Linux (glibc and musl), macOS and Windows (x64 and ARM) plus a source
-# distribution, then publishes them with PyPI Trusted Publishing (no stored tokens). Tag releases
+# Runs the CI tests, builds wheels for Linux (glibc and musl), macOS and Windows (x64 and ARM) plus a
+# source distribution, then publishes them with PyPI Trusted Publishing (no stored tokens). Releases
 # then publish the Rust crates to crates.io, also with Trusted Publishing.
 #
-# - Run it by hand (Actions > Release > Run workflow) to publish to TestPyPI, as a rehearsal. Each
-#   rehearsal publishes its own development release, VERSION.devN with N the run number, since an
-#   index accepts each version only once.
-# - Push a tag `vX.Y.Z` matching the package version to publish to PyPI and crates.io.
+# - To release: bump the version in Cargo.toml, then create a release on GitHub
+#   (https://github.com/vglazer/subgraphsearch/releases/new) with a new tag `v` followed by that
+#   version, e.g. v0.2.2. Publishing the release publishes to PyPI and crates.io.
+# - To rehearse: run it by hand (Actions > Release > Run workflow), which publishes to TestPyPI.
+#   Each rehearsal publishes its own development release, VERSION.devN with N the run number,
+#   since an index accepts each version only once.
 #
 # One-time setup: add this repository as a trusted publisher on pypi.org and test.pypi.org
 # (owner vglazer, repository subgraphsearch, workflow release.yml, environment pypi or testpypi),
@@ -15,21 +17,35 @@ name: Release
 # workflow, environment cratesio).
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
+  # a rehearsal that publishes to TestPyPI
   workflow_dispatch:
-    inputs:
-      index:
-        description: "Where to publish"
-        type: choice
-        options: [testpypi, pypi]
-        default: testpypi
 
 permissions:
   contents: read
 
 jobs:
+  check-version:
+    name: Check that the release tag matches the package version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          if [ "v${version}" != "${TAG}" ]; then
+            echo "::error::Cargo.toml has version ${version}, but the release tag is ${TAG}"
+            exit 1
+          fi
+
+  tests:
+    uses: ./.github/workflows/ci.yml
+
   wheels:
+    needs: [check-version, tests]
     name: Wheel (${{ matrix.os }}, ${{ matrix.target }}${{ matrix.manylinux && format(', {0}', matrix.manylinux) || '' }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -54,7 +70,7 @@ jobs:
       - name: Use PyPI's copy of the README (math as plain text, links to GitHub)
         run: python scripts/make_pypi_readme.py --apply
       - name: Give a TestPyPI rehearsal its own version (VERSION.devRUN)
-        if: github.event_name == 'workflow_dispatch' && inputs.index == 'testpypi'
+        if: github.event_name == 'workflow_dispatch'
         run: python scripts/set_dev_version.py ${{ github.run_number }}
       - uses: PyO3/maturin-action@v1
         with:
@@ -92,6 +108,7 @@ jobs:
 
   sdist:
     name: Source distribution
+    needs: [check-version, tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -101,7 +118,7 @@ jobs:
       - name: Use PyPI's copy of the README (math as plain text, links to GitHub)
         run: python scripts/make_pypi_readme.py --apply
       - name: Give a TestPyPI rehearsal its own version (VERSION.devRUN)
-        if: github.event_name == 'workflow_dispatch' && inputs.index == 'testpypi'
+        if: github.event_name == 'workflow_dispatch'
         run: python scripts/set_dev_version.py ${{ github.run_number }}
       - uses: PyO3/maturin-action@v1
         with:
@@ -113,41 +130,36 @@ jobs:
           path: dist
 
   publish:
-    name: Publish to ${{ github.event_name == 'push' && 'pypi' || inputs.index }}
+    name: Publish to ${{ github.event_name == 'release' && 'PyPI' || 'TestPyPI' }}
     needs: [wheels, sdist]
     runs-on: ubuntu-latest
+    # must match the environment names in the trusted publisher settings on pypi.org and test.pypi.org
     environment:
-      name: ${{ github.event_name == 'push' && 'pypi' || inputs.index }}
+      name: ${{ github.event_name == 'release' && 'pypi' || 'testpypi' }}
+      url: ${{ github.event_name == 'release' && 'https://pypi.org/project/subgraphsearch/' || 'https://test.pypi.org/project/subgraphsearch/' }}
     permissions:
       id-token: write # for Trusted Publishing
     steps:
-      - uses: actions/checkout@v7
-      - name: Check that a release tag matches the package version
-        if: github.event_name == 'push'
-        run: |
-          version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
-          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
-            echo "tag ${GITHUB_REF_NAME} does not match the package version ${version}" >&2
-            exit 1
-          fi
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
       - run: ls -l dist
+      - name: Check the package metadata
+        run: pipx run twine check dist/*
       - name: Publish to TestPyPI
-        if: github.event_name != 'push' && inputs.index == 'testpypi'
+        if: github.event_name == 'workflow_dispatch'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
       - name: Publish to PyPI
-        if: github.event_name == 'push' || inputs.index == 'pypi'
+        if: github.event_name == 'release'
         uses: pypa/gh-action-pypi-publish@release/v1
 
   crates:
     name: Publish to crates.io
-    # tag releases only, once the PyPI release (which checks the tag against the version) succeeded
-    if: github.event_name == 'push'
+    # releases only, once the PyPI release succeeded
+    if: github.event_name == 'release'
     needs: [publish]
     runs-on: ubuntu-latest
     environment:
