@@ -2,11 +2,12 @@
 
     python -m subgraphsearch explore GRAPH [--result RESULT.json] [-o PAGE.html]
     python -m subgraphsearch report GRAPH [--result RESULT.json] [-o FIGURE.png]
-    python -m subgraphsearch quickstart [DIR] [--no-open]
+    python -m subgraphsearch quickstart [DIR] [--force] [--no-open]
 
 GRAPH is any readable graph file; RESULT.json comes from ``subgraphsearch search --json`` (the Rust
 CLI) or ``SearchResult.save``. ``quickstart`` copies the quickstart notebook into DIR (default: the
-current directory) and opens it in JupyterLab, if installed.
+current directory) and opens it in JupyterLab, if installed. An existing copy is opened as it is,
+keeping any edits, unless ``--force`` replaces it with the installed version.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ def main(argv: list[str] | None = None) -> int:
     report = sub.add_parser("report", help="write a figure summarizing a graph and, if given, a search result")
     quickstart = sub.add_parser("quickstart", help="copy the quickstart notebook here and open it in JupyterLab")
     quickstart.add_argument("dir", type=Path, nargs="?", default=Path("."), help="where to put quickstart.ipynb")
+    quickstart.add_argument("--force", action="store_true",
+                            help="replace an existing quickstart.ipynb (and any edits to it) with the installed version")
     quickstart.add_argument("--no-open", action="store_true", help="only copy the notebook")
     for p in (explore, report):
         p.add_argument("graph", type=Path, help="graph file")
@@ -39,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if args.command == "quickstart":
-        return run_quickstart(args.dir, open_it=not args.no_open)
+        return run_quickstart(args.dir, open_it=not args.no_open, force=args.force)
     graph = WeightedGraph.read(args.graph, args.format) if args.weighted else Graph.read(args.graph, args.format)
     result = SearchResult.load(args.result, graph) if args.result else None
 
@@ -66,19 +69,21 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def run_quickstart(directory: Path, open_it: bool = True) -> int:
-    """Copies the notebook (without outputs) unless one is already there, then opens it."""
+def run_quickstart(directory: Path, open_it: bool = True, force: bool = False) -> int:
+    """Copies the notebook (without outputs), unless one is already there and ``force`` is false,
+    then opens it."""
     import importlib.util
     import subprocess
     from importlib.resources import files
 
     path = directory / "quickstart.ipynb"
-    if path.exists():
-        print(f"{path} already exists; opening it as it is", flush=True)
+    if path.exists() and not force:
+        print(f"{path} already exists; opening it as it is (--force replaces it)", flush=True)
     else:
+        replacing = path.exists()
         directory.mkdir(parents=True, exist_ok=True)
         path.write_bytes(files("subgraphsearch").joinpath("quickstart.ipynb").read_bytes())
-        print(f"wrote {path}", flush=True)
+        print(f"{'replaced' if replacing else 'wrote'} {path}", flush=True)
     if not open_it:
         return 0
     if importlib.util.find_spec("jupyterlab") is None:

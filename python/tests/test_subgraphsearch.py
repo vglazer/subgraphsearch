@@ -477,7 +477,9 @@ def test_quickstart_notebook_ships_with_the_package(tmp_path):
     # the same cells as the executed notebook in the repo (rerun examples/make_quickstart.py), no outputs
     assert [c["source"] for c in packaged["cells"]] == [c["source"] for c in executed["cells"]]
     assert all(not c.get("outputs") for c in packaged["cells"])
-    # an existing notebook, perhaps edited, is never overwritten
+    # an existing notebook, perhaps edited, is kept unless --force replaces it
     (tmp_path / "quickstart.ipynb").write_text("mine", encoding="utf-8")
     assert main(["quickstart", str(tmp_path), "--no-open"]) == 0
     assert (tmp_path / "quickstart.ipynb").read_text(encoding="utf-8") == "mine"
+    assert main(["quickstart", str(tmp_path), "--no-open", "--force"]) == 0
+    assert json.loads((tmp_path / "quickstart.ipynb").read_text(encoding="utf-8")) == packaged

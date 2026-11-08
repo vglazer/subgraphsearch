@@ -46,6 +46,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Use PyPI's copy of the README (math as plain text, links to GitHub)
+        run: python scripts/make_pypi_readme.py --apply
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
@@ -85,6 +87,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Use PyPI's copy of the README (math as plain text, links to GitHub)
+        run: python scripts/make_pypi_readme.py --apply
       - uses: PyO3/maturin-action@v1
         with:
           command: sdist

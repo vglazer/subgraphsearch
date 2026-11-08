@@ -49,6 +49,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v6
+      - name: Check that the README converts for PyPI
+        run: uv run --no-project python scripts/make_pypi_readme.py
       - name: Build the package
         run: uv sync --all-extras
       - name: Build the CLI (for the CLI-to-Python round-trip test)

@@ -9,3 +9,4 @@ python/subgraphsearch/_core*.so
 .DS_Store
 .ipynb_checkpoints/
 /out/
+python/PYPI_README.md
