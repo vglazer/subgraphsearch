@@ -427,17 +427,23 @@ print(convert.to_networkx(g), "|", repr(convert.to_scipy(g)))
 print("formats:", ss.formats())
 """),
 ]
-nb = nbformat.v4.new_notebook(cells=cells, metadata={"kernelspec": {"name": "python3", "display_name": "Python 3 (ipykernel)", "language": "python"}})
-# the packaged copy has no outputs: about 12 KB instead of over a megabyte of embedded images, and
-# its cells are meant to be run anyway
-packaged = Path(__file__).resolve().parents[1] / "python" / "subgraphsearch" / "quickstart.ipynb"
-nbformat.write(copy.deepcopy(nb), packaged)
-print(packaged, f"{packaged.stat().st_size // 1024} KB")
-NotebookClient(nb, timeout=600, kernel_name="python3").execute()
-# Sign the notebook, as `jupyter trust` would, so that its saved outputs (inline charts, the
-# interactive viewer) display on this machine instead of being stripped as untrusted HTML.
-# Elsewhere, re-running the cells or `jupyter trust quickstart.ipynb` does the same.
-nbformat.sign.NotebookNotary().sign(nb)
-out = Path(__file__).with_name("quickstart.ipynb")
-nbformat.write(nb, out)
-print(out, f"{out.stat().st_size // 1024} KB")
+
+def main() -> None:
+    nb = nbformat.v4.new_notebook(cells=cells, metadata={"kernelspec": {"name": "python3", "display_name": "Python 3 (ipykernel)", "language": "python"}})
+    # the packaged copy has no outputs: about 12 KB instead of over a megabyte of embedded images, and
+    # its cells are meant to be run anyway
+    packaged = Path(__file__).resolve().parents[1] / "python" / "subgraphsearch" / "quickstart.ipynb"
+    nbformat.write(copy.deepcopy(nb), packaged)
+    print(packaged, f"{packaged.stat().st_size // 1024} KB")
+    NotebookClient(nb, timeout=600, kernel_name="python3").execute()
+    # Sign the notebook, as `jupyter trust` would, so that its saved outputs (inline charts, the
+    # interactive viewer) display on this machine instead of being stripped as untrusted HTML.
+    # Elsewhere, re-running the cells or `jupyter trust quickstart.ipynb` does the same.
+    nbformat.sign.NotebookNotary().sign(nb)
+    out = Path(__file__).with_name("quickstart.ipynb")
+    nbformat.write(nb, out)
+    print(out, f"{out.stat().st_size // 1024} KB")
+
+
+if __name__ == "__main__":
+    main()

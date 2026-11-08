@@ -33,8 +33,8 @@ def found(result: ss.SearchResult) -> tuple[int, ...]:
     return result.best.vertices
 
 
-def main() -> None:
-    OUT.mkdir(exist_ok=True)
+def main(out: Path = OUT) -> None:
+    out.mkdir(exist_ok=True)
     fig = plt.figure(figsize=(12, 9.6), layout="constrained")
     grid = fig.add_gridspec(2, 6, height_ratios=[1.3, 1])
 
@@ -75,8 +75,8 @@ def main() -> None:
         viz.plot_graph(g, found(rm), fig.add_subplot(grid[1, 2 * col:2 * col + 2]), layout="circle",
                        title=f"6 vertices, {m} edges: {label}")
 
-    fig.savefig(OUT / "overview.png", dpi=110, facecolor="white")
-    print(OUT / "overview.png")
+    fig.savefig(out / "overview.png", dpi=110, facecolor="white")
+    print(out / "overview.png")
 
 
 if __name__ == "__main__":
