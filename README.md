@@ -105,7 +105,7 @@ Two refinements make this fast and effective:
 - **Restricted neighborhood.** If the last move left the edge count unchanged, only swaps
   involving a vertex adjacent to exactly one of the two vertices just swapped are examined. Every
   other swap has the same value it had before the move, so the search concentrates on the swaps
-  the move changed. This was found to improve results as well as speed, and on large dense graphs
+  the move changed. This improves results as well as speed, and on large dense graphs
   it skips most of the work.
 - **No immediate reversal.** The two vertices just swapped are never swapped straight back, which
   stops the search cycling between the same two subgraphs.
@@ -142,14 +142,13 @@ Each experiment reports the best conflict it reached and the moves it needed:
   such a subgraph can produce a new, larger strongly regular graph. It can find cliques and
   independent sets too, but the plain search does that much faster.
 - **Two phases** (`--degree d --two-phase`): first find a subgraph with the right number of edges
-  (`k d / 2`), then make it regular using only swaps that keep the edge count. The original
-  report found no advantage, but in tests here it found regular subgraphs 1.4 to 3.5 times faster
-  than `--degree` alone. With `--fixed`, it computes the edge target from the non-fixed vertices
-  only, as the original program did, so it rarely succeeds; use `--degree` alone there.
-- **Aspiration** (`--aspiration`): after each move, also consider swaps involving the two
-  vertices just swapped, which are normally excluded, and take one whenever it would beat the
-  best conflict so far. It sometimes helps searches that stall, but made no consistent difference
-  on random graphs.
+  (`k d / 2`), then make it regular using only swaps that keep the edge count. It usually finds
+  regular subgraphs about 1.5 to 3.5 times faster than `--degree` alone. With `--fixed`, it
+  computes the edge target from the non-fixed vertices only, as the original program did, so it
+  rarely succeeds; use `--degree` alone there.
+- **Aspiration** (`--aspiration`): after each move, also consider swaps involving the two vertices
+  just swapped, which are normally excluded, and take one whenever it would beat the best conflict
+  so far. It can help a search that stalls, but usually makes little difference.
 
 ### Random graphs and operations
 
@@ -194,37 +193,37 @@ Some reformulations make a search easier:
 - **Restrict to a neighborhood.** A subgraph whose vertices must all be adjacent to some vertices
   `S` (a clique through `S`, for example) lies in their common neighborhood. Searching
   `g.induced(nbrs)`, with `nbrs = g.common_neighborhood(S)`, for `k - |S|` vertices, instead of
-  fixing `S` in the whole graph, found 11-cliques through a given vertex about 3 times faster in a
-  test. Vertex `i` of the result is `nbrs[i]` of the original graph.
+  fixing `S` in the whole graph, is typically about 3 times faster for cliques through a given
+  vertex. Vertex `i` of the result is `nbrs[i]` of the original graph.
 - **Search the complement of a dense graph.** `k` vertices with `m` edges become `k` vertices
   with `k (k - 1) / 2 - m` in the complement, which is sparse when the graph is dense.
 - **Find the limit by bisection.** To find the most edges `k` vertices can span, search a few
-  values of `m`: the switch from always found to never found is abrupt (for 30 vertices of a
-  100-vertex graph of density 0.6, 345 edges were found in every experiment and 350 in none), and
-  near-misses (`--max-conflict`) show how close a failed target came.
+  values of `m`: the switch from always found to never found is abrupt (in a 100-vertex graph of
+  density 0.6, for example, 30 vertices spanning 345 edges are easy to find and 350 are out of
+  reach), and near-misses (`--max-conflict`) show how close a failed target came.
 
 ### Settings
 
 Tune a search on your own graph by trying a few settings; `ss.sweep` runs one search per value of
-a setting, and `viz.plot_sweep` compares them. In tests on random graphs:
+a setting, and `viz.plot_sweep` compares them. As a rule:
 
 - **Spend the budget on experiments, not long runs.** Most successful experiments succeed early,
   and an experiment that has stalled rarely recovers, so the defaults are many short runs: 40
-  experiments of up to 250 moves. For targets whose successes came quickly, runs of 50 to 250
-  moves found solutions about 4 to 17 times faster than runs of 1000. To tune this for your
-  target, run a pilot search with generous `--moves` (say 5000), look at the moves successful
-  experiments needed (the success-time distribution, or `viz.plot_run_time_distribution`), and set
-  `--moves` to two or three times the median, using the rest of the time for more `--experiments`.
-  Raise `--moves` if successes cluster near the limit; do not go far below the size of the
-  subgraph, since a random start may need about `k` swaps to reach a solution.
+  experiments of up to 250 moves. When successes come quickly, runs of 50 to 250 moves can find
+  solutions 4 to 17 times faster than runs of 1000. To tune this for your target, run a pilot
+  search with generous `--moves` (say 5000), look at the moves successful experiments needed (the
+  success-time distribution, or `viz.plot_run_time_distribution`), and set `--moves` to two or
+  three times the median, using the rest of the time for more `--experiments`. Raise `--moves` if
+  successes cluster near the limit; do not go far below the size of the subgraph, since a random
+  start may need about `k` swaps to reach a solution.
 - **Use more experiments to find more solutions.** The success rate estimates how hard a target is,
   and more experiments find more distinct solutions, although many repeat
   (`r.solutions()` lists each once).
-- **Leave diversification at its defaults.** Short bursts of random moves had little effect.
-  Bursts of `k` to `2k` random moves help long runs that stall, because they act as restarts within
-  an experiment, but shorter runs with more experiments do the same more simply. `--div-dur 0`
-  gives a pure local search.
-- **Aspiration** made no measurable difference in these tests; try it only on searches that stall.
+- **Leave diversification at its defaults.** Short bursts of random moves make little difference.
+  Bursts of `k` to `2k` random moves help long runs that stall, because they act as restarts
+  within an experiment, but shorter runs with more experiments do the same more simply. `--div-dur
+  0` gives a pure local search.
+- **Aspiration** rarely makes a difference; try it on searches that stall.
 - **Seeds:** results depend only on the seed and the settings, not on the number of threads, so a
   search can be repeated exactly; change the seed for independent runs. `--rng legacy`
   reproduces the original programs but runs sequentially, so use it only for that.
