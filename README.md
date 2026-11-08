@@ -8,13 +8,17 @@ Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with 
 vertices and edges**: [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)),
 [independent sets](https://en.wikipedia.org/wiki/Independent_set_(graph_theory)) and everything in
 between. It can also find [regular](https://en.wikipedia.org/wiki/Regular_graph) subgraphs of a
-given degree, and subgraphs of a given total weight in weighted graphs. Graphs can be built from
-[block designs](https://en.wikipedia.org/wiki/Block_design) and other incidence structures, and
+given degree, and subgraphs of a given total weight in weighted graphs. 
+
+Graphs can be built from
+[block designs](https://en.wikipedia.org/wiki/Block_design) and other incidence structures, as well as
 [switched](https://en.wikipedia.org/wiki/Two-graph#Switching_and_graphs) with respect to the
-subgraphs a search finds, which produces other
+subgraphs a search finds. This produces other
 [strongly regular graphs](https://en.wikipedia.org/wiki/Strongly_regular_graph) with the same
 parameters, such as all three [Chang graphs](https://en.wikipedia.org/wiki/Chang_graphs) from the
-triangular graph T(8). A search can be required to include given vertices or confined to the
+triangular graph T(8).
+
+A search can be required to include given vertices or confined to the
 neighborhood of chosen vertices, and reports near misses as well as exact solutions. Searches are
 fast, reproducible from a seed, and come with diagnostics for tuning them.
 
