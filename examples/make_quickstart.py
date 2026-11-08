@@ -8,63 +8,316 @@ import nbformat
 import nbformat.sign
 from nbclient import NotebookClient
 
-md, code = nbformat.v4.new_markdown_cell, nbformat.v4.new_code_cell
+W = "https://en.wikipedia.org/wiki/"
+
+
+def md(text: str):
+    return nbformat.v4.new_markdown_cell(text.strip())
+
+
+def code(text: str):
+    return nbformat.v4.new_code_cell(text.strip())
+
+
 cells = [
-    md("# subgraphsearch quickstart\n\n"
-       "`subgraphsearch` finds **induced subgraphs with a given number of vertices and edges** (cliques, independent sets "
-       "and everything in between), regular subgraphs, and subgraphs of a given total weight, by a fast randomized tabu "
-       "search. This notebook walks through generating graphs, searching them, reading the results, and the visualizations."),
-    code("import subgraphsearch as ss\nfrom subgraphsearch import viz\n\nss.__version__"),
-    md("## Graphs\n\nGenerate one of `ggen`'s random models, or read graph6, sparse6, Matrix Market, edge lists or `sub_search` adjacency lists. "
-       "In a notebook a graph shows a summary, its degree distribution and, when small, a drawing."),
-    code("g = ss.generate(\"exponential\", 100, 0.6, seed=1, rng=\"legacy\")  # exactly ggen's `2 100 0 600 1 0 0 0`\ng"),
-    md("## Reproducing the original program\n\n`rng=\"legacy\"` replays the C program's random numbers, so this finds the same five 11-cliques "
-       "as the example in the original `sub_search` README, in the same order."),
-    code("cliques = ss.search(g, size=11, edges=55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng=\"legacy\")\n"
-         "cliques"),
-    md("## A harder search\n\nThe default generator (xoshiro256++) runs experiments in parallel. Here we look for 30 vertices spanning 343 edges, "
-       "far denser than the graph's 58% average, and record the objective after every move (`trace=True`)."),
-    code("r = ss.search(g, size=30, edges=343, experiments=60, max_moves=2000, div_freq=300, div_dur=8, seed=5, trace=True)\nprint(r.summary())"),
-    code("viz.plot_search_summary(r);"),
-    md("The **run-time distribution** (left) is the probability of success within a given number of moves: still rising at the budget means more "
-       "moves would help. The traces (right) show the bursts of random moves every `div_freq` moves.\n\n"
-       "At this density the target is barely attainable: every success found the *same* vertex set."),
-    code("len(r.solutions()), [len(ss.search(g, 30, m, experiments=60, max_moves=2000, div_freq=300, div_dur=8, seed=5).solutions()) for m in (330, 340)]"),
-    md("## Graph structure\n\nDegree distribution against an Erdős–Rényi graph of the same density, the Laplacian spectrum (λ₁ > 0 means connected), "
-       "and the adjacency matrix with the found subgraph moved to the top-left block."),
-    code("viz.plot_graph_summary(g, highlight=r.best.vertices);"),
-    md("`ggen`'s \"power\" model is not heavy-tailed, which the comparison makes plain:"),
-    code("viz.plot_degree_distribution(ss.generate(\"power\", 1500, 0.2, seed=52));"),
-    md("## Interactive view\n\nA self-contained page: drag to pan, scroll to zoom, hover or click vertices, and pick a solution to highlight. "
-       "`viz.save_html` writes the same page to a file."),
-    code("viz.show(ss.search(g, 30, 330, experiments=8, seed=2), max_conflict=0)"),
-    md("## Tuning\n\n`ss.sweep` reruns a search across values of one parameter."),
-    code("sweep = ss.sweep(g, 30, 340, \"div_dur\", [0, 4, 16, 64], experiments=40, max_moves=1500, div_freq=300)\n"
-         "viz.plot_sweep(sweep, parameter=\"div_dur\");"),
-    md("## Weighted graphs\n\nThe original `wggen` and `wsub_search` work with integer edge weights; the target is then a total weight. "
-       "Here, 15 vertices whose edges weigh 180 in total, in a graph with a mean weight of 0.65 per vertex pair."),
-    code("w = ss.generate_weighted(200, 0.65, seed=1, rng=\"legacy\")  # exactly wggen's `200 65 1`\n"
-         "rw = ss.search(w, 15, 180, experiments=40, max_moves=3000, div_freq=300, div_dur=10)\n"
-         "rw"),
-    md("## Regular subgraphs\n\nInstead of an edge count, `degree=` asks for subgraphs in which every vertex has that many neighbors "
-       "(the original `reg_search`), the search it was written for in strongly regular graphs. The Paley graph on 61 vertices is one; "
-       "here we look for 4-regular subgraphs on 10 of its vertices. `two_phase=True` first finds the right number of edges (`ereg_search`)."),
-    code("q = 61\nsquares = {x * x % q for x in range(1, q)}\n"
-         "paley = ss.Graph(q, [(i, j) for i in range(q) for j in range(i + 1, q) if (j - i) % q in squares])\n"
-         "reg = ss.search(paley, 10, degree=4, experiments=40, max_moves=2000, div_freq=300, div_dur=8)\n"
-         "print(\"degrees within the subgraph:\", set(paley.induced(reg.best.vertices).degrees().tolist()))\n"
-         "reg"),
-    md("## Formats and other libraries"),
-    code("import tempfile, pathlib\nfrom subgraphsearch import convert\n\n"
-         "path = pathlib.Path(tempfile.mkdtemp()) / \"g.g6\"\n"
-         "g.write(path)\n"
-         "assert ss.read(path) == g\n"
-         "G = convert.to_networkx(g)\n"
-         "A = convert.to_scipy(g)\n"
-         "print(G, \"|\", repr(A))\n"
-         "print(\"formats:\", ss.formats())"),
-    md("## The original interfaces\n\n`ss.legacy` takes exactly what `sub_search` and `ggen` read on stdin and returns what they printed."),
-    code("print(ss.legacy.ggen(\"2 10 0 500 42 0 0 0\"))"),
+    md(f"""
+# subgraphsearch quickstart
+
+`subgraphsearch` finds **[induced subgraphs]({W}Induced_subgraph) with a given number of vertices and
+edges**: [cliques]({W}Clique_(graph_theory)), [independent sets]({W}Independent_set_(graph_theory)) and
+everything in between. It also finds [regular]({W}Regular_graph) subgraphs and subgraphs of a given total
+weight. The method is a randomized [tabu search]({W}Tabu_search). This notebook generates a graph,
+searches it in several ways, and shows how to read and visualize the results.
+"""),
+    code("""
+import subgraphsearch as ss
+from subgraphsearch import viz
+
+ss.__version__
+"""),
+    md(f"""
+## A graph
+
+`ss.generate` makes random graphs; `"exponential"` is the [Erdős–Rényi]({W}Erd%C5%91s%E2%80%93R%C3%A9nyi_model)
+model, in which each pair of vertices is an edge with probability equal to the density. `ss.read` reads
+graph6, sparse6, Matrix Market, edge lists and adjacency lists. In a notebook, a graph displays as a summary
+with its degree distribution and, when it is small, a drawing.
+"""),
+    code("""
+g = ss.generate("exponential", 100, 0.6, seed=1)   # 100 vertices, density 0.6
+g
+"""),
+    md(f"""
+## Kinds of search
+
+Every search picks $k$ vertices and swaps one of them for an outside vertex at each move, trying to drive a
+*conflict* to 0. What the conflict measures depends on what you ask for:
+
+| You want | Call | Conflict |
+| --- | --- | --- |
+| $k$ vertices spanning exactly $m$ edges | `ss.search(g, k, m)` | $\\lvert e - m \\rvert$, with $e$ the edges among them |
+| $k$ vertices whose edges weigh $m$ in total | `ss.search(w, k, m)` on a `WeightedGraph` | $\\lvert \\text{{weight}} - m \\rvert$ |
+| a [$d$-regular]({W}Regular_graph) subgraph on $k$ vertices | `ss.search(g, k, degree=d)` | $\\sum_{{v \\in S}} \\lvert d_S(v) - d \\rvert$ |
+| the same, in two phases | `ss.search(g, k, degree=d, two_phase=True)` | first $\\lvert e - kd/2 \\rvert$, then regularity |
+
+Here $d_S(v)$ is the number of neighbors $v$ has among the chosen vertices $S$. Any of these can also
+require some vertices with `fixed=`, return near misses with `solutions(max_conflict=...)`, and record the
+conflict after every move with `trace=True`. Edge-count and weight searches can also use `aspiration=True`,
+which lets the search undo its last swap when that would beat the best conflict so far (the *aspiration
+criterion* of a tabu search). The sections below try each one.
+"""),
+    md("""
+## Cliques
+
+An 11-vertex clique has all 11 · 10 / 2 = 55 edges, so this asks for 11 vertices spanning 55 edges. Each of
+the 40 *experiments* (independent restarts) reports the best subgraph it found.
+"""),
+    code("""
+cliques = ss.search(g, size=11, edges=55)
+cliques
+"""),
+    md("""
+Many experiments find the same clique; `solutions()` lists each distinct vertex set once, and
+`viz.plot_graph` draws one.
+"""),
+    code("""
+print(len(cliques.solutions()), "distinct 11-cliques")
+viz.plot_graph(g, cliques.best.vertices, title="an 11-clique");
+"""),
+    md("""
+## A harder target
+
+Any edge count can be the target. For 30 vertices of this graph, 346 edges is near the limit of what the
+search finds, and it succeeds only some of the time. `trace=True` records the *conflict*, the distance from
+the target edge count, after every move.
+"""),
+    code("""
+r = ss.search(g, size=30, edges=346, experiments=60, max_moves=2000, div_freq=300, div_dur=8, seed=5, trace=True)
+print(r.summary())
+"""),
+    code("""
+viz.plot_search_summary(r);
+"""),
+    md("""
+The **run-time distribution** (left) is the fraction of experiments that succeeded within a given number of
+moves, the middle panel counts the best conflict each experiment reached, and the **traces** (right) show the
+conflict after each move for some of the experiments. Here 19 of the 21 successes came within 100 moves, and
+the rest of the 2000-move budget added only two: many short experiments usually beat a few long ones.
+
+Success falls off sharply around the limit: one edge fewer is found by every experiment, and a few more by
+none.
+"""),
+    code("""
+settings = dict(experiments=60, max_moves=2000, div_freq=300, div_dur=8, seed=5)
+{m: ss.search(g, 30, m, **settings).successes for m in (345, 346, 350)}
+"""),
+    md("""
+## Near misses and approximate solutions
+
+The search minimizes the conflict, so every experiment ends with the best subgraph it reached, even when it
+misses the target. `solutions(max_conflict=c)` returns the distinct subgraphs within $c$ edges of the target
+(`--max-conflict c` on the command line), and each one's conflict is exact: it is how far that subgraph's
+edge count is from the target. This turns the search into an approximation algorithm:
+
+- **When a target is out of reach,** the near misses are the closest subgraphs found. No experiment finds 30
+  vertices spanning 350 edges, but several find 349.
+- **To find the densest $k$ vertices,** aim at a target the graph cannot reach, such as all $k(k-1)/2$ edges,
+  and take the best near miss: its edge count is the most the search found. Aiming at 0 edges finds the
+  sparsest $k$ vertices the same way.
+
+The search cannot show that nothing closer exists, so the best near miss is a lower bound on the true
+optimum, not a proof of it.
+"""),
+    code("""
+near = ss.search(g, 30, 350, **settings).solutions(max_conflict=1)
+print("within one edge of 350:", [g.induced_edge_count(vs) for vs in near])
+
+densest = ss.search(g, 30, 30 * 29 // 2, **settings).best   # aim at a 30-clique
+print("aiming at a 30-clique, the densest 30 vertices found span", g.induced_edge_count(densest.vertices), "edges")
+"""),
+    md("""
+## Fixed vertices and neighborhoods
+
+`fixed=` names vertices the subgraph must contain, here cliques through the vertex of highest degree. A
+clique through a vertex also lies in its neighborhood, so searching the subgraph induced on the neighborhood
+for one vertex fewer finds the same cliques, with a smaller graph to search.
+"""),
+    code("""
+v = int(g.degrees().argmax())
+through_v = ss.search(g, 11, 55, fixed=[v])
+
+nbrs = g.common_neighborhood([v])
+in_nbhd = ss.search(g.induced(nbrs), 10, 45)
+cliques_via_nbhd = [sorted([v, *(int(nbrs[i]) for i in vs)]) for vs in in_nbhd.solutions()]
+
+print(f"vertex {v} has {len(nbrs)} neighbors")
+print("with fixed=[v]:", through_v.successes, "of 40 experiments found an 11-clique through it")
+print("in its neighborhood:", in_nbhd.successes, "of 40 found one")
+assert all(g.induced_edge_count(c) == 55 for c in cliques_via_nbhd)
+"""),
+    md(f"""
+## Graph structure
+
+`viz.plot_graph_summary` shows three views of a graph: its [degree distribution]({W}Degree_distribution) next to
+that of an Erdős–Rényi graph of the same density, its Laplacian spectrum, and its adjacency matrix with a
+subgraph's vertices moved to the top-left block.
+"""),
+    code("""
+viz.plot_graph_summary(g, highlight=r.best.vertices);
+"""),
+    md(f"""
+The [Laplacian]({W}Laplacian_matrix) of a graph is $L = D - A$, where $D$ is the diagonal matrix of degrees
+and $A$ the adjacency matrix. Its eigenvalues $\\lambda_0 \\le \\lambda_1 \\le \\dots$ are never negative,
+$\\lambda_0$ is always 0, and the number of eigenvalues equal to 0 is the number of connected components. So the
+second-smallest, $\\lambda_1$, called the [algebraic connectivity]({W}Algebraic_connectivity), is positive
+exactly when the graph is connected. It also measures how well connected the graph is. *Fiedler's bound*
+(1973) says that unless the graph is complete, $\\lambda_1 \\le \\kappa$, where $\\kappa$ is the
+[vertex connectivity]({W}Connectivity_(graph_theory)), the fewest vertices whose removal disconnects the graph.
+So removing fewer than $\\lambda_1$ vertices can never disconnect it.
+
+The middle panel is a histogram of all 100 eigenvalues. The lone bar at 0 is $\\lambda_0$, and the red line
+marks $\\lambda_1$, far from 0, so this graph is connected and hard to break apart. The vertex connectivity
+can never exceed the smallest degree, since removing a vertex's neighbors cuts it off, so $\\kappa$ lies
+between $\\lambda_1$ and the smallest degree. Here that means between 46 and 48, and computing it gives 48. Two separate 4-cycles, by contrast, have two zero eigenvalues and $\\lambda_1 = 0$:
+"""),
+    code("""
+import networkx as nx
+from subgraphsearch import convert
+
+fiedler = viz.spectral_summary(g)["algebraic_connectivity"]
+kappa = nx.node_connectivity(convert.to_networkx(g))
+print(f"Fiedler's bound: algebraic connectivity {fiedler:.1f} <= vertex connectivity {kappa} "
+      f"<= smallest degree {g.degrees().min()}")
+
+two_cycles = ss.Graph(8, [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4)])
+for name, h in [("g", g), ("two 4-cycles", two_cycles)]:
+    eigenvalues = viz.laplacian_spectrum(h)
+    print(f"{name}: {sum(abs(eigenvalues) < 1e-9)} zero eigenvalue(s), algebraic connectivity "
+          f"{viz.spectral_summary(h)['algebraic_connectivity']:.1f}")
+"""),
+    md(f"""
+Despite its name, the `"power"` model has no heavy tail, so its graphs are not
+[scale-free]({W}Scale-free_network); the comparison makes that plain:
+"""),
+    code("""
+viz.plot_degree_distribution(ss.generate("power", 1500, 0.2, seed=52));
+"""),
+    md("""
+## Interactive view
+
+`viz.show` displays a self-contained page: drag to pan, scroll to zoom, hover or click vertices, and pick a
+solution to highlight. `viz.save_html` writes the same page to a file.
+"""),
+    code("""
+viz.show(ss.search(g, 30, 330, experiments=8, seed=2), max_conflict=0)
+"""),
+    md("""
+## Tuning
+
+`ss.sweep` runs one search per value of a setting, and `viz.plot_sweep` compares them. Here the setting is
+`div_dur`, the number of random moves at the start of every `div_freq` moves.
+"""),
+    code("""
+sweep = ss.sweep(g, 30, 340, "div_dur", [0, 4, 16, 64], experiments=40, max_moves=1500, div_freq=300)
+viz.plot_sweep(sweep, parameter="div_dur");
+"""),
+    md("""
+Aspiration is worth comparing the same way. On the hard 346-edge target from earlier it raises the number of
+successes; on many targets it makes little difference.
+"""),
+    code("""
+for aspiration in (False, True):
+    res = ss.search(g, 30, 346, aspiration=aspiration, **settings)
+    print(f"aspiration={aspiration}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
+"""),
+    md("""
+## Weighted graphs
+
+In a `WeightedGraph` every edge has an integer weight, and the target is the total weight of the subgraph's
+edges. This graph has 200 vertices and a mean weight of 0.65 per pair of vertices; the search looks for 15
+vertices whose edges weigh 140 in total.
+"""),
+    code("""
+w = ss.generate_weighted(200, 0.65, seed=1)
+ss.search(w, 15, 140, experiments=40, max_moves=3000, div_freq=300, div_dur=10)
+"""),
+    md(f"""
+## Regular subgraphs and switching
+
+`degree=` asks for subgraphs in which every vertex has exactly that many neighbors within the subgraph. A
+graph is [strongly regular]({W}Strongly_regular_graph) with parameters $(n, k, \\lambda, \\mu)$ when it has $n$
+vertices, is $k$-regular, every two adjacent vertices have exactly $\\lambda$ common neighbors, and every two
+non-adjacent vertices exactly $\\mu$. The [Paley graph]({W}Paley_graph) on 61 vertices is one; here are
+4-regular subgraphs on 10 of its vertices. The conflict is the total deviation from regularity,
+$\\sum_{{v \\in S}} \\lvert d_S(v) - d \\rvert$, which is 0 exactly when every chosen vertex has $d$
+neighbors among the others.
+"""),
+    code("""
+q = 61
+squares = {x * x % q for x in range(1, q)}
+paley = ss.Graph(q, [(i, j) for i in range(q) for j in range(i + 1, q) if (j - i) % q in squares])
+reg = ss.search(paley, 10, degree=4, experiments=40, max_moves=2000, div_freq=300, div_dur=8)
+print("degrees within the subgraph:", set(paley.induced(reg.best.vertices).degrees().tolist()))
+reg
+"""),
+    md("""
+A $d$-regular subgraph on $k$ vertices has exactly $kd/2$ edges. With `two_phase=True` the search first finds
+$k$ vertices with that many edges, then makes them regular using only swaps that keep the edge count. Those
+swaps are cheaper to evaluate, so although each experiment succeeds less often on hard targets, two phases
+usually find solutions faster. Compare the time per success on a harder target, 8-regular subgraphs on 20
+vertices (with `fixed=`, use `degree=` alone: the two-phase edge target then counts only the non-fixed
+vertices, so it rarely succeeds):
+"""),
+    code("""
+import time
+
+for two_phase in (False, True):
+    start = time.perf_counter()
+    res = ss.search(paley, 20, degree=8, two_phase=two_phase, experiments=100, max_moves=2000, div_freq=300, div_dur=8, seed=3)
+    elapsed = time.perf_counter() - start
+    print(f"two_phase={two_phase}: {res.successes}/100 successes, {1000 * elapsed / max(res.successes, 1):.1f} ms per success")
+"""),
+    md(f"""
+[Seidel switching]({W}Two-graph#Switching_and_graphs) with respect to a vertex set $S$ swaps edges and
+non-edges between $S$ and the rest of the graph. Switching a strongly regular graph with respect to a
+suitable regular subgraph can give a different strongly regular graph with the same parameters. The 4×4
+[rook's graph]({W}Rook%27s_graph), with parameters $(16, 6, 2, 2)$, switched with respect to a 2-regular
+subgraph on 8 vertices gives the [Shrikhande graph]({W}Shrikhande_graph), the only other graph with those
+parameters.
+"""),
+    code("""
+def srg_parameters(h):
+    \"\"\"(n, k, λ, μ) if h is strongly regular, else None.\"\"\"
+    A = h.adjacency_matrix().astype(int)
+    common, n = A @ A, len(A)
+    degrees = set(A.sum(axis=1).tolist())
+    lam = {int(common[i, j]) for i in range(n) for j in range(i + 1, n) if A[i, j]}
+    mu = {int(common[i, j]) for i in range(n) for j in range(i + 1, n) if not A[i, j]}
+    return (n, *degrees, *lam, *mu) if len(degrees) == len(lam) == len(mu) == 1 else None
+
+
+rook = ss.Graph(16, [(a, b) for a in range(16) for b in range(a + 1, 16) if a // 4 == b // 4 or a % 4 == b % 4])
+two_regular = ss.search(rook, 8, degree=2).best.vertices
+switched = rook.switch(two_regular)
+print("rook's graph:", srg_parameters(rook), "| switched:", srg_parameters(switched))
+print("isomorphic:", nx.is_isomorphic(convert.to_networkx(rook), convert.to_networkx(switched)))
+"""),
+    md("""
+## Formats and other libraries
+
+Graphs read and write graph6, sparse6, Matrix Market, edge lists, DOT and GraphML, and convert to and
+from networkx, igraph, SciPy and NumPy.
+"""),
+    code("""
+import pathlib
+import tempfile
+
+path = pathlib.Path(tempfile.mkdtemp()) / "g.g6"
+g.write(path)
+assert ss.read(path) == g
+print(convert.to_networkx(g), "|", repr(convert.to_scipy(g)))
+print("formats:", ss.formats())
+"""),
 ]
 nb = nbformat.v4.new_notebook(cells=cells, metadata={"kernelspec": {"name": "python3", "display_name": "Python 3 (ipykernel)", "language": "python"}})
 # the packaged copy has no outputs: about 12 KB instead of over a megabyte of embedded images, and

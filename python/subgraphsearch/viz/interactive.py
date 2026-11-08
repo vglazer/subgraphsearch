@@ -128,7 +128,8 @@ const DATA = __DATA__;
   }
 
   const css = () => getComputedStyle(document.documentElement);
-  let view = {x: 0, y: 0, k: 1}, size = {w: 1, h: 1}, hover = -1, pin = -1;
+  // `moved`: the reader has panned or zoomed, so a resize keeps their view instead of re-fitting
+  let view = {x: 0, y: 0, k: 1}, size = {w: 1, h: 1}, hover = -1, pin = -1, moved = false;
   function fit() {
     const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     size = {w: r.width, h: r.height};
@@ -241,7 +242,7 @@ const DATA = __DATA__;
     if (drag) {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
-      view.x = drag.vx + dx; view.y = drag.vy + dy; tip.style.display = "none"; draw(); return;
+      view.x = drag.vx + dx; view.y = drag.vy + dy; moved = drag.moved || moved; tip.style.display = "none"; draw(); return;
     }
     const h = nearest(mx, my);
     if (h !== hover) { hover = h; draw(); }
@@ -264,19 +265,23 @@ const DATA = __DATA__;
     e.preventDefault();
     const r = canvas.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
     const f = Math.exp(-e.deltaY * 0.0015);
-    view.x = mx - (mx - view.x) * f; view.y = my - (my - view.y) * f; view.k *= f; draw();
+    view.x = mx - (mx - view.x) * f; view.y = my - (my - view.y) * f; view.k *= f; moved = true; draw();
   }, {passive: false});
-  document.getElementById("reset").addEventListener("click", () => { home(); draw(); });
+  document.getElementById("reset").addEventListener("click", () => { moved = false; home(); draw(); });
   document.getElementById("find").addEventListener("change", e => {
     const v = Number(e.target.value);
     if (Number.isInteger(v) && v >= 0 && v < n) {
       pin = v; showPin();
-      view.x = size.w / 2 - pos[2 * v] * view.k; view.y = size.h / 2 - pos[2 * v + 1] * view.k; draw();
+      view.x = size.w / 2 - pos[2 * v] * view.k; view.y = size.h / 2 - pos[2 * v + 1] * view.k; moved = true; draw();
     }
   });
   sel.addEventListener("change", setSolution);
   dim.addEventListener("change", draw);
-  window.addEventListener("resize", () => { fit(); draw(); });
+  // In a notebook the page often runs before its frame is laid out, when the canvas has no size yet,
+  // so re-fit whenever the canvas changes size (not only on window resizes)
+  function refit() { fit(); if (!moved) home(); draw(); }
+  if (window.ResizeObserver) new ResizeObserver(refit).observe(canvas);
+  window.addEventListener("resize", refit);
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
   fit(); home(); setSolution();
 })();

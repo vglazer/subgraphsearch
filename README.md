@@ -219,10 +219,10 @@ Each experiment reports the best conflict it reached and the moves it needed:
   regular subgraphs about 1.5 to 3.5 times faster than `--degree` alone. With `--fixed`, it
   computes the edge target from the non-fixed vertices only, so it rarely succeeds; use
   `--degree` alone there.
-- **Aspiration** (`--aspiration`): the tabu search's *aspiration criterion*, which lifts the tabu
-  on a move that would beat the best conflict so far. After each move it also considers the swaps
-  involving the two vertices just swapped, and takes one of them whenever it would. It can help a
-  search that stalls, but usually makes little difference.
+- **Aspiration** (`--aspiration`, edge-count and weight searches only): the tabu search's
+  *aspiration criterion*, which lifts the tabu on a move that would beat the best conflict so far.
+  After each move it also considers the swaps involving the two vertices just swapped, and takes one
+  of them whenever it would. It can help a search that stalls, but usually makes little difference.
 
 ### Random graphs and operations
 
