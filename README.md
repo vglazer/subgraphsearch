@@ -343,13 +343,13 @@ maximum, determine the time.
 
 | Search | Settings | Moves made | Time | Successes |
 | --- | --- | --- | --- | --- |
-| 11-cliques in a random graph on 100 vertices, density 0.6 | 40 × 250 (defaults) | 1,652 | 0.4 ms | 40 of 40 |
-| 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 81,539 | 14 ms | 21 of 60 |
-| 13-cliques in a random graph on 1,000 vertices, density 0.5 | 200 × 2000 | 12,042 | 12 ms | 200 of 200 |
-| 14-cliques in the same graph | 200 × 2000 | 134,267 | 135 ms | 182 of 200 |
-| 15-cliques in the same graph | 200 × 2000 | 396,104 | 394 ms | 4 of 200 |
-| 8-regular subgraphs on 20 vertices of the [Paley graph](https://en.wikipedia.org/wiki/Paley_graph) on 61 vertices | 100 × 2000, two phases | 183,319 | 49 ms | 11 of 100 |
-| 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 634 | 1 ms | 40 of 40 |
+| 11-cliques in a random graph on 100 vertices, density 0.6 | 40 × 250 (defaults) | 1,652 | 0.4&nbsp;ms | 40 of 40 |
+| 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 81,539 | 14&nbsp;ms | 21 of 60 |
+| 13-cliques in a random graph on 1,000 vertices, density 0.5 | 200 × 2000 | 12,042 | 12&nbsp;ms | 200 of 200 |
+| 14-cliques in the same graph | 200 × 2000 | 134,267 | 135&nbsp;ms | 182 of 200 |
+| 15-cliques in the same graph | 200 × 2000 | 396,104 | 394&nbsp;ms | 4 of 200 |
+| 8-regular subgraphs on 20 vertices of the [Paley graph](https://en.wikipedia.org/wiki/Paley_graph) on 61 vertices | 100 × 2000, two phases | 183,319 | 49&nbsp;ms | 11 of 100 |
+| 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 634 | 1&nbsp;ms | 40 of 40 |
 
 A search that misses its target makes every move it is allowed, so its time is the cost of a move
 times the number of moves. The cost of a move grows in proportion to the number of vertices, and a
@@ -359,9 +359,9 @@ Here are 40 × 250 = 10,000 moves looking for 30 vertices in random graphs of de
 
 | Graph | All 16 cores | One thread |
 | --- | --- | --- |
-| 100 vertices | 1.7 ms | 20 ms |
-| 1,000 vertices | 19 ms | 230 ms |
-| 10,000 vertices (25 million edges) | 210 ms | 2.4 s |
+| 100 vertices | 1.7&nbsp;ms | 20&nbsp;ms |
+| 1,000 vertices | 19&nbsp;ms | 230&nbsp;ms |
+| 10,000 vertices (25 million edges) | 210&nbsp;ms | 2.4&nbsp;s |
 
 On 1,000 vertices, the same 10,000 moves take 14 ms for 20-vertex subgraphs and 61 ms for 100-vertex
 subgraphs. Experiments run in parallel, so on 16 cores a search is 11 to 12 times faster than on
