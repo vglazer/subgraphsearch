@@ -210,9 +210,10 @@ def search(
 
     Each of ``experiments`` independent runs starts from random vertices (always including
     ``fixed``) and makes up to ``max_moves`` swaps of one subgraph vertex for one outside vertex,
-    minimizing ``|edges in subgraph - edges|``. Locally optimal swaps are chosen from a
-    restricted neighborhood; the first ``div_dur`` of every ``div_freq`` moves are random
-    ("diversification"). With ``rng="xoshiro"`` (default) experiments run in parallel and depend
+    minimizing ``|edges in subgraph - edges|``. It is a tabu search: locally optimal swaps are
+    chosen from a restricted neighborhood, and the two vertices just swapped are tabu (cannot be
+    swapped straight back) for one move. The first ``div_dur`` of every ``div_freq`` moves are
+    random ("diversification"). With ``rng="xoshiro"`` (default) experiments run in parallel and depend
     only on ``seed``; ``rng="legacy"`` reproduces the original ``sub_search`` exactly.
 
     Set ``trace=True`` to record the objective after every move, for :mod:`subgraphsearch.viz`.
@@ -221,9 +222,9 @@ def search(
     (the original ``reg_search``); add ``two_phase=True`` to first find the right number of edges and
     then make the subgraph regular (``ereg_search``). Regular searches need an unweighted graph.
 
-    ``aspiration=True`` adds the limited aspiration of the original ``asub_search``: swaps involving
-    the two vertices just swapped, which the restricted search otherwise excludes, are taken
-    whenever they would beat the best value found so far.
+    ``aspiration=True`` adds the aspiration criterion of the original ``asub_search``: tabu swaps,
+    those involving the two vertices just swapped, are taken whenever they would beat the best
+    value found so far.
     """
     if (edges is None) == (degree is None):
         raise ValueError("give exactly one of edges (an edge count or total weight) and degree (for a regular subgraph)")

@@ -12,7 +12,7 @@ md, code = nbformat.v4.new_markdown_cell, nbformat.v4.new_code_cell
 cells = [
     md("# subgraphsearch quickstart\n\n"
        "`subgraphsearch` finds **induced subgraphs with a given number of vertices and edges** (cliques, independent sets "
-       "and everything in between), regular subgraphs, and subgraphs of a given total weight, by a fast randomized local "
+       "and everything in between), regular subgraphs, and subgraphs of a given total weight, by a fast randomized tabu "
        "search. This notebook walks through generating graphs, searching them, reading the results, and the visualizations."),
     code("import subgraphsearch as ss\nfrom subgraphsearch import viz\n\nss.__version__"),
     md("## Graphs\n\nGenerate one of `ggen`'s random models, or read graph6, sparse6, Matrix Market, edge lists or `sub_search` adjacency lists. "

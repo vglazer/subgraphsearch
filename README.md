@@ -110,10 +110,11 @@ subgraphsearch search many.g6 --all -k 10 -m 30 -q                # every graph 
 subgraphsearch info g.g6                                          # statistics
 subgraphsearch convert g.g6 g.dot --highlight 3,17,42             # draw a subgraph with Graphviz
 subgraphsearch op complement g.g6 gc.g6                           # complements, induced subgraphs, ...
+
+subgraphsearch search g.g6 -k 11 -m 55 --json result.json         # save the full results
+python -m subgraphsearch explore g.g6 --result result.json        # explore them in an interactive page
 ```
 
-`--json result.json` saves the full results, which
-`python -m subgraphsearch explore g.g6 --result result.json` turns into an interactive page.
 `subgraphsearch search` exits with status 2 when nothing is found.
 
 | Option | Meaning | Default |
@@ -130,9 +131,16 @@ subgraphsearch op complement g.g6 gc.g6                           # complements,
 
 ## How the search works
 
+The subgraph *induced* by a set of vertices consists of those vertices and every edge of the graph
+between them, so choosing the vertices determines the edges. A *clique* is a set of vertices that
+are all adjacent, an *independent set* one with no edges at all, and a graph is *`d`-regular* when
+every vertex has exactly `d` neighbors.
+
 Finding a `k`-vertex induced subgraph with exactly `m` edges is NP-hard (it includes finding
-cliques), so `subgraphsearch` uses a randomized local search. It cannot prove that no solution
-exists, but in practice it finds solutions quickly when they are not too rare.
+cliques), so `subgraphsearch` uses a randomized local search, specifically a *tabu search*: a
+local search that forbids undoing recent moves for a while, so that it keeps exploring instead of
+cycling. It cannot prove that no solution exists, but in practice it finds solutions quickly when
+they are not too rare.
 
 ### Moves
 
@@ -149,8 +157,10 @@ Two refinements make this fast and effective:
   other swap has the same value it had before the move, so the search concentrates on the swaps
   the move changed. This improves results as well as speed, and on large dense graphs
   it skips most of the work.
-- **No immediate reversal.** The two vertices just swapped are never swapped straight back, which
-  stops the search cycling between the same two subgraphs.
+- **Tabu moves.** The two vertices just swapped are *tabu* for the next move: the vertex just
+  added cannot be removed and the vertex just removed cannot be added back. Without this the
+  search would often cycle between the same two subgraphs. Moves stay tabu for a single step,
+  the shortest possible *tabu tenure*.
 
 ### Diversification and restarts
 
@@ -180,17 +190,25 @@ Each experiment reports the best conflict it reached and the moves it needed:
 - **Regular subgraphs** (`--degree d`): the conflict becomes the total deviation from regularity,
   the sum of `|d(v) - d|` over the subgraph. Each vertex's neighbor list is kept partitioned,
   subgraph neighbors first, so that swaps stay cheap to evaluate. The intended use is finding
-  regular subgraphs of strongly regular graphs: switching a strongly regular graph with respect to
-  such a subgraph can produce a new, larger strongly regular graph. It can find cliques and
-  independent sets too, but the plain search does that much faster.
+  regular subgraphs of strongly regular graphs. A graph is *strongly regular* with parameters
+  `(n, k, λ, μ)` when it has `n` vertices, is `k`-regular, every two adjacent vertices have
+  exactly `λ` common neighbors, and every two non-adjacent vertices exactly `μ`; the 5-cycle,
+  the Petersen graph and the Paley graphs are examples. *Seidel switching* a graph with respect to
+  a vertex set `S` swaps edges and non-edges between `S` and the rest of the graph, leaving edges
+  within `S` and within the rest unchanged. Switching a strongly regular graph with respect to a
+  suitable regular subgraph can give another strongly regular graph with the same parameters,
+  sometimes one not isomorphic to the original: switching the 4×4 rook's graph, `(16, 6, 2, 2)`,
+  with respect to a 2-regular subgraph on 8 vertices gives the Shrikhande graph. The search can
+  find cliques and independent sets too, but the plain search does that much faster.
 - **Two phases** (`--degree d --two-phase`): first find a subgraph with the right number of edges
   (`k d / 2`), then make it regular using only swaps that keep the edge count. It usually finds
   regular subgraphs about 1.5 to 3.5 times faster than `--degree` alone. With `--fixed`, it
   computes the edge target from the non-fixed vertices only, as the original program did, so it
   rarely succeeds; use `--degree` alone there.
-- **Aspiration** (`--aspiration`): after each move, also consider swaps involving the two vertices
-  just swapped, which are normally excluded, and take one whenever it would beat the best conflict
-  so far. It can help a search that stalls, but usually makes little difference.
+- **Aspiration** (`--aspiration`): the tabu search's *aspiration criterion*, which lifts the tabu
+  on a move that would beat the best conflict so far. After each move it also considers the swaps
+  involving the two vertices just swapped, and takes one of them whenever it would. It can help a
+  search that stalls, but usually makes little difference.
 
 ### Random graphs and operations
 
@@ -209,8 +227,9 @@ Each experiment reports the best conflict it reached and the moves it needed:
 Graph operations help focus a search. Searching the complement is equivalent, since `k` vertices
 with `m` edges become `k` vertices with `k (k - 1) / 2 - m`, and for a dense graph the complement
 is sparse and cheaper to work with. Inducing a subgraph on the common neighborhood of some
-vertices restricts the search to vertices adjacent to all of them, and `switch` performs the
-Seidel switching used with regular subgraphs.
+vertices restricts the search to vertices adjacent to all of them, and `switch` performs Seidel
+switching (see [Variants](#variants)) with respect to a vertex set, such as a regular subgraph
+found by the search.
 
 To re-run experiments from the original programs, `subgraphsearch legacy` accepts their input and
 reproduces their output exactly, and `--rng legacy` reproduces their results through the

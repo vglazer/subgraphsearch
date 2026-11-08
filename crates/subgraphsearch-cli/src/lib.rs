@@ -189,8 +189,8 @@ struct SearchArgs {
     /// Print nothing but the summary.
     #[arg(short, long)]
     quiet: bool,
-    /// Limited aspiration (the original asub_search): also take swaps involving the two vertices just
-    /// swapped when they would beat the best value so far.
+    /// Aspiration criterion (the original asub_search): lift the tabu on swaps involving the two
+    /// vertices just swapped when they would beat the best value so far.
     #[arg(long)]
     aspiration: bool,
     /// Search every graph in a multi-graph file (graph6 or sparse6), one after another.

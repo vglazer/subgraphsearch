@@ -4,13 +4,13 @@ build-backend = "maturin"
 
 [project]
 name = "subgraphsearch"
-description = "Find induced subgraphs with a given number of vertices and edges, or regular ones, by fast randomized local search; with graph generators, standard formats and visualization"
+description = "Find induced subgraphs with a given number of vertices and edges, or regular ones, by fast randomized tabu search; with graph generators, standard formats and visualization"
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Victor Glazer" }]
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24"]
-keywords = ["graph", "induced subgraph", "local search", "clique", "regular subgraph", "combinatorics"]
+keywords = ["graph", "induced subgraph", "tabu search", "local search", "clique", "regular subgraph", "combinatorics"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

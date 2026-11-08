@@ -1,6 +1,6 @@
 [package]
 name = "subgraphsearch-core"
-description = "Randomized local search for induced subgraphs with a given number of vertices and edges, or regular ones, plus graph generators and formats"
+description = "Randomized tabu search for induced subgraphs with a given number of vertices and edges, or regular ones, plus graph generators and formats"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,8 +1,8 @@
 //! # subgraphsearch
 //!
-//! Randomized restricted local search for vertex-induced subgraphs with a prescribed number of
-//! edges, ported from the original `sub_search` program, together with the graph generators and
-//! operations of its companion `ggen`, and readers and writers for standard graph formats.
+//! Randomized tabu search for vertex-induced subgraphs with a given number of vertices and
+//! edges, regular ones, or ones of a given total weight, together with random graph generators,
+//! graph operations, and readers and writers for standard graph formats.
 //!
 //! ```
 //! use subgraphsearch_core::{Graph, SearchParams, search};

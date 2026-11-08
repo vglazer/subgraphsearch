@@ -1,4 +1,4 @@
-//! Randomized restricted local search for vertex-induced subgraphs with a prescribed edge count.
+//! Randomized tabu search for vertex-induced subgraphs with a prescribed edge count.
 //!
 //! This is a faithful port of the original `sub_search.c`. Each *experiment* starts from
 //! a random set of `size` vertices (always including any fixed vertices) and makes up to
@@ -8,13 +8,15 @@
 //! - Normally a move is chosen at random among the best swaps in a *restricted* neighborhood:
 //!   when the edge count did not change on the last move, only rows for vertices adjacent to
 //!   exactly one of the two vertices just swapped get a full scan; the rest only look at such
-//!   columns. The two vertices just swapped are never swapped straight back.
+//!   columns.
+//! - The two vertices just swapped are *tabu* for one move (a tabu tenure of 1): the vertex just
+//!   added cannot be removed and the vertex just removed cannot be added back.
 //! - For the first `div_dur` moves of every `div_freq` (and whenever no optimal move is known),
 //!   a uniformly random swap is made instead ("diversification").
 //!
-//! - With [`SearchParams::aspiration`] (the original `asub_search`), the swaps involving the two
-//!   vertices just swapped are also examined after each move, and one is taken whenever it would
-//!   beat the best value so far.
+//! - With [`SearchParams::aspiration`] (the original `asub_search`), an *aspiration criterion*
+//!   lifts the tabu: the swaps involving the two vertices just swapped are also examined after
+//!   each move, and one is taken whenever it would beat the best value so far.
 //!
 //! With [`RngKind::Legacy`] the search consumes random numbers exactly as the C programs do, so
 //! the same seed gives the same experiments, move for move (see [`search_sequential`]).
@@ -149,9 +151,9 @@ pub struct SearchParams {
     /// Record the objective value after every move (memory: experiments x moves).
     #[serde(default)]
     pub record_trace: bool,
-    /// Limited aspiration, as in the original `asub_search`: after each move, also consider the
-    /// swaps involving the two vertices just swapped (which the restricted search otherwise
-    /// excludes), and take one of them whenever it would beat the best value so far.
+    /// An aspiration criterion, as in the original `asub_search`: after each move, also consider
+    /// the swaps involving the two vertices just swapped (which are otherwise tabu), and take one
+    /// of them whenever it would beat the best value so far.
     #[serde(default)]
     pub aspiration: bool,
     /// Search for regular induced subgraphs instead (the original `reg_search` and `ereg_search`); the

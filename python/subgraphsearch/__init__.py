@@ -1,7 +1,7 @@
 """subgraphsearch: find induced subgraphs with a given number of vertices and edges.
 
 Cliques, independent sets and everything in between, regular subgraphs, and subgraphs of a given
-total weight, by a fast randomized local search; with random graph generators, graph operations,
+total weight, by a fast randomized tabu search; with random graph generators, graph operations,
 standard formats, conversions to networkx / igraph / SciPy, and visualization.
 
 >>> import subgraphsearch as ss
