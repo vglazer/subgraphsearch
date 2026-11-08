@@ -5,22 +5,15 @@
 [![crates.io](https://img.shields.io/crates/v/subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of
-vertices and edges**: [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)),
-[independent sets](https://en.wikipedia.org/wiki/Independent_set_(graph_theory)) and everything in
-between. It can also find [regular](https://en.wikipedia.org/wiki/Regular_graph) subgraphs of a
-given degree, and subgraphs of a given total weight in weighted graphs. 
+vertices and edges**: cliques, independent sets and everything in
+between. Searches are
+[fast](#performance), reproducible from a seed and come with diagnostics for tuning them. Many [graph formats](#graph-formats) are supported.
 
-Graphs can be built from
-[block designs](https://en.wikipedia.org/wiki/Block_design) and other incidence structures, as well as
-[switched](https://en.wikipedia.org/wiki/Two-graph#Switching_and_graphs) with respect to the
-subgraphs a search finds. This produces other
-[strongly regular graphs](https://en.wikipedia.org/wiki/Strongly_regular_graph) with the same
-parameters, such as all three [Chang graphs](https://en.wikipedia.org/wiki/Chang_graphs) from the
-triangular graph T(8).
+A search can be required to fix particular vertices. It can also find regular subgraphs with a prescribed degree and subgraphs with a given total weight in weighted graphs. Graphs can be built from block designs and other incidence structures, as well as switched with respect to the subgraphs a search finds. Near misses are reported in addition to exact solutions, enabling use as an approximation algorithm.
 
-A search can be required to include given vertices or confined to the
-neighborhood of chosen vertices, and reports near misses as well as exact solutions. Searches are
-[fast](#performance), reproducible from a seed, and come with diagnostics for tuning them.
+See the
+[quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+for a complete tour.
 
 ![Searches drawn with viz.plot_graph: an induced 12-cycle (a 2-regular subgraph) in a random graph; a dense 10-vertex, 32-edge subgraph found within the neighborhood of a fixed vertex of a random geometric graph; and one graph three times, with 6 vertices spanning 0 edges (an independent set), 7 edges, and all 15 (a clique)](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
 
@@ -75,9 +68,7 @@ viz.plot_graph_summary(g, highlight=r.best.vertices)  # degrees, spectrum, adjac
 viz.save_html("result.html", r)                       # interactive viewer; viz.show(r) in Jupyter
 ```
 
-In Jupyter, graphs and results display as summaries with small charts. The
-[quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
-is a full tour.
+In Jupyter, graphs and results display as summaries with small charts.
 
 - **What to search for:** `edges=` (an exact edge count), `degree=` (a regular subgraph), or a
   total weight in a `WeightedGraph`. `fixed=` names vertices the subgraph must contain, and
