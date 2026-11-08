@@ -385,12 +385,7 @@ values. Formats without weights read as weight 1, and writing a weighted graph t
 
 ## Development
 
-```sh
-cargo test --release                              # Rust tests
-uv run pytest                                     # Python tests (build the CLI first)
-uv run python examples/make_quickstart.py         # rebuild the quickstart notebooks
-uv run python examples/make_figures.py            # redraw the README figures
-```
+See [DEVELOPMENT.md](DEVELOPMENT.md) for setting up, testing, the scripts and releasing.
 
 ## License
 
