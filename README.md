@@ -335,17 +335,19 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
 ## Performance
 
 Wall-clock times on an Apple M3 Max laptop with 16 cores, using all of them, for searches started
-from Python (the command runs the same engine). Settings are given as experiments × moves.
+from Python (the command runs the same engine). Settings are given as experiments × maximum moves
+per experiment. An experiment stops at its first solution, so the moves actually made, not the
+maximum, determine the time.
 
-| Search | Settings | Time | Successes |
-| --- | --- | --- | --- |
-| 11-cliques in a random graph on 100 vertices, density 0.6 | 40 × 250 (defaults) | 0.3 ms | 40 of 40 |
-| 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 14 ms | 21 of 60 |
-| 13-cliques in a random graph on 1,000 vertices, density 0.5 | 200 × 2000 | 13 ms | 200 of 200 |
-| 14-cliques in the same graph | 200 × 2000 | 130 ms | 182 of 200 |
-| 15-cliques in the same graph | 200 × 2000 | 400 ms | 4 of 200 |
-| 8-regular subgraphs on 20 vertices of the [Paley graph](https://en.wikipedia.org/wiki/Paley_graph) on 61 vertices | 100 × 2000, two phases | 49 ms | 11 of 100 |
-| 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 1 ms | 40 of 40 |
+| Search | Settings | Moves made | Time | Successes |
+| --- | --- | --- | --- | --- |
+| 11-cliques in a random graph on 100 vertices, density 0.6 | 40 × 250 (defaults) | 1,652 | 0.4 ms | 40 of 40 |
+| 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 81,539 | 14 ms | 21 of 60 |
+| 13-cliques in a random graph on 1,000 vertices, density 0.5 | 200 × 2000 | 12,042 | 12 ms | 200 of 200 |
+| 14-cliques in the same graph | 200 × 2000 | 134,267 | 135 ms | 182 of 200 |
+| 15-cliques in the same graph | 200 × 2000 | 396,104 | 394 ms | 4 of 200 |
+| 8-regular subgraphs on 20 vertices of the [Paley graph](https://en.wikipedia.org/wiki/Paley_graph) on 61 vertices | 100 × 2000, two phases | 183,319 | 49 ms | 11 of 100 |
+| 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 634 | 1 ms | 40 of 40 |
 
 A search that misses its target makes every move it is allowed, so its time is the cost of a move
 times the number of moves. The cost of a move grows in proportion to the number of vertices, and a
