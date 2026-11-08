@@ -137,7 +137,7 @@ def plot_adjacency(graph: Graph, highlight: Iterable[int] = (), ax=None, order: 
     a = graph.adjacency_matrix(dtype=np.int8)[np.ix_(perm, perm)].astype(float)
     k = len(h)
     if k:
-        a[:k, :k] *= 2  # subgraph edges get their own colour
+        a[:k, :k] *= 2  # subgraph edges get their own color
     ax.imshow(a, cmap=ListedColormap(["#ffffff", NEUTRAL, ACCENT]), vmin=0, vmax=2, interpolation="nearest")
     if k:
         for pos in (k - 0.5,):

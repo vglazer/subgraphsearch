@@ -1,4 +1,4 @@
-//! Force-directed graph layout (Fruchterman–Reingold), for visualisation.
+//! Force-directed graph layout (Fruchterman–Reingold), for visualization.
 //!
 //! Repulsion is computed exactly between all pairs (in parallel), which is fast enough for a few
 //! thousand vertices; that is also about as many as a drawing can usefully show.
@@ -57,12 +57,12 @@ pub fn spring(graph: &Graph, iterations: usize, seed: u64) -> Vec<(f64, f64)> {
         }
         temperature -= cooling;
     }
-    normalise(&mut pos);
+    normalize(&mut pos);
     pos
 }
 
 /// Scales positions into the unit square, preserving the aspect ratio.
-fn normalise(pos: &mut [(f64, f64)]) {
+fn normalize(pos: &mut [(f64, f64)]) {
     let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
     for &(x, y) in pos.iter() {
         x0 = x0.min(x);
@@ -83,7 +83,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn neighbours_end_up_closer_than_non_neighbours() {
+    fn neighbors_end_up_closer_than_non_neighbors() {
         // two triangles joined by nothing: within-triangle distances should be small
         let g = Graph::from_edges(6, [(0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5)]).unwrap();
         let p = spring(&g, 200, 1);

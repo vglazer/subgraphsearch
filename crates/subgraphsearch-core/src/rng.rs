@@ -3,7 +3,7 @@
 //! The search and the graph generators only ever need "a uniform integer below `bound`", which
 //! is what [`SearchRng`] provides. Two implementations are available:
 //!
-//! - [`Randu`] reproduces the `RAND` macro shared by all the original USRA C programs bit for
+//! - [`Randu`] reproduces the `RAND` macro shared by all the original C programs bit for
 //!   bit, so that `subgraphsearch` can regenerate their graphs and search runs exactly. It is a
 //!   variant of RANDU (`x <- 65539 x mod 2^31`), which is fast but statistically weak.
 //! - [`Xoshiro`] (xoshiro256++, seeded through SplitMix64) is the default for new work.
@@ -38,7 +38,7 @@ impl std::str::FromStr for RngKind {
     }
 }
 
-/// The USRA programs' generator: `((seed = (seed * 65539) & 0x7fffffff) / 7) % bound`.
+/// The original programs' generator: `((seed = (seed * 65539) & 0x7fffffff) / 7) % bound`.
 ///
 /// The original computes this in a 64-bit `long`; the multiplication wraps here exactly as it
 /// does in practice there.

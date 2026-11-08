@@ -2,9 +2,9 @@
 
 Charts are SVG embedded as ``<img>`` data URIs. Outputs you produce by running a cell are trusted
 and render normally. In an untrusted notebook (one executed elsewhere and not marked with
-``jupyter trust``) JupyterLab's sanitiser drops data-URI images, and an image then degrades to its
+``jupyter trust``) JupyterLab's sanitizer drops data-URI images, and an image then degrades to its
 alt text, which says how to fix it; inline ``<svg>`` would instead degrade to a jumble of its
-labels. An image cannot inherit the notebook's text colour, so charts use a mid grey that reads
+labels. An image cannot inherit the notebook's text color, so charts use a mid gray that reads
 on both light and dark themes."""
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def _svg_img(body: str, width: int, height: int, label: str) -> str:
 
 
 def _bars(title: str, labels: list[str], values: list[int], width: int = 260, height: int = 110) -> str:
-    """A small labelled bar chart."""
+    """A small labeled bar chart."""
     n = max(len(values), 1)
     vmax = max(max(values, default=0), 1)
     bw = width / n

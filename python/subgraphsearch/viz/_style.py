@@ -1,10 +1,10 @@
-"""Shared colours and axes helpers. matplotlib is imported lazily so that ``import subgraphsearch``
+"""Shared colors and axes helpers. matplotlib is imported lazily so that ``import subgraphsearch``
 works without it."""
 
 from __future__ import annotations
 
 ACCENT = "#d6336c"  # the subgraph / successes
-SECONDARY = "#4c6ef5"  # everything else that needs a colour
+SECONDARY = "#4c6ef5"  # everything else that needs a color
 NEUTRAL = "#868e96"
 
 

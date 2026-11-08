@@ -1,4 +1,4 @@
-"""Plots of search behaviour: objective traces, run-time distributions, conflicts, sweeps.
+"""Plots of search behavior: objective traces, run-time distributions, conflicts, sweeps.
 
 All functions take an optional matplotlib ``ax`` and return it, so they compose into figures.
 """

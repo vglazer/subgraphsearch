@@ -1,4 +1,4 @@
-"""Command-line access to the Python-side visualisations.
+"""Command-line access to the Python-side visualizations.
 
     python -m subgraphsearch explore GRAPH [--result RESULT.json] [-o PAGE.html]
     python -m subgraphsearch report GRAPH [--result RESULT.json] [-o FIGURE.png]
@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     explore = sub.add_parser("explore", help="write an interactive HTML page for a graph and search result")
-    report = sub.add_parser("report", help="write a figure summarising a graph and, if given, a search result")
+    report = sub.add_parser("report", help="write a figure summarizing a graph and, if given, a search result")
     for p in (explore, report):
         p.add_argument("graph", type=Path, help="graph file")
         p.add_argument("--format", help="graph format, if not implied by the extension")

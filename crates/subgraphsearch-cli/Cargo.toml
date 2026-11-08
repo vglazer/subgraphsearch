@@ -1,6 +1,6 @@
 [package]
 name = "subgraphsearch"
-description = "Command-line interface for subgraphsearch, including byte-compatible emulation of the original USRA sub_search and ggen programs"
+description = "Find induced subgraphs with a given number of vertices and edges, or regular ones, from the command line; generate, convert and inspect graphs"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,7 +1,7 @@
 //! Simple undirected graphs on vertices `0..n`.
 //!
 //! [`Graph`] stores both a bitset adjacency matrix (O(1) edge queries, `n * n / 8` bytes) and
-//! sorted neighbour lists (fast traversal), mirroring the original C programs, which kept a
+//! sorted neighbor lists (fast traversal), mirroring the original C programs, which kept a
 //! `char` adjacency matrix alongside adjacency lists for the same reasons.
 
 use crate::Error;
@@ -93,7 +93,7 @@ impl GraphBuilder {
         Ok(())
     }
 
-    /// Finishes the graph, computing sorted neighbour lists.
+    /// Finishes the graph, computing sorted neighbor lists.
     pub fn build(self) -> Graph {
         let GraphBuilder {
             n,
@@ -169,7 +169,7 @@ impl Graph {
         &self.bits[u * self.words_per_row..(u + 1) * self.words_per_row]
     }
 
-    /// The neighbours of `u`, in ascending order.
+    /// The neighbors of `u`, in ascending order.
     #[inline]
     pub fn neighbors(&self, u: usize) -> &[u32] {
         &self.neighbors[u]
@@ -253,8 +253,8 @@ impl Graph {
 }
 
 /// An undirected graph whose edges carry small positive integer weights (1 to 255), as used by
-/// USRA's `wsub_search` and `wggen`. Weights live in an `n x n` byte matrix (O(1) lookup, `n * n`
-/// bytes) alongside sorted neighbour lists.
+/// the original `wsub_search` and `wggen`. Weights live in an `n x n` byte matrix (O(1) lookup, `n * n`
+/// bytes) alongside sorted neighbor lists.
 #[derive(Clone, PartialEq, Eq)]
 pub struct WeightedGraph {
     n: usize,
@@ -360,7 +360,7 @@ impl WeightedGraph {
         &self.weights[u * self.n..(u + 1) * self.n]
     }
 
-    /// The neighbours of `u`, in ascending order.
+    /// The neighbors of `u`, in ascending order.
     #[inline]
     pub fn neighbors(&self, u: usize) -> &[u32] {
         &self.neighbors[u]
@@ -401,7 +401,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn builds_sorted_symmetric_neighbour_lists() {
+    fn builds_sorted_symmetric_neighbor_lists() {
         let g = Graph::from_edges(70, [(3, 1), (1, 65), (1, 3), (0, 69)]).unwrap();
         assert_eq!(g.num_edges(), 3);
         assert_eq!(g.neighbors(1), &[3, 65]);

@@ -21,7 +21,7 @@ class Graph:
     """An immutable simple undirected graph on vertices ``0 .. n-1``.
 
     Build one from an edge list, read it from a file (graph6, sparse6, Matrix Market, edge list
-    or USRA adjacency lists), generate it with :func:`subgraphsearch.generate`, or convert it from
+    or ``sub_search`` adjacency lists), generate it with :func:`subgraphsearch.generate`, or convert it from
     networkx, igraph or SciPy with :mod:`subgraphsearch.convert`.
 
     >>> g = Graph(4, [(0, 1), (1, 2), (2, 3)])
@@ -47,7 +47,7 @@ class Graph:
     def read(path: str | PathLike, format: str | None = None, index: int | None = None) -> Graph:
         """Reads a graph file. The format is inferred from the extension unless given:
         ``.g6`` graph6, ``.s6`` sparse6, ``.mtx`` Matrix Market, ``.edges``/``.csv`` edge list,
-        ``.txt`` USRA '-1'-terminated adjacency lists.
+        ``.txt`` ``sub_search`` '-1'-terminated adjacency lists.
 
         graph6 and sparse6 files can hold many graphs, one per line; pick one with ``index``
         (from 0), or read them all with :func:`read_all`.
@@ -64,7 +64,7 @@ class Graph:
         return Graph(_core.Graph.parse(text, format))
 
     def dumps(self, format: str, highlight: Iterable[int] = ()) -> str:
-        """Serialises the graph. ``highlight`` marks vertices in ``dot`` and ``graphml`` output."""
+        """Serializes the graph. ``highlight`` marks vertices in ``dot`` and ``graphml`` output."""
         return self._g.dumps(format, [int(v) for v in highlight])
 
     def write(self, path: str | PathLike, format: str | None = None, highlight: Iterable[int] = ()) -> None:
@@ -155,13 +155,13 @@ class Graph:
         """Seidel switching with respect to ``vertices``."""
         return Graph(self._g.switch([int(v) for v in vertices]))
 
-    def common_neighbourhood(self, vertices: Iterable[int]) -> list[int]:
+    def common_neighborhood(self, vertices: Iterable[int]) -> list[int]:
         """Vertices outside ``vertices`` adjacent to all of them."""
-        return self._g.common_neighbourhood([int(v) for v in vertices])
+        return self._g.common_neighborhood([int(v) for v in vertices])
 
-    def common_non_neighbourhood(self, vertices: Iterable[int]) -> list[int]:
+    def common_non_neighborhood(self, vertices: Iterable[int]) -> list[int]:
         """Vertices outside ``vertices`` adjacent to none of them."""
-        return self._g.common_non_neighbourhood([int(v) for v in vertices])
+        return self._g.common_non_neighborhood([int(v) for v in vertices])
 
     # ---- search, layout, display
 
@@ -230,7 +230,7 @@ def parse_all(text: str, format: str) -> list[Graph]:
 
 
 def dumps_all(graphs: Iterable[Graph], format: str = "graph6") -> str:
-    """Serialises several graphs, one per line. Only graph6 and sparse6 can hold more than one."""
+    """Serializes several graphs, one per line. Only graph6 and sparse6 can hold more than one."""
     return _core.dumps_all([g._g for g in graphs], format)
 
 
@@ -262,7 +262,7 @@ def generate(model: str, n: int, density: float, *, seed: int = 1, rng: str = "x
     seed:
         Positive random seed.
     rng:
-        ``"xoshiro"`` (default) or ``"legacy"``, which reproduces USRA ``ggen``'s graphs exactly
+        ``"xoshiro"`` (default) or ``"legacy"``, which reproduces the original ``ggen``'s graphs exactly
         (``density`` is ``ggen``'s per-mille density divided by 1000).
     """
     if model not in MODELS:
@@ -277,7 +277,7 @@ def generate(model: str, n: int, density: float, *, seed: int = 1, rng: str = "x
 
 class WeightedGraph:
     """An immutable undirected graph whose edges carry integer weights from 1 to 255, as searched
-    by USRA's ``wsub_search``: the search target is then a total weight rather than an edge count.
+    by the original ``wsub_search``: the search target is then a total weight rather than an edge count.
 
     >>> w = WeightedGraph(3, [(0, 1, 2), (1, 2, 5)])
     >>> w.total_weight, w.weight(2, 1)
@@ -299,7 +299,7 @@ class WeightedGraph:
 
     @staticmethod
     def read(path: str | PathLike, format: str | None = None) -> WeightedGraph:
-        """Reads weights from an edge list's third column, a Matrix Market file's values, or USRA
+        """Reads weights from an edge list's third column, a Matrix Market file's values, or
         weighted lists (``format="wlists"``); formats without weights give every edge weight 1."""
         return WeightedGraph(_core.WeightedGraph.read(str(path), format))
 
@@ -308,7 +308,7 @@ class WeightedGraph:
         return WeightedGraph(_core.WeightedGraph.parse(text, format))
 
     def dumps(self, format: str, highlight: Iterable[int] = ()) -> str:
-        """Serialises with weights: ``edgelist``, ``mtx``, ``wlists``, ``dot`` or ``graphml``."""
+        """Serializes with weights: ``edgelist``, ``mtx``, ``wlists``, ``dot`` or ``graphml``."""
         return self._g.dumps(format, [int(v) for v in highlight])
 
     def write(self, path: str | PathLike, format: str | None = None, highlight: Iterable[int] = ()) -> None:
@@ -357,7 +357,7 @@ class WeightedGraph:
         return np.asarray(self._g.neighbors(int(u)), dtype=np.int64)
 
     def degrees(self) -> np.ndarray:
-        """Number of neighbours of each vertex."""
+        """Number of neighbors of each vertex."""
         return self.structure.degrees()
 
     def weighted_degrees(self) -> np.ndarray:
@@ -404,7 +404,7 @@ class WeightedGraph:
 
 
 def generate_weighted(n: int, mean_weight: float, *, seed: int = 1, rng: str = "xoshiro") -> WeightedGraph:
-    """A weighted random graph as USRA's ``wggen`` makes it: ``n (n - 1) / 2 * mean_weight`` times,
+    """A weighted random graph as the original ``wggen`` makes it: ``n (n - 1) / 2 * mean_weight`` times,
     a uniformly random pair of vertices has its weight increased by 1.
 
     ``mean_weight`` is the mean weight per vertex pair, in steps of 0.01 (``wggen``'s density

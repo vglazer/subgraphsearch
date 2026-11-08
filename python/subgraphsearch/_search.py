@@ -36,17 +36,17 @@ class SearchParams:
     size: int
     edges: int
     fixed: tuple[int, ...] = ()
-    experiments: int = 10
-    max_moves: int = 1000
+    experiments: int = 40
+    max_moves: int = 250
     div_freq: int = 250
     div_dur: int = 4
     seed: int = 1
     rng: str = "xoshiro"
     trace: bool = False
     aspiration: bool = False
-    #: For a regular-subgraph search (USRA's ``reg_search``): the degree; ``edges`` is then unused.
+    #: For a regular-subgraph search (the original ``reg_search``): the degree; ``edges`` is then unused.
     degree: int | None = None
-    #: With ``degree``: first find the right number of edges (USRA's ``ereg_search``).
+    #: With ``degree``: first find the right number of edges (the original ``ereg_search``).
     two_phase: bool = False
 
 
@@ -196,8 +196,8 @@ def search(
     degree: int | None = None,
     two_phase: bool = False,
     fixed: Iterable[int] = (),
-    experiments: int = 10,
-    max_moves: int = 1000,
+    experiments: int = 40,
+    max_moves: int = 250,
     div_freq: int = 250,
     div_dur: int = 4,
     seed: int = 1,
@@ -206,22 +206,22 @@ def search(
     aspiration: bool = False,
 ) -> SearchResult:
     """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges, or, in
-    a :class:`WeightedGraph`, with total weight ``edges`` (USRA's ``wsub_search``).
+    a :class:`WeightedGraph`, with total weight ``edges`` (the original ``wsub_search``).
 
     Each of ``experiments`` independent runs starts from random vertices (always including
     ``fixed``) and makes up to ``max_moves`` swaps of one subgraph vertex for one outside vertex,
-    minimising ``|edges in subgraph - edges|``. Locally optimal swaps are chosen from a
-    restricted neighbourhood; the first ``div_dur`` of every ``div_freq`` moves are random
+    minimizing ``|edges in subgraph - edges|``. Locally optimal swaps are chosen from a
+    restricted neighborhood; the first ``div_dur`` of every ``div_freq`` moves are random
     ("diversification"). With ``rng="xoshiro"`` (default) experiments run in parallel and depend
-    only on ``seed``; ``rng="legacy"`` reproduces USRA ``sub_search`` exactly.
+    only on ``seed``; ``rng="legacy"`` reproduces the original ``sub_search`` exactly.
 
     Set ``trace=True`` to record the objective after every move, for :mod:`subgraphsearch.viz`.
 
     Pass ``degree`` instead of ``edges`` to look for subgraphs that are regular of that degree
-    (USRA's ``reg_search``); add ``two_phase=True`` to first find the right number of edges and
+    (the original ``reg_search``); add ``two_phase=True`` to first find the right number of edges and
     then make the subgraph regular (``ereg_search``). Regular searches need an unweighted graph.
 
-    ``aspiration=True`` adds the limited aspiration of USRA's ``asub_search``: swaps involving
+    ``aspiration=True`` adds the limited aspiration of the original ``asub_search``: swaps involving
     the two vertices just swapped, which the restricted search otherwise excludes, are taken
     whenever they would beat the best value found so far.
     """

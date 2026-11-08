@@ -1,4 +1,4 @@
-"""The original USRA programs' interfaces, reproduced byte for byte.
+"""The original programs' interfaces, reproduced byte for byte.
 
 These take exactly the text the C programs read on stdin and return what they printed, which is
 useful for re-running old experiments or scripts.

@@ -1,4 +1,4 @@
-//! Random graph generators, ported from USRA's `ggen`.
+//! Random graph generators, ported from the original `ggen`.
 //!
 //! Densities are in *per mille* (0..=1000), as in `ggen`. Each generator is generic over the
 //! random number generator: with [`crate::rng::Randu`] seeded as `ggen` is, the output is
@@ -124,11 +124,11 @@ pub fn geometric<R: SearchRng>(n: usize, density: u32, rng: &mut R) -> Graph {
     b.build()
 }
 
-/// The largest weight [`weighted`] creates: USRA's `wggen` and `wsub_search` store weights in a
+/// The largest weight [`weighted`] creates: the original `wggen` and `wsub_search` store weights in a
 /// signed `char`.
 pub const MAX_GENERATED_WEIGHT: u8 = 127;
 
-/// A weighted random graph, as USRA's `wggen` makes it: `v * (v - 1) * density / 200` times, a
+/// A weighted random graph, as the original `wggen` makes it: `v * (v - 1) * density / 200` times, a
 /// uniformly random pair of distinct vertices has its weight increased by 1. So `density` is in
 /// percent, and the mean weight per vertex pair is `density / 100`; it may exceed 100. Fails if
 /// any weight would exceed [`MAX_GENERATED_WEIGHT`] or the total weight would not fit an `i32`.

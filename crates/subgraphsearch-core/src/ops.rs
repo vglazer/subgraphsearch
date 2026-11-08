@@ -1,4 +1,4 @@
-//! Graph operations from USRA's `ggen`: complements, induced subgraphs, common neighbourhoods
+//! Graph operations from the original `ggen`: complements, induced subgraphs, common neighborhoods
 //! and (Seidel) switching, plus graphs built from incidence structures.
 
 use crate::Error;
@@ -56,12 +56,12 @@ pub fn rest(g: &Graph, set: &[usize]) -> Result<Vec<usize>, Error> {
 }
 
 /// Vertices outside `set` adjacent to every vertex of `set` (ascending). `set` must be non-empty.
-pub fn common_neighbourhood(g: &Graph, set: &[usize]) -> Result<Vec<usize>, Error> {
+pub fn common_neighborhood(g: &Graph, set: &[usize]) -> Result<Vec<usize>, Error> {
     common(g, set, true)
 }
 
 /// Vertices outside `set` adjacent to no vertex of `set` (ascending). `set` must be non-empty.
-pub fn common_non_neighbourhood(g: &Graph, set: &[usize]) -> Result<Vec<usize>, Error> {
+pub fn common_non_neighborhood(g: &Graph, set: &[usize]) -> Result<Vec<usize>, Error> {
     common(g, set, false)
 }
 
@@ -179,10 +179,10 @@ mod tests {
     }
 
     #[test]
-    fn neighbourhoods_and_induced() {
+    fn neighborhoods_and_induced() {
         let g = path(5);
-        assert_eq!(common_neighbourhood(&g, &[1, 3]).unwrap(), vec![2]);
-        assert_eq!(common_non_neighbourhood(&g, &[0]).unwrap(), vec![2, 3, 4]);
+        assert_eq!(common_neighborhood(&g, &[1, 3]).unwrap(), vec![2]);
+        assert_eq!(common_non_neighborhood(&g, &[0]).unwrap(), vec![2, 3, 4]);
         let h = induced(&g, &[3, 2, 0]).unwrap();
         assert_eq!(h.edges().collect::<Vec<_>>(), vec![(0, 1)]);
         assert!(induced(&g, &[1, 1]).is_err());

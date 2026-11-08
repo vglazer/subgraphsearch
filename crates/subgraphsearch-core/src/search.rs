@@ -1,18 +1,18 @@
-//! Randomised restricted local search for vertex-induced subgraphs with a prescribed edge count.
+//! Randomized restricted local search for vertex-induced subgraphs with a prescribed edge count.
 //!
-//! This is a faithful port of `sub_search.c` from the USRA project. Each *experiment* starts from
+//! This is a faithful port of the original `sub_search.c`. Each *experiment* starts from
 //! a random set of `size` vertices (always including any fixed vertices) and makes up to
 //! `max_moves` *moves*, each swapping one subgraph vertex for one outside vertex, trying to drive
 //! the objective `|e - target|` to zero, where `e` is the number of edges the subgraph induces.
 //!
-//! - Normally a move is chosen at random among the best swaps in a *restricted* neighbourhood:
+//! - Normally a move is chosen at random among the best swaps in a *restricted* neighborhood:
 //!   when the edge count did not change on the last move, only rows for vertices adjacent to
 //!   exactly one of the two vertices just swapped get a full scan; the rest only look at such
 //!   columns. The two vertices just swapped are never swapped straight back.
 //! - For the first `div_dur` moves of every `div_freq` (and whenever no optimal move is known),
 //!   a uniformly random swap is made instead ("diversification").
 //!
-//! - With [`SearchParams::aspiration`] (USRA's `asub_search`), the swaps involving the two
+//! - With [`SearchParams::aspiration`] (the original `asub_search`), the swaps involving the two
 //!   vertices just swapped are also examined after each move, and one is taken whenever it would
 //!   beat the best value so far.
 //!
@@ -40,7 +40,7 @@ pub trait SearchGraph: Sync {
         Self: 'a;
 
     fn num_vertices(&self) -> usize;
-    /// Neighbours of `u`, ascending.
+    /// Neighbors of `u`, ascending.
     fn neighbors(&self, u: usize) -> &[u32];
     fn adjacency_row(&self, u: usize) -> Self::Row<'_>;
     /// What the edge `{u, v}` contributes to the subgraph's value: its weight, or 0 or 1.
@@ -49,7 +49,7 @@ pub trait SearchGraph: Sync {
     fn as_graph(&self) -> Option<&Graph> {
         None
     }
-    /// [`SearchGraph::edge_value`] for a known neighbour `v` of `u`.
+    /// [`SearchGraph::edge_value`] for a known neighbor `v` of `u`.
     fn neighbor_value(&self, u: usize, v: usize) -> i64 {
         self.edge_value(u, v)
     }
@@ -149,12 +149,12 @@ pub struct SearchParams {
     /// Record the objective value after every move (memory: experiments x moves).
     #[serde(default)]
     pub record_trace: bool,
-    /// Limited aspiration, as in USRA's `asub_search`: after each move, also consider the
+    /// Limited aspiration, as in the original `asub_search`: after each move, also consider the
     /// swaps involving the two vertices just swapped (which the restricted search otherwise
     /// excludes), and take one of them whenever it would beat the best value so far.
     #[serde(default)]
     pub aspiration: bool,
-    /// Search for regular induced subgraphs instead (USRA's `reg_search` and `ereg_search`); the
+    /// Search for regular induced subgraphs instead (the original `reg_search` and `ereg_search`); the
     /// `edges` target is then ignored. Needs an unweighted [`Graph`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub regular: Option<Regular>,
@@ -172,14 +172,15 @@ pub struct Regular {
 
 impl SearchParams {
     /// Parameters with the given subgraph size and edge count and otherwise reasonable defaults:
-    /// 10 experiments of up to 1000 moves, 4 random moves every 250, seed 1, xoshiro.
+    /// 40 experiments of up to 250 moves (many short runs usually beat a few long ones), 4 random
+    /// moves every 250, seed 1, xoshiro.
     pub fn new(size: usize, edges: i64) -> Self {
         SearchParams {
             size,
             edges,
             fixed: Vec::new(),
-            experiments: 10,
-            max_moves: 1000,
+            experiments: 40,
+            max_moves: 250,
             div_freq: 250,
             div_dur: 4,
             seed: 1,
@@ -421,7 +422,7 @@ struct Workspace {
     u_ch: Vec<u8>,
     /// Candidate columns: active ones first, then the inactive ones.
     u_list: Vec<usize>,
-    /// Optimal moves found in the current neighbourhood.
+    /// Optimal moves found in the current neighborhood.
     sub_opt: Vec<usize>,
     rest_opt: Vec<usize>,
     /// Aspiration moves (with `params.aspiration`), as in `asub_search.c`.

@@ -1,7 +1,7 @@
 //! # subgraphsearch
 //!
-//! Randomised restricted local search for vertex-induced subgraphs with a prescribed number of
-//! edges, ported from the USRA `sub_search` program, together with the graph generators and
+//! Randomized restricted local search for vertex-induced subgraphs with a prescribed number of
+//! edges, ported from the original `sub_search` program, together with the graph generators and
 //! operations of its companion `ggen`, and readers and writers for standard graph formats.
 //!
 //! ```
@@ -19,7 +19,7 @@
 //! - [`search`](mod@search): the search itself, and [`regular`]: its regular-subgraph variant.
 //! - [`generate`] and [`ops`]: random graphs, complements, induced subgraphs, switching,
 //!   incidence structures.
-//! - [`formats`]: graph6, sparse6, Matrix Market, edge lists, USRA adjacency lists, DOT, GraphML.
+//! - [`formats`]: graph6, sparse6, Matrix Market, edge lists, `sub_search` adjacency lists, DOT, GraphML.
 //! - [`rng`]: the original programs' generator (for exact reproduction) and xoshiro256++.
 //! - [`layout`]: force-directed layout for drawing graphs.
 //! - [`legacy`]: byte-for-byte emulation of the original `sub_search` and `ggen` programs.

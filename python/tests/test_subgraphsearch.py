@@ -43,8 +43,8 @@ def test_operations():
     g = cycle(6)
     assert g.complement().m == 15 - 6
     assert g.induced([0, 1, 3]).edge_list() == [(0, 1)]
-    assert g.common_neighbourhood([0, 2]) == [1]
-    assert g.common_non_neighbourhood([0]) == [2, 3, 4]
+    assert g.common_neighborhood([0, 2]) == [1]
+    assert g.common_non_neighborhood([0]) == [2, 3, 4]
     s = g.switch([0])
     assert not s.has_edge(0, 1) and s.has_edge(0, 3)
     assert np.allclose(np.linalg.eigvalsh(g.laplacian()).sum(), 2 * g.m)
@@ -167,7 +167,7 @@ def test_legacy_ggen_and_errors():
         ss.legacy.ggen("2 6 0 500 0 0 0 0")
 
 
-def test_result_serialisation(g100):
+def test_result_serialization(g100):
     r = ss.search(g100, 6, 3, experiments=3, trace=True)
     d = json.loads(r.to_json())
     assert d["params"]["size"] == 6 and len(d["experiments"]) == 3
@@ -179,7 +179,7 @@ def test_sweep(g100):
     assert set(res) == {0, 4} and all(r.params.div_dur == v for v, r in res.items())
 
 
-# ---- visualisation
+# ---- visualization
 
 def test_plots_render(g100):
     r = ss.search(g100, 10, 30, experiments=8, max_moves=400, trace=True)
@@ -232,7 +232,7 @@ def test_layouts(g100):
 
 def test_jupyter_reprs(g100):
     small = cycle(12)._repr_html_()
-    # charts are img data URIs, so sanitisers in untrusted notebooks cannot strip them into stray text
+    # charts are img data URIs, so sanitizers in untrusted notebooks cannot strip them into stray text
     assert "data:image/svg+xml;base64," in small and "<svg" not in small and "<title" not in small
     assert "degree distribution" in g100._repr_html_()
     r = ss.search(g100, 8, 0, experiments=6, max_moves=200)
@@ -240,7 +240,7 @@ def test_jupyter_reprs(g100):
     assert "Solutions" in h and "moves to success" in h
 
 
-# ---- CLI round trip: Rust search --json -> Python visualisation
+# ---- CLI round trip: Rust search --json -> Python visualization
 
 def test_rust_cli_json_loads_in_python(tmp_path, g100):
     import subprocess
@@ -382,7 +382,7 @@ def test_legacy_weighted_programs():
         ss.legacy.wggen([10, 30000, 1])
 
 
-def test_weighted_visualisation(tmp_path, w200):
+def test_weighted_visualization(tmp_path, w200):
     r = ss.search(w200, 15, 180, experiments=6, max_moves=2000, seed=4, trace=True)
     page = viz.to_html(r)
     data = json.loads(re.search(r"const DATA = (\{.*?\});\n", page).group(1))

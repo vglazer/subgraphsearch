@@ -1,4 +1,4 @@
-//! Byte-for-byte emulation of the original USRA `sub_search` and `ggen` programs: the same
+//! Byte-for-byte emulation of the original `sub_search` and `ggen` programs: the same
 //! stdin parameters, the same algorithms and random numbers, and the same output.
 //!
 //! The only intended differences are input checks the C programs lacked (`sub_search` read
@@ -349,7 +349,7 @@ fn run_search<W: Write>(
             .collect()
     };
     match (plain, weights) {
-        // reg_search and ereg_search print neighbours in the order of their partitioned lists
+        // reg_search and ereg_search print neighbors in the order of their partitioned lists
         (Some(g), _) if run.params.regular.is_some() => {
             report_experiments(&run, out, footer, |report| {
                 regular::search_sequential(&g, &run.params, |e, lists| {
@@ -385,9 +385,9 @@ fn run_search<W: Write>(
     }
 }
 
-/// For a vertex, its neighbours in the order the C program printed them, each with the number
+/// For a vertex, its neighbors in the order the C program printed them, each with the number
 /// printed for it.
-type Neighbours<'a> = &'a dyn Fn(usize) -> Vec<(usize, i64)>;
+type Neighbors<'a> = &'a dyn Fn(usize) -> Vec<(usize, i64)>;
 
 /// Which of the search programs to emulate.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -408,14 +408,14 @@ struct Run {
     num_exps: i64,
 }
 
-/// Runs the experiments and prints them as the C programs do. `entry(k, u)` is how the neighbour
+/// Runs the experiments and prints them as the C programs do. `entry(k, u)` is how the neighbor
 /// `u` of `k` appears in printed adjacency lists. As in the C programs, the printed `E =` counts
 /// edges, even for weighted graphs.
 fn report_experiments<W: Write>(
     run: &Run,
     out: &mut W,
     footer: impl FnOnce() -> String,
-    drive: impl FnOnce(&mut dyn FnMut(&Experiment, Neighbours)) -> Result<(), Error>,
+    drive: impl FnOnce(&mut dyn FnMut(&Experiment, Neighbors)) -> Result<(), Error>,
 ) -> Result<Status, Error> {
     let Run {
         params,
@@ -432,7 +432,7 @@ fn report_experiments<W: Write>(
     let mut boxes = [0i64; NUM_BOXES];
     let boxsize = num_mov / NUM_BOXES as i64 + 1;
     let _ = params;
-    drive(&mut |e, neighbours| {
+    drive(&mut |e, neighbors| {
         if io_result.is_err() {
             return;
         }
@@ -457,7 +457,7 @@ fn report_experiments<W: Write>(
                 if show_sols < 0 {
                     let mut degree = 0;
                     for &k in &e.vertices {
-                        for (u, printed) in neighbours(k) {
+                        for (u, printed) in neighbors(k) {
                             if e.vertices.binary_search(&u).is_ok() {
                                 degree += 1;
                                 if u > k {
@@ -605,8 +605,8 @@ pub fn ggen<W: Write>(input: &str, out: &mut W) -> Result<(), Error> {
         let sub_verts = match fixed_type {
             1 | 3 => fixed.clone(),
             -1 => ops::rest(&graph, &fixed)?,
-            2 => ops::common_neighbourhood(&graph, &fixed)?,
-            _ => ops::common_non_neighbourhood(&graph, &fixed)?,
+            2 => ops::common_neighborhood(&graph, &fixed)?,
+            _ => ops::common_non_neighborhood(&graph, &fixed)?,
         };
         write!(out, "\n{}\n", sub_verts.len())?;
         for s in &sub_verts {

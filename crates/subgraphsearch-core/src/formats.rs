@@ -2,14 +2,14 @@
 //!
 //! | Format | Read | Write | Notes |
 //! |---|---|---|---|
-//! | [`Format::Lists`] | yes | yes | USRA's '-1'-terminated adjacency lists (upper triangle on output) |
+//! | [`Format::Lists`] | yes | yes | `sub_search`'s '-1'-terminated adjacency lists (upper triangle on output) |
 //! | [`Format::EdgeList`] | yes | yes | one `u v` (or `u,v`) pair per line; `# vertices: N` keeps isolated vertices |
 //! | [`Format::Graph6`] | yes | yes | nauty's compact dense format; read by networkx, SageMath, House of Graphs |
 //! | [`Format::Sparse6`] | yes | yes | nauty's compact sparse format |
 //! | [`Format::MatrixMarket`] | yes | yes | `coordinate pattern symmetric`; read by SciPy, MATLAB, Julia |
 //! | [`Format::Dot`] | no | yes | Graphviz, optionally highlighting a vertex set |
 //! | [`Format::GraphML`] | no | yes | Gephi, Cytoscape, yEd, networkx, igraph |
-//! | [`Format::WeightedLists`] | yes | yes | USRA's weighted lists (`wggen`, `wsub_search`): entry `x` in row `i` is edge `{i, x % n}` of weight `x / n + 1` |
+//! | [`Format::WeightedLists`] | yes | yes | weighted `sub_search` lists (`wggen`, `wsub_search`): entry `x` in row `i` is edge `{i, x % n}` of weight `x / n + 1` |
 //!
 //! Weighted graphs ([`WeightedGraph`]) are read with [`parse_weighted`] and written with
 //! [`to_string_weighted`]: weights are the third column of an edge list, the values of a Matrix
@@ -81,13 +81,13 @@ impl std::str::FromStr for Format {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_ascii_lowercase();
         let alias = match s.as_str() {
-            "legacy" | "adj" | "usra" => "lists",
+            "legacy" | "adj" => "lists",
             "edges" | "el" | "csv" => "edgelist",
             "g6" => "graph6",
             "s6" => "sparse6",
             "matrixmarket" | "mm" => "mtx",
             "gv" | "graphviz" => "dot",
-            "weighted-lists" | "wusra" => "wlists",
+            "weighted-lists" => "wlists",
             other => other,
         };
         Format::ALL
@@ -172,7 +172,7 @@ pub fn holds_many(format: Format) -> bool {
     matches!(format, Format::Graph6 | Format::Sparse6)
 }
 
-/// Serialises several graphs, one per line. Only graph6 and sparse6 can hold more than one.
+/// Serializes several graphs, one per line. Only graph6 and sparse6 can hold more than one.
 pub fn to_string_all(graphs: &[Graph], format: Format) -> Result<String, Error> {
     if graphs.len() != 1 && !holds_many(format) {
         return Err(Error::Invalid(format!(
@@ -197,7 +197,7 @@ fn at_line(e: Error, line: usize) -> Error {
     }
 }
 
-/// Serialises `g` in `format`.
+/// Serializes `g` in `format`.
 pub fn to_string(g: &Graph, format: Format, options: &WriteOptions) -> String {
     match format {
         Format::Lists => write_lists(g),
@@ -223,7 +223,7 @@ pub fn holds_weights(format: Format) -> bool {
     )
 }
 
-/// Parses a weighted graph. Formats without weights (graph6, sparse6, USRA lists, edge lists
+/// Parses a weighted graph. Formats without weights (graph6, sparse6, `sub_search` lists, edge lists
 /// with two columns, `pattern` Matrix Market files) give every edge weight 1.
 pub fn parse_weighted(text: &str, format: Format) -> Result<WeightedGraph, Error> {
     match format {
@@ -234,7 +234,7 @@ pub fn parse_weighted(text: &str, format: Format) -> Result<WeightedGraph, Error
     }
 }
 
-/// Serialises a weighted graph; fails for formats that cannot store weights.
+/// Serializes a weighted graph; fails for formats that cannot store weights.
 pub fn to_string_weighted(
     g: &WeightedGraph,
     format: Format,
@@ -539,7 +539,7 @@ fn parse_error(line: usize, msg: impl Into<String>) -> Error {
     }
 }
 
-// ---- USRA adjacency lists
+// ---- `sub_search` adjacency lists
 
 fn parse_lists(text: &str) -> Result<Graph, Error> {
     let mut sc = Scanner::new(text);

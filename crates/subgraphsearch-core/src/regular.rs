@@ -1,11 +1,11 @@
-//! Regular induced subgraphs: ports of USRA's `reg_search` and `ereg_search`.
+//! Regular induced subgraphs: ports of the original `reg_search` and `ereg_search`.
 //!
-//! Instead of an edge count, the search minimises the total deviation from regularity,
+//! Instead of an edge count, the search minimizes the total deviation from regularity,
 //! `sum over subgraph vertices of |degree within the subgraph - degree|`, which is zero exactly
 //! when the subgraph is regular of the requested degree. Moves and diversification work as in
-//! [`crate::search`](mod@crate::search). To evaluate swaps quickly, every vertex's neighbour list is kept
-//! partitioned, neighbours inside the subgraph first, and an `n x n` matrix holds each
-//! neighbour's position in that list (or -1 for non-neighbours); both are updated every move.
+//! [`crate::search`](mod@crate::search). To evaluate swaps quickly, every vertex's neighbor list is kept
+//! partitioned, neighbors inside the subgraph first, and an `n x n` matrix holds each
+//! neighbor's position in that list (or -1 for non-neighbors); both are updated every move.
 //!
 //! The two-phase variant (`ereg_search`) first searches for the right number of edges with the
 //! `sub_search` objective and only then switches to regularity, making only moves that keep
@@ -21,7 +21,7 @@ use crate::graph::Graph;
 use crate::rng::{Randu, RngKind, SearchRng, Xoshiro};
 use crate::search::{Experiment, SearchParams, SearchResult};
 
-/// The most vertices a regular search supports: like the C programs, it stores neighbour
+/// The most vertices a regular search supports: like the C programs, it stores neighbor
 /// positions in 16-bit integers.
 pub const MAX_VERTICES: usize = i16::MAX as usize;
 
@@ -53,7 +53,7 @@ pub(crate) fn search(graph: &Graph, params: &SearchParams) -> Result<SearchResul
 }
 
 /// Runs the experiments one at a time, calling `on_experiment` with each result and with the
-/// current (partitioned) neighbour lists, which the legacy output prints from.
+/// current (partitioned) neighbor lists, which the legacy output prints from.
 pub(crate) fn search_sequential<F>(
     graph: &Graph,
     params: &SearchParams,
@@ -117,7 +117,7 @@ struct Workspace {
     degs: Vec<usize>,
     /// Position of `j` in `adj_list[i]` at `i * v + j`, or -1 if `{i, j}` is not an edge.
     adj: Vec<i16>,
-    /// Neighbour lists, partitioned: subgraph neighbours first.
+    /// Neighbor lists, partitioned: subgraph neighbors first.
     adj_list: Vec<Vec<u32>>,
     sub_degs: Vec<i64>,
     /// `sub_degs - degree` for subgraph vertices; also scratch space, as in the C programs.
@@ -164,7 +164,7 @@ impl Workspace {
         ws
     }
 
-    /// The state the C programs start from: plain sorted neighbour lists, edges marked 0.
+    /// The state the C programs start from: plain sorted neighbor lists, edges marked 0.
     fn reset(&mut self, graph: &Graph, params: &SearchParams) {
         let v = self.v;
         self.adj.fill(-1);
@@ -225,7 +225,7 @@ impl Workspace {
         }
     }
 
-    /// Rebuilds every neighbour list with subgraph neighbours first (each part ascending) and
+    /// Rebuilds every neighbor list with subgraph neighbors first (each part ascending) and
     /// stores positions in `adj`; returns nothing, but leaves `sub_degs` set when `set_degrees`.
     fn partition(&mut self, set_degrees: bool) {
         let v = self.v;
@@ -257,7 +257,7 @@ impl Workspace {
     }
 
     /// Moves `sub_vert` (just left) and `rest_vert` (just joined) to the right side of every
-    /// neighbour's partitioned list. Mirrors "update partitioning of adjacency list".
+    /// neighbor's partitioned list. Mirrors "update partitioning of adjacency list".
     fn update_partition(&mut self, sub_vert: usize, rest_vert: usize) {
         let v = self.v;
         for k in 0..self.degs[sub_vert] {
@@ -360,7 +360,7 @@ impl Workspace {
         curr_val + abs(temp)
     }
 
-    /// The objective with `sub_vert` removed; adjusts `diffs` of its subgraph neighbours, which
+    /// The objective with `sub_vert` removed; adjusts `diffs` of its subgraph neighbors, which
     /// [`Workspace::restore_diffs`] undoes.
     fn without(&mut self, obj_val: i64, sub_vert: usize) -> i64 {
         let mut degree = obj_val - abs(self.diffs[sub_vert]);

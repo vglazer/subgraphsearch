@@ -214,12 +214,12 @@ const DATA = __DATA__;
     const anySub = member.some(x => x);
     return `<b>vertex ${v}</b>${member[v] ? " · in subgraph" : ""}<br>degree ${deg[v]}` +
       (W ? `, total weight ${wdeg[v]}` : "") +
-      (anySub ? `<br>${inSub} neighbour${inSub === 1 ? "" : "s"} in the subgraph` + (W ? ` (weight ${wSub})` : "") : "");
+      (anySub ? `<br>${inSub} neighbor${inSub === 1 ? "" : "s"} in the subgraph` + (W ? ` (weight ${wSub})` : "") : "");
   }
   function showPin() {
     if (pin < 0) { pinned.style.display = "none"; return; }
     const nb = adj[pin].slice().sort((a, b) => a - b);
-    pinned.innerHTML = describe(pin) + `<br><span style="color:var(--muted)">neighbours:</span> ${nb.join(" ") || "none"}`;
+    pinned.innerHTML = describe(pin) + `<br><span style="color:var(--muted)">neighbors:</span> ${nb.join(" ") || "none"}`;
     pinned.style.display = "block";
   }
   function legend() {

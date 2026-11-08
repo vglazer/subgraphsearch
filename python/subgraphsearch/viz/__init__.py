@@ -1,6 +1,6 @@
-"""Visualisation.
+"""Visualization.
 
-- Search behaviour: :func:`plot_traces`, :func:`plot_run_time_distribution`,
+- Search behavior: :func:`plot_traces`, :func:`plot_run_time_distribution`,
   :func:`plot_success_times`, :func:`plot_conflicts`, :func:`plot_search_summary`,
   :func:`plot_sweep`.
 - Graph structure: :func:`plot_degree_distribution`, :func:`plot_spectrum`,

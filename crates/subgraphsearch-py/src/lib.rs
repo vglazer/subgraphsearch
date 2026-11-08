@@ -104,7 +104,7 @@ impl PyGraph {
         Ok(graphs.into_iter().map(Self::wrap).collect())
     }
 
-    /// Serialises the graph; `highlight` marks vertices in DOT and GraphML output.
+    /// Serializes the graph; `highlight` marks vertices in DOT and GraphML output.
     #[pyo3(signature = (format, highlight = Vec::new()))]
     fn dumps(&self, format: &str, highlight: Vec<usize>) -> PyResult<String> {
         Ok(formats::to_string(
@@ -202,12 +202,12 @@ impl PyGraph {
         ))
     }
 
-    fn common_neighbourhood(&self, vertices: Vec<usize>) -> PyResult<Vec<usize>> {
-        ops::common_neighbourhood(&self.inner, &vertices).map_err(err)
+    fn common_neighborhood(&self, vertices: Vec<usize>) -> PyResult<Vec<usize>> {
+        ops::common_neighborhood(&self.inner, &vertices).map_err(err)
     }
 
-    fn common_non_neighbourhood(&self, vertices: Vec<usize>) -> PyResult<Vec<usize>> {
-        ops::common_non_neighbourhood(&self.inner, &vertices).map_err(err)
+    fn common_non_neighborhood(&self, vertices: Vec<usize>) -> PyResult<Vec<usize>> {
+        ops::common_non_neighborhood(&self.inner, &vertices).map_err(err)
     }
 
     /// Force-directed layout: one (x, y) in the unit square per vertex.
@@ -357,7 +357,7 @@ impl PyWeightedGraph {
     }
 }
 
-/// A weighted random graph as USRA's wggen makes it, `density` in percent (mean weight per
+/// A weighted random graph as the original wggen makes it, `density` in percent (mean weight per
 /// vertex pair times 100).
 #[pyfunction]
 fn generate_weighted(n: usize, density: u32, seed: i64, rng: &str) -> PyResult<PyWeightedGraph> {
@@ -513,7 +513,7 @@ fn legacy_ggen(stdin: &str) -> PyResult<String> {
     Ok(String::from_utf8(out).unwrap())
 }
 
-/// Serialises several graphs, one per line (graph6 and sparse6 only, for more than one).
+/// Serializes several graphs, one per line (graph6 and sparse6 only, for more than one).
 #[pyfunction]
 fn dumps_all(graphs: Vec<PyRef<'_, PyGraph>>, format: &str) -> PyResult<String> {
     let owned: Vec<Graph> = graphs.iter().map(|g| (*g.inner).clone()).collect();

@@ -33,7 +33,7 @@ enum Command {
     Info(InfoArgs),
     /// Apply an operation (complement, induced subgraph, switching, ...) to a graph.
     Op(OpArgs),
-    /// Run the original USRA programs' interface: same stdin, same stdout.
+    /// Run the original programs' interface: same stdin, same stdout.
     #[command(subcommand)]
     Legacy(LegacyCommand),
 }
@@ -146,22 +146,22 @@ struct SearchArgs {
         conflicts_with = "degree"
     )]
     edges: Option<i64>,
-    /// Instead of an edge count, look for subgraphs that are regular of this degree (USRA's
+    /// Instead of an edge count, look for subgraphs that are regular of this degree (the original
     /// reg_search).
     #[arg(short = 'd', long)]
     degree: Option<i64>,
     /// With --degree: first find the right number of edges, then make the subgraph regular
-    /// (USRA's ereg_search).
+    /// (the original ereg_search).
     #[arg(long)]
     two_phase: bool,
     /// Vertices the subgraph must contain, e.g. 3,17,42.
     #[arg(long, value_delimiter = ',')]
     fixed: Vec<usize>,
     /// Number of independent experiments (restarts).
-    #[arg(short = 'n', long, default_value_t = 10)]
+    #[arg(short = 'n', long, default_value_t = 40)]
     experiments: usize,
     /// Maximum moves per experiment.
-    #[arg(long, default_value_t = 1000)]
+    #[arg(long, default_value_t = 250)]
     moves: usize,
     /// Start a burst of random moves every this many moves.
     #[arg(long, default_value_t = 250)]
@@ -190,14 +190,14 @@ struct SearchArgs {
     /// Print nothing but the summary.
     #[arg(short, long)]
     quiet: bool,
-    /// Limited aspiration (USRA's asub_search): also take swaps involving the two vertices just
+    /// Limited aspiration (the original asub_search): also take swaps involving the two vertices just
     /// swapped when they would beat the best value so far.
     #[arg(long)]
     aspiration: bool,
     /// Search every graph in a multi-graph file (graph6 or sparse6), one after another.
     #[arg(long, conflicts_with = "index")]
     all: bool,
-    /// Use edge weights (USRA's wsub_search): -m is then a total weight. Weights come from an
+    /// Use edge weights (the original wsub_search): -m is then a total weight. Weights come from an
     /// edge list's third column, Matrix Market values, or weighted lists (--from wlists).
     #[arg(long, conflicts_with = "all")]
     weighted: bool,
@@ -205,7 +205,7 @@ struct SearchArgs {
 
 #[derive(Args)]
 struct GenerateArgs {
-    /// Random graph model: exponential, power, geometric, or weighted (USRA's wggen).
+    /// Random graph model: exponential, power, geometric, or weighted (the original wggen).
     #[arg(value_parser = parse_gen_model)]
     model: GenModel,
     /// Number of vertices.
@@ -285,10 +285,10 @@ enum Operation {
     Induce,
     /// The subgraph induced on all vertices except --vertices.
     Remove,
-    /// The subgraph induced on the common neighbourhood of --vertices.
-    CommonNeighbours,
-    /// The subgraph induced on the common non-neighbourhood of --vertices.
-    CommonNonNeighbours,
+    /// The subgraph induced on the common neighborhood of --vertices.
+    CommonNeighbors,
+    /// The subgraph induced on the common non-neighborhood of --vertices.
+    CommonNonNeighbors,
     /// Seidel switching with respect to --vertices.
     Switch,
 }
@@ -823,11 +823,11 @@ fn run_op(args: OpArgs) -> Result<()> {
         Operation::Complement => ops::complement(&g),
         Operation::Induce => ops::induced(&g, &args.vertices)?,
         Operation::Remove => ops::induced(&g, &ops::rest(&g, &args.vertices)?)?,
-        Operation::CommonNeighbours => {
-            ops::induced(&g, &ops::common_neighbourhood(&g, &args.vertices)?)?
+        Operation::CommonNeighbors => {
+            ops::induced(&g, &ops::common_neighborhood(&g, &args.vertices)?)?
         }
-        Operation::CommonNonNeighbours => {
-            ops::induced(&g, &ops::common_non_neighbourhood(&g, &args.vertices)?)?
+        Operation::CommonNonNeighbors => {
+            ops::induced(&g, &ops::common_non_neighborhood(&g, &args.vertices)?)?
         }
         Operation::Switch => ops::switch(&g, &args.vertices)?,
     };

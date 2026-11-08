@@ -9,15 +9,15 @@ from nbclient import NotebookClient
 md, code = nbformat.v4.new_markdown_cell, nbformat.v4.new_code_cell
 cells = [
     md("# subgraphsearch quickstart\n\n"
-       "`subgraphsearch` finds **induced subgraphs with a prescribed number of vertices and edges** using the randomised "
-       "restricted local search of USRA's `sub_search`, ported to Rust. This notebook walks through generating graphs, "
-       "searching them, reading the results, and the visualisations."),
+       "`subgraphsearch` finds **induced subgraphs with a prescribed number of vertices and edges** using the randomized "
+       "restricted local search of the original `sub_search`, ported to Rust. This notebook walks through generating graphs, "
+       "searching them, reading the results, and the visualizations."),
     code("import subgraphsearch as ss\nfrom subgraphsearch import viz\n\nss.__version__"),
-    md("## Graphs\n\nGenerate one of `ggen`'s random models, or read graph6, sparse6, Matrix Market, edge lists or USRA adjacency lists. "
+    md("## Graphs\n\nGenerate one of `ggen`'s random models, or read graph6, sparse6, Matrix Market, edge lists or `sub_search` adjacency lists. "
        "In a notebook a graph shows a summary, its degree distribution and, when small, a drawing."),
     code("g = ss.generate(\"exponential\", 100, 0.6, seed=1, rng=\"legacy\")  # exactly ggen's `2 100 0 600 1 0 0 0`\ng"),
     md("## Reproducing the original program\n\n`rng=\"legacy\"` replays the C program's random numbers, so this finds the same five 11-cliques "
-       "as the example in the USRA README, in the same order."),
+       "as the example in the original `sub_search` README, in the same order."),
     code("cliques = ss.search(g, size=11, edges=55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng=\"legacy\")\n"
          "cliques"),
     md("## A harder search\n\nThe default generator (xoshiro256++) runs experiments in parallel. Here we look for 30 vertices spanning 343 edges, "
@@ -39,13 +39,13 @@ cells = [
     md("## Tuning\n\n`ss.sweep` reruns a search across values of one parameter."),
     code("sweep = ss.sweep(g, 30, 340, \"div_dur\", [0, 4, 16, 64], experiments=40, max_moves=1500, div_freq=300)\n"
          "viz.plot_sweep(sweep, parameter=\"div_dur\");"),
-    md("## Weighted graphs\n\nUSRA's `wggen` and `wsub_search` work with integer edge weights; the target is then a total weight. "
+    md("## Weighted graphs\n\nThe original `wggen` and `wsub_search` work with integer edge weights; the target is then a total weight. "
        "Here, 15 vertices whose edges weigh 180 in total, in a graph with a mean weight of 0.65 per vertex pair."),
     code("w = ss.generate_weighted(200, 0.65, seed=1, rng=\"legacy\")  # exactly wggen's `200 65 1`\n"
          "rw = ss.search(w, 15, 180, experiments=40, max_moves=3000, div_freq=300, div_dur=10)\n"
          "rw"),
-    md("## Regular subgraphs\n\nInstead of an edge count, `degree=` asks for subgraphs in which every vertex has that many neighbours "
-       "(USRA's `reg_search`), the search it was written for in strongly regular graphs. The Paley graph on 61 vertices is one; "
+    md("## Regular subgraphs\n\nInstead of an edge count, `degree=` asks for subgraphs in which every vertex has that many neighbors "
+       "(the original `reg_search`), the search it was written for in strongly regular graphs. The Paley graph on 61 vertices is one; "
        "here we look for 4-regular subgraphs on 10 of its vertices. `two_phase=True` first finds the right number of edges (`ereg_search`)."),
     code("q = 61\nsquares = {x * x % q for x in range(1, q)}\n"
          "paley = ss.Graph(q, [(i, j) for i in range(q) for j in range(i + 1, q) if (j - i) % q in squares])\n"
