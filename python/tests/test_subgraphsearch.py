@@ -193,6 +193,11 @@ def test_plots_render(g100):
     for order in ("degree", "spectral", "index"):
         viz.plot_adjacency(g100, best, order=order)
     viz.plot_graph_summary(g100, best)
+    for layout in ("spring", "circle", "spectral"):
+        viz.plot_graph(g100, best, layout=layout, title="x")
+    viz.plot_graph(ss.WeightedGraph.from_graph(cycle(10)), [0, 1, 2])
+    with pytest.raises(ValueError, match="layout must have shape"):
+        viz.plot_graph(g100, layout=np.zeros((3, 2)))
     import matplotlib.pyplot as plt
 
     plt.close("all")

@@ -8,6 +8,8 @@ subgraphs of a given total weight in weighted graphs. A fast randomized local se
 Rust, with a Python API, a command-line tool, random graph generators, standard graph formats and
 visualization.
 
+![Four views of searches: a 5-regular subgraph highlighted in a Paley graph drawn on a circle; a dense 14-vertex cluster in a random geometric graph; a 30-vertex, 345-edge subgraph gathered into the corner of an adjacency matrix; and the conflict falling move by move in ten experiments](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
+
 ## Install
 
 ```sh
@@ -31,6 +33,7 @@ r = ss.search(g, size=10, degree=4)    # 4-regular induced subgraphs
 
 print(r.summary())
 r.solutions()                                         # the distinct vertex sets found
+viz.plot_graph(g, highlight=r.best.vertices)          # draw it
 viz.plot_search_summary(r)                            # how the search went
 viz.plot_graph_summary(g, highlight=r.best.vertices)  # degrees, spectrum, adjacency matrix
 viz.save_html("result.html", r)                       # interactive viewer; viz.show(r) in Jupyter
@@ -254,6 +257,7 @@ values. Formats without weights read as weight 1, and writing a weighted graph t
 cargo test --release                              # Rust tests
 uv run pytest                                     # Python tests (build the CLI first)
 uv run python examples/make_quickstart.py         # rebuild the quickstart notebook
+uv run python examples/make_figures.py            # redraw the README figures
 USRA_DIR=~/repos/USRA scripts/make_fixtures.sh    # re-record test fixtures from the C programs
 ```
 

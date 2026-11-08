@@ -3,6 +3,8 @@
 - Search behavior: :func:`plot_traces`, :func:`plot_run_time_distribution`,
   :func:`plot_success_times`, :func:`plot_conflicts`, :func:`plot_search_summary`,
   :func:`plot_sweep`.
+- Graph drawings: :func:`plot_graph` draws a graph with a vertex set, such as a search result,
+  highlighted.
 - Graph structure: :func:`plot_degree_distribution`, :func:`plot_spectrum`,
   :func:`plot_adjacency`, :func:`plot_graph_summary`, plus :func:`laplacian_spectrum` and
   :func:`spectral_summary` for the numbers.
@@ -21,6 +23,7 @@ from .diagnostics import (
     plot_sweep,
     plot_traces,
 )
+from .drawing import plot_graph
 from .interactive import save_html, show, to_html
 from .spectral import (
     laplacian_spectrum,
@@ -36,6 +39,7 @@ __all__ = [
     "plot_adjacency",
     "plot_conflicts",
     "plot_degree_distribution",
+    "plot_graph",
     "plot_graph_summary",
     "plot_run_time_distribution",
     "plot_search_summary",
