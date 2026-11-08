@@ -169,10 +169,8 @@ Two refinements make this fast and effective:
 
 Local search gets stuck in local minima. To shake it loose, the first `--div-dur` moves of every
 `--div-freq` moves are made at random; these perturbations can improve the results considerably
-(`--div-dur 0` turns them off). Each *experiment* is an independent restart from random vertices,
-and experiments run in parallel, which makes a search roughly 10× faster than the
-[original C programs](https://github.com/vglazer/USRA/tree/master/subgraph_finding) on a
-multi-core machine; results still depend only on the seed.
+(`--div-dur 0` turns them off). Each *experiment* is an independent restart from random vertices.
+Experiments run in parallel on all cores, and results still depend only on the seed.
 
 ### Reading the results
 
@@ -206,8 +204,8 @@ Each experiment reports the best conflict it reached and the moves it needed:
 - **Two phases** (`--degree d --two-phase`): first find a subgraph with the right number of edges
   ($`kd/2`$), then make it regular using only swaps that keep the edge count. It usually finds
   regular subgraphs about 1.5 to 3.5 times faster than `--degree` alone. With `--fixed`, it
-  computes the edge target from the non-fixed vertices only, as the original program did, so it
-  rarely succeeds; use `--degree` alone there.
+  computes the edge target from the non-fixed vertices only, so it rarely succeeds; use
+  `--degree` alone there.
 - **Aspiration** (`--aspiration`): the tabu search's *aspiration criterion*, which lifts the tabu
   on a move that would beat the best conflict so far. After each move it also considers the swaps
   involving the two vertices just swapped, and takes one of them whenever it would. It can help a
@@ -233,10 +231,6 @@ is sparse and cheaper to work with. Inducing a subgraph on the common neighborho
 vertices restricts the search to vertices adjacent to all of them, and `switch` performs Seidel
 switching (see [Variants](#variants)) with respect to a vertex set, such as a regular subgraph
 found by the search.
-
-To re-run experiments from the original programs, `subgraphsearch legacy` accepts their input and
-reproduces their output exactly, and `--rng legacy` reproduces their results through the
-interfaces above.
 
 ## Choosing a search and its settings
 
@@ -289,8 +283,7 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   0` gives a pure local search.
 - **Aspiration** rarely makes a difference; try it on searches that stall.
 - **Seeds:** results depend only on the seed and the settings, not on the number of threads, so a
-  search can be repeated exactly; change the seed for independent runs. `--rng legacy`
-  reproduces the original programs but runs sequentially, so use it only for that.
+  search can be repeated exactly; change the seed for independent runs.
 
 ## Graph formats
 
@@ -302,7 +295,7 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
 | edge list | `edgelist` | `.edges`, `.csv`, `.tsv` | ✓ | ✓ | anything; edge weights |
 | Graphviz | `dot` | `.dot`, `.gv` | | ✓ | drawing, with a highlighted subgraph |
 | GraphML | `graphml` | `.graphml` | | ✓ | Gephi, Cytoscape, yEd |
-| sub_search lists | `lists`, `wlists` | `.txt` (`lists`) | ✓ | ✓ | the original programs' formats |
+| adjacency lists | `lists`, `wlists` | `.txt` (`lists`) | ✓ | ✓ | plain text, one line of neighbors per vertex |
 
 graph6 is the most compact format for dense graphs and sparse6 for sparse ones; both are standard
 in combinatorics (nauty, SageMath, networkx, House of Graphs). They can also hold many graphs, one
@@ -319,7 +312,6 @@ cargo test --release                              # Rust tests
 uv run pytest                                     # Python tests (build the CLI first)
 uv run python examples/make_quickstart.py         # rebuild the quickstart notebooks
 uv run python examples/make_figures.py            # redraw the README figures
-USRA_DIR=~/repos/USRA scripts/make_fixtures.sh    # re-record test fixtures from the C programs
 ```
 
 ## License

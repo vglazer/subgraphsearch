@@ -31,7 +31,6 @@ Homepage = "https://github.com/vglazer/subgraphsearch"
 Repository = "https://github.com/vglazer/subgraphsearch"
 Issues = "https://github.com/vglazer/subgraphsearch/issues"
 Changelog = "https://github.com/vglazer/subgraphsearch/commits/main"
-"Original C programs" = "https://github.com/vglazer/USRA/tree/master/subgraph_finding"
 
 [project.optional-dependencies]
 viz = ["matplotlib>=3.7"]
