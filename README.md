@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml/badge.svg)](https://github.com/vglazer/subgraphsearch/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/subgraphsearch)](https://pypi.org/project/subgraphsearch/)
+[![crates.io](https://img.shields.io/crates/v/subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of
 vertices and edges**: [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)),
@@ -87,7 +88,9 @@ is a full tour.
 ## Rust
 
 The search, generators and formats are also a Rust library,
-[`subgraphsearch-core`](https://docs.rs/subgraphsearch-core) (Rust 1.87 or later):
+[`subgraphsearch-core`](https://crates.io/crates/subgraphsearch-core), which needs Rust 1.87 or
+later. Add it with `cargo add subgraphsearch-core`; its API is documented on
+[docs.rs](https://docs.rs/subgraphsearch-core).
 
 ```rust
 use subgraphsearch_core::{Graph, SearchParams, search};
@@ -102,7 +105,8 @@ assert_eq!(g.induced_edge_count(&found.vertices), 3);
 ## Command line
 
 The `subgraphsearch` command comes with the Python package (see [Install](#install)); with a Rust
-toolchain, `cargo install subgraphsearch` builds the same command.
+toolchain, `cargo install subgraphsearch` builds the same command from
+[crates.io](https://crates.io/crates/subgraphsearch).
 
 ```sh
 subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6    # a random graph
