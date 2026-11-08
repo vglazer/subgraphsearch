@@ -40,7 +40,9 @@ jupyter = ["ipython>=8"]
 all = ["subgraphsearch[viz,interop,igraph,jupyter]"]
 
 [dependency-groups]
-dev = ["pytest>=8", "maturin>=1.9,<2", "matplotlib>=3.7", "networkx>=3.1", "scipy>=1.10", "igraph>=0.11", "ipython>=8", "nbformat>=5", "nbclient>=0.10", "ipykernel>=6", "ruff==0.17.4"]
+dev = ["pytest>=8", "maturin>=1.9,<2", "matplotlib>=3.7", "networkx>=3.1", "scipy>=1.10", "igraph>=0.11", "ipython>=8", "nbformat>=5", "nbclient>=0.10", "ipykernel>=6", {include-group = "lint"}]
+# Just ruff, so that CI can lint without building the package
+lint = ["ruff==0.17.4"]
 
 [tool.maturin]
 manifest-path = "crates/subgraphsearch-py/Cargo.toml"

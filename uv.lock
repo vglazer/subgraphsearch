@@ -2583,6 +2583,9 @@ dev = [
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
+lint = [
+    { name = "ruff" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -2610,6 +2613,7 @@ dev = [
     { name = "ruff", specifier = "==0.17.4" },
     { name = "scipy", specifier = ">=1.10" },
 ]
+lint = [{ name = "ruff", specifier = "==0.17.4" }]
 
 [[package]]
 name = "texttable"

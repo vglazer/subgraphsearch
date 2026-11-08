@@ -18,6 +18,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  lint:
+    name: Lint (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Ruff
+        # Only the lint group: ruff at the version locked in uv.lock, without building the package
+        run: uv run --only-group lint ruff check .
+
   rust:
     name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -57,8 +67,6 @@ jobs:
         run: uv run --no-project python scripts/make_pypi_readme.py
       - name: Build the package
         run: uv sync --all-extras
-      - name: Lint
-        run: uv run ruff check .
       - name: Build the CLI (for the CLI-to-Python round-trip test)
         run: cargo build --release -p subgraphsearch
       - name: Tests
