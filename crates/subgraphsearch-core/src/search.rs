@@ -285,8 +285,9 @@ impl Components {
 /// The outcome of one experiment.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Experiment {
-    /// The smallest objective value `|e - target|` reached (plus the components beyond the first,
-    /// with [`SearchParams::connected`]).
+    /// The smallest conflict reached, which is that of `vertices`: `|e - target|`, or for a regular
+    /// search the deviation from regularity, plus the components beyond the first with
+    /// [`SearchParams::connected`]. 0 exactly when the experiment succeeded.
     pub best_conflict: i64,
     /// Moves made: the index of the successful move, or `max_moves` if none succeeded.
     pub moves: usize,
@@ -401,9 +402,7 @@ where
     F: FnMut(&Experiment),
 {
     if params.regular.is_some() {
-        return crate::regular::search_sequential(unweighted(graph)?, params, |e, _| {
-            on_experiment(e)
-        });
+        return crate::regular::search_sequential(unweighted(graph)?, params, on_experiment);
     }
     params.validate(graph.num_vertices())?;
     let mut ws = Workspace::new(graph, params);
@@ -887,7 +886,7 @@ mod tests {
                         "{label}: {:?}",
                         e.vertices
                     );
-                    // a two-phase search's best conflict starts over in its second phase
+                    // a two-phase search's trace counts edges, not regularity, in its first phase
                     if !target.is_some_and(|r| r.two_phase) {
                         let lowest = *e.trace.as_ref().unwrap().iter().min().unwrap();
                         assert_eq!(i64::from(lowest), e.best_conflict, "{label}");

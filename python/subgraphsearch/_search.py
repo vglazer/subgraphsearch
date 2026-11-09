@@ -19,7 +19,8 @@ class Experiment:
     """One independent run (restart) of the search."""
 
     index: int
-    #: Smallest ``|edges - target|`` reached (plus the components beyond the first, with ``connected``).
+    #: Smallest conflict reached, which is that of ``vertices``: ``|edges - target|``, or for a regular search the
+    #: deviation from regularity, plus the components beyond the first with ``connected``. 0 exactly on success.
     best_conflict: int
     #: Moves made: the index of the successful move, or ``max_moves`` if none succeeded.
     moves: int

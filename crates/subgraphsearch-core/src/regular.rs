@@ -13,6 +13,12 @@
 //! phase-one edge target is `(size - fixed) * degree / 2` rather than `size * degree / 2`, and
 //! the partitioned lists carry over from one experiment to the next, which affects only the
 //! order in which [`crate::legacy`] prints a solution's adjacency lists.
+//!
+//! A third quirk is kept only in [`crate::legacy`]'s output: `ereg_search` reports, for an
+//! experiment that never reaches the second phase, how far its edge count was from the target, and
+//! for one whose second phase stalls at once, `size * size`. Neither is the conflict of the subgraph
+//! the experiment returns, and the first is not even a deviation from regularity, so everywhere
+//! else a failed two-phase experiment's best conflict is recomputed from its subgraph.
 
 use rayon::prelude::*;
 
@@ -31,7 +37,7 @@ pub(crate) fn search(graph: &Graph, params: &SearchParams) -> Result<SearchResul
     let experiments = match params.rng {
         RngKind::Legacy => {
             let mut out = Vec::with_capacity(params.experiments);
-            search_sequential(graph, params, |e, _| out.push(e.clone()))?;
+            search_sequential(graph, params, |e| out.push(e.clone()))?;
             out
         }
         RngKind::Xoshiro => (0..params.experiments)
@@ -41,7 +47,9 @@ pub(crate) fn search(graph: &Graph, params: &SearchParams) -> Result<SearchResul
                 |ws, i| {
                     ws.reset(graph, params);
                     let mut rng = Xoshiro::for_stream(params.seed as u64, i as u64);
-                    ws.run(graph, params, &mut rng)
+                    let mut e = ws.run(graph, params, &mut rng);
+                    recompute_conflict(graph, params, &mut e);
+                    e
                 },
             )
             .collect(),
@@ -52,9 +60,60 @@ pub(crate) fn search(graph: &Graph, params: &SearchParams) -> Result<SearchResul
     })
 }
 
-/// Runs the experiments one at a time, calling `on_experiment` with each result and with the
-/// current (partitioned) neighbor lists, which the legacy output prints from.
+/// Runs the experiments one at a time, calling `on_experiment` with each result.
 pub(crate) fn search_sequential<F>(
+    graph: &Graph,
+    params: &SearchParams,
+    mut on_experiment: F,
+) -> Result<(), Error>
+where
+    F: FnMut(&Experiment),
+{
+    search_sequential_as_c(graph, params, |e, _| {
+        let mut e = e.clone();
+        recompute_conflict(graph, params, &mut e);
+        on_experiment(&e)
+    })
+}
+
+/// A failed two-phase experiment's best conflict, recomputed from the subgraph it returns: its
+/// deviation from regularity, plus its components beyond the first with `params.connected`. See
+/// the module documentation. Other experiments already report that.
+fn recompute_conflict(graph: &Graph, params: &SearchParams, e: &mut Experiment) {
+    let Some(regular) = params.regular else {
+        return;
+    };
+    // with no moves at all, an experiment returns no subgraph
+    if !regular.two_phase || e.success || e.vertices.is_empty() {
+        return;
+    }
+    let mut in_sub = vec![0u8; graph.num_vertices()];
+    for &v in &e.vertices {
+        in_sub[v] = 1;
+    }
+    let mut conflict: i64 = e
+        .vertices
+        .iter()
+        .map(|&v| {
+            let within = graph
+                .neighbors(v)
+                .iter()
+                .filter(|&&x| in_sub[x as usize] != 0)
+                .count() as i64;
+            (within - regular.degree).abs()
+        })
+        .sum();
+    if params.connected {
+        let mut components = Components::new(graph.num_vertices());
+        conflict += components.extra(e.vertices.iter().copied(), &in_sub, |u| graph.neighbors(u));
+    }
+    e.best_conflict = conflict;
+}
+
+/// Runs the experiments one at a time, calling `on_experiment` with each result, its best conflict
+/// as `ereg_search` reports it, and with the current (partitioned) neighbor lists, which the legacy
+/// output prints from.
+pub(crate) fn search_sequential_as_c<F>(
     graph: &Graph,
     params: &SearchParams,
     mut on_experiment: F,
@@ -824,6 +883,37 @@ mod tests {
                         e.vertices
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn two_phase_best_conflicts_describe_the_subgraphs_returned() {
+        let g = paley(61);
+        for connected in [false, true] {
+            let mut p = SearchParams::new(20, 0);
+            p.regular = Some(Regular {
+                degree: 8,
+                two_phase: true,
+            });
+            p.connected = connected;
+            p.experiments = 40;
+            p.max_moves = 3;
+            for rng in [RngKind::Xoshiro, RngKind::Legacy] {
+                p.rng = rng;
+                let mut as_c = Vec::new();
+                super::search_sequential_as_c(&g, &p, |e, _| as_c.push(e.best_conflict)).unwrap();
+                let r = search(&g, &p).unwrap();
+                for e in &r.experiments {
+                    let deviation: i64 = degrees_within(&g, &e.vertices)
+                        .iter()
+                        .map(|&d| (d as i64 - 8).abs())
+                        .sum();
+                    assert_eq!(e.best_conflict, deviation, "{rng:?}, {:?}", e.vertices);
+                }
+                // the C program's values differ: these runs exercise the quirk
+                let fixed: Vec<i64> = r.experiments.iter().map(|e| e.best_conflict).collect();
+                assert_ne!(as_c, fixed, "{rng:?}");
             }
         }
     }

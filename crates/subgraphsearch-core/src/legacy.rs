@@ -353,7 +353,7 @@ fn run_search<W: Write>(
         // reg_search and ereg_search print neighbors in the order of their partitioned lists
         (Some(g), _) if run.params.regular.is_some() => {
             report_experiments(&run, out, footer, |report| {
-                regular::search_sequential(&g, &run.params, |e, lists| {
+                regular::search_sequential_as_c(&g, &run.params, |e, lists| {
                     report(e, &|k| {
                         lists[k]
                             .iter()

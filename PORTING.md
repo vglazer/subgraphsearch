@@ -58,6 +58,12 @@ The port deliberately keeps the programs' quirks so that results match:
 - Input is parsed the way C's `scanf("%d")` parses it, so `5-1` reads as `5` followed by `-1`
   (`ggen`'s output relies on this), and numbers print as C's `%g` prints them.
 
+One quirk is kept only in the exact output: for a failed experiment, `ereg_search` reports how far
+the edge count was from the target if the experiment never reached its second phase, and
+`size * size` if the second phase stalled at once. Neither is the conflict of the subgraph it
+returns, so the modern interfaces recompute it from that subgraph: its deviation from regularity.
+The experiments and their subgraphs are unchanged.
+
 The intended differences are input checks the C programs lacked: unchecked vertex numbers,
 self-loops and similar problems now produce an error instead of undefined behavior. On systems
 other than Unix, the final timing line reports elapsed time and the `COMPUTERNAME` host name.
