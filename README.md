@@ -6,7 +6,7 @@
 [![crates.io: subgraphsearch-core](https://img.shields.io/crates/v/subgraphsearch-core?label=crates.io%3A%20subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of
-vertices and edges**: cliques, independent sets and everything in
+vertices and edges**: independent sets, cycles, cliques and everything in
 between. Searches are
 [fast](#performance), reproducible from a seed and come with diagnostics for tuning them. Many [graph formats](#graph-formats) are supported.
 

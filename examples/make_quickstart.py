@@ -24,8 +24,8 @@ cells = [
 # subgraphsearch quickstart
 
 `subgraphsearch` finds **[induced subgraphs]({W}Induced_subgraph) with a given number of vertices and
-edges**: [cliques]({W}Clique_(graph_theory)), [independent sets]({W}Independent_set_(graph_theory)) and
-everything in between. It also finds [regular]({W}Regular_graph) subgraphs and subgraphs of a given total
+edges**: [independent sets]({W}Independent_set_(graph_theory)), [cycles]({W}Cycle_graph),
+[cliques]({W}Clique_(graph_theory)) and everything in between. It also finds [regular]({W}Regular_graph) subgraphs and subgraphs of a given total
 weight. The method is a randomized [tabu search]({W}Tabu_search). This notebook generates a graph,
 searches it in several ways, and shows how to read and visualize the results.
 """),
@@ -277,6 +277,52 @@ for two_phase in (False, True):
     res = ss.search(paley, 20, degree=8, two_phase=two_phase, experiments=100, max_moves=2000, div_freq=300, div_dur=8, seed=3)
     elapsed = time.perf_counter() - start
     print(f"two_phase={two_phase}: {res.successes}/100 successes, {1000 * elapsed / max(res.successes, 1):.1f} ms per success")
+"""),
+    md(f"""
+### Cycles
+
+An [induced cycle]({W}Induced_path) on $k$ vertices spans $k$ edges, but so do many other subgraphs, such as a
+triangle with a path hanging off it, so an edge-count search rarely finds one. Every vertex of a cycle has
+exactly two neighbors on it, so search for 2-regular subgraphs instead. A 2-regular graph is a disjoint union
+of cycles, though, not always a single one: count the components of each solution and keep those with one.
+Below 6 vertices there is nothing to check, since the smallest union of two cycles is two triangles. Here are
+12-vertex searches of a sparse random graph, the one in the README figure:
+"""),
+    code("""
+import collections
+
+sparse = ss.generate("exponential", 60, 0.08, seed=3)
+by_counts = ss.search(sparse, 12, 12, experiments=100, seed=1).solutions()
+regular = sum(set(sparse.induced(vs).degrees().tolist()) == {2} for vs in by_counts)
+print(f"12 vertices spanning 12 edges: {regular} of {len(by_counts)} are 2-regular")
+
+
+def cycle_lengths(h):
+    \"\"\"The lengths of the cycles a 2-regular graph is made of.\"\"\"
+    labels, _ = h.components()
+    return tuple(sorted(collections.Counter(labels).values()))
+
+
+unions = ss.search(sparse, 12, degree=2, two_phase=True, experiments=400, seed=1).solutions()
+print("2-regular, by cycle lengths:", collections.Counter(cycle_lengths(sparse.induced(vs)) for vs in unions).most_common(4))
+cycles = [vs for vs in unions if sparse.induced(vs).components()[1] == 1]
+print(len(cycles), "of", len(unions), "are a single 12-cycle")
+viz.plot_graph(sparse, cycles[0], layout=sparse.layout("spring", seed=27), title="an induced 12-cycle");   # a seed that draws it uncrossed
+"""),
+    md("""
+The same filter gives cycles through chosen vertices, with `fixed=`, and the longest induced cycles the search
+can find, by raising $k$ until single cycles stop turning up. Here they get rare at 28 vertices and none are
+found at 30. As with near misses, the longest one found is a lower bound, not a proof that none is longer.
+"""),
+    code("""
+def single_cycles(k, **kwargs):
+    \"\"\"The distinct induced k-cycles of the sparse graph that the search finds.\"\"\"
+    found = ss.search(sparse, k, degree=2, experiments=200, seed=1, **kwargs).solutions()
+    return [vs for vs in found if sparse.induced(vs).components()[1] == 1]
+
+
+print("10-cycles through vertex 0:", len(single_cycles(10, fixed=[0])))
+print("k-cycles found, by k:", {k: len(single_cycles(k, two_phase=True)) for k in (24, 26, 28, 30)})
 """),
     md(f"""
 [Seidel switching]({W}Two-graph#Switching_and_graphs) with respect to a vertex set $S$ swaps edges and
