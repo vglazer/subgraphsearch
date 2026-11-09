@@ -24,10 +24,9 @@ cells = [
 # subgraphsearch quickstart
 
 `subgraphsearch` finds **[induced subgraphs]({W}Induced_subgraph) with a given number of vertices and
-edges**: [independent sets]({W}Independent_set_(graph_theory)), [cycles]({W}Cycle_graph),
-[cliques]({W}Clique_(graph_theory)) and everything in between. It also finds [regular]({W}Regular_graph)
-subgraphs, connected subgraphs, induced paths and subgraphs of a given total weight. The method is a
-randomized [tabu search]({W}Tabu_search).
+edges**: [cycles]({W}Cycle_graph), [cliques]({W}Clique_(graph_theory)) and everything in between. It
+also finds [regular]({W}Regular_graph) subgraphs, connected subgraphs, induced paths and subgraphs of a
+given total weight. The method is a randomized [tabu search]({W}Tabu_search).
 
 The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
 vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles, trees and
@@ -91,10 +90,11 @@ Many experiments find the same clique; `solutions()` lists each distinct vertex 
 print(len(cliques.solutions()), "distinct 11-cliques")
 viz.plot_graph(g, cliques.best.vertices, title="an 11-clique");
 """),
-    md("""
-An independent set is the opposite: vertices with no edges among them, so the target is 0. It is also a
-clique of the complement, `g.complement()`, and the two searches find the same sets. This graph is dense, so
-its independent sets are smaller than its cliques: the search finds 7 vertices every time and 8 never.
+    md(f"""
+An [independent set]({W}Independent_set_(graph_theory)) is the opposite: vertices with no edges among them,
+so the target is 0. It is also a clique of the complement, `g.complement()`, and the two searches find the
+same sets. This graph is dense, so its independent sets are smaller than its cliques: the search finds 7
+vertices every time and 8 never.
 """),
     code("""
 independent = ss.search(g, 7, 0)
