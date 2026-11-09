@@ -458,7 +458,8 @@ ss.search(w, 15, 140, experiments=40, max_moves=3000, div_freq=300, div_dur=10)
 `viz.plot_graph_summary` shows three views of a graph: its [degree distribution]({W}Degree_distribution) next to
 that of an Erdős–Rényi graph of the same density, its Laplacian spectrum, and its adjacency matrix with a
 subgraph's vertices moved to the top-left block. Here it is for the dense graph from the start, with the
-30-vertex, 346-edge subgraph found earlier.
+30-vertex, 346-edge subgraph found earlier. This section's tools also accept a `WeightedGraph`, and use its
+edges without their weights.
 """),
     code("""
 viz.plot_graph_summary(g, highlight=r.best.vertices);
