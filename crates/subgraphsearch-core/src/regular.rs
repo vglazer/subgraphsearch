@@ -22,10 +22,13 @@
 //!
 //! A path search ([`SearchParams::path`]) is a one-phase search for degree 2 that aims at a
 //! deviation of 2 instead of 0: a path's two endpoints have degree 1 and every other vertex
-//! degree 2. Each swap is valued by how far the deviation after it would be from 2, so the search
-//! is drawn to paths rather than cycles. Its conflict is `|deviation - 2| + |edges - (size - 1)|`
-//! plus the components beyond the first, which is 0 exactly for an induced path: a connected graph
-//! with `size - 1` edges is a tree, and a tree whose deviation from degree 2 is 2 has two leaves.
+//! degree 2. Each swap is valued by how far the deviation after it would be from 2 plus how far
+//! the edge count would be from `size - 1`, so the search is drawn to paths rather than cycles or
+//! paths that loop back into themselves, which have the right deviation but an edge too many. Its
+//! conflict adds the components beyond the first, and is 0 exactly for an induced path: a connected
+//! graph with `size - 1` edges is a tree, and a tree whose deviation from degree 2 is 2 has two
+//! leaves. Components are not part of a swap's value, since counting them for every swap would
+//! cost too much.
 
 use rayon::prelude::*;
 
@@ -521,6 +524,9 @@ impl Workspace {
 
         let v_sq = self.v_sq;
         let (mut g_opt_val, mut old_min_val) = (v_sq, v_sq);
+        // a path search also tracks the edge count, which it values swaps by
+        let target_edges = params.size as i64 - 1;
+        let (mut edges, mut old_edges) = (0i64, -1i64);
         let mut opt_mov = 0usize;
         let mut j = 0;
         while j < params.max_moves {
@@ -580,7 +586,8 @@ impl Workspace {
                     .chain(&self.sub_verts)
                     .map(|&u| self.sub_degs[u])
                     .sum();
-                abs(obj_val - 2) + abs(twice_edges / 2 - (params.size as i64 - 1)) + extra
+                edges = twice_edges / 2;
+                abs(obj_val - 2) + abs(edges - target_edges) + extra
             } else {
                 obj_val + extra
             };
@@ -601,7 +608,7 @@ impl Workspace {
             }
 
             let (u_cols, m) = self.active_columns(sub_vert, rest_col);
-            if new_min_val != old_min_val {
+            if new_min_val != old_min_val || (params.path && edges != old_edges) {
                 for k in 0..self.v_sub {
                     self.u_ch[self.sub_verts[k]] = 1;
                 }
@@ -627,8 +634,15 @@ impl Workspace {
                 for l in 0..w_cols {
                     let rv = self.u_list[l];
                     let val = self.swap_value(degree, d_sub, sv, rv);
-                    // a path search aims at a deviation of 2, for the path's two endpoints
-                    let val = if params.path { abs(val - 2) } else { val };
+                    // a path search aims at a deviation of 2, for the path's two endpoints, and
+                    // at one edge fewer than vertices
+                    let val = if params.path {
+                        let after = edges - self.sub_degs[sv] + self.sub_degs[rv]
+                            - i64::from(self.adjacent(sv, rv));
+                        abs(val - 2) + abs(after - target_edges)
+                    } else {
+                        val
+                    };
                     self.store(val, &mut opt_val, &mut opt_mov, sv, rv);
                 }
                 self.restore_diffs(sv);
@@ -637,6 +651,7 @@ impl Workspace {
             for k in 0..u_cols {
                 self.u_ch[self.u_list[k]] = 0;
             }
+            old_edges = edges;
             old_min_val = new_min_val;
             j += 1;
         }
@@ -1003,6 +1018,30 @@ mod tests {
         assert!(search(&grid, &p).is_err());
         p.aspiration = false;
         assert!(search(&crate::graph::WeightedGraph::from_graph(&grid), &p).is_err());
+    }
+
+    #[test]
+    fn path_searches_reach_the_6_cube_snake_record() {
+        // the longest induced path in the 6-cube has 27 vertices
+        let n = 6;
+        let cube = Graph::from_edges(
+            1 << n,
+            (0..1usize << n)
+                .flat_map(|u| (0..n).map(move |b| (u, u ^ (1 << b))))
+                .filter(|&(u, w)| u < w),
+        )
+        .unwrap();
+        let mut p = SearchParams::new(27, 0);
+        p.path = true;
+        p.experiments = 50;
+        p.max_moves = 2000;
+        p.div_freq = 300;
+        p.div_dur = 8;
+        let r = search(&cube, &p).unwrap();
+        assert!(r.successes() > 0);
+        for e in r.experiments.iter().filter(|e| e.success) {
+            assert!(is_induced_path(&cube, &e.vertices), "{:?}", e.vertices);
+        }
     }
 
     #[test]

@@ -320,8 +320,8 @@ print("with connected=True, experiments that found a k-vertex tree, by k:", indu
 A path is a tree whose vertices all have degree at most 2, but beyond a few vertices the tree search rarely
 ends on one. `path=True` searches for induced [paths]({W}Path_graph) directly. It makes the regular search's
 moves for degree 2, but aims at a deviation from regularity of 2 instead of 0, for the path's two endpoints
-of degree 1, so it is drawn to paths rather than cycles; its conflict is 0 exactly for an induced path. In
-this graph it finds paths of 29 vertices, longer than its longest induced cycle:
+of degree 1, and at $k - 1$ edges, so it is drawn to paths rather than cycles; its conflict is 0 exactly for
+an induced path. In this graph it finds paths of 29 vertices, longer than its longest induced cycle:
 """),
     code("""
 trees = ss.search(sparse, 12, 11, connected=True, experiments=200, seed=1).solutions()
@@ -334,8 +334,8 @@ In the $n$-dimensional [hypercube]({W}Hypercube_graph), whose vertices are the $
 join strings that differ in one bit, the longest induced paths are the [snake-in-the-box]({W}Snake-in-the-box)
 problem, and the longest induced cycles the coil-in-the-box problem. Their known records make a good test:
 the longest snake in the 7-cube has 51 vertices, and the path search finds one in under a second. In the
-9-cube, the lowest dimension where the longest snake is unknown, the same search finds snakes of 180 vertices
-in about a minute and a half, within 6% of the long-standing record of 191 vertices.
+9-cube, the lowest dimension where the longest snake is unknown, the same search finds snakes of 185 vertices
+in under three minutes, within 4% of the long-standing record of 191 vertices.
 """),
     code("""
 n = 7
