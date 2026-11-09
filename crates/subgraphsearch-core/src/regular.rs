@@ -19,6 +19,13 @@
 //! for one whose second phase stalls at once, `size * size`. Neither is the conflict of the subgraph
 //! the experiment returns, and the first is not even a deviation from regularity, so everywhere
 //! else a failed two-phase experiment's best conflict is recomputed from its subgraph.
+//!
+//! A path search ([`SearchParams::path`]) is a one-phase search for degree 2 that aims at a
+//! deviation of 2 instead of 0: a path's two endpoints have degree 1 and every other vertex
+//! degree 2. Each swap is valued by how far the deviation after it would be from 2, so the search
+//! is drawn to paths rather than cycles. Its conflict is `|deviation - 2| + |edges - (size - 1)|`
+//! plus the components beyond the first, which is 0 exactly for an induced path: a connected graph
+//! with `size - 1` edges is a tree, and a tree whose deviation from degree 2 is 2 has two leaves.
 
 use rayon::prelude::*;
 
@@ -153,7 +160,12 @@ fn validate(graph: &Graph, params: &SearchParams) -> Result<(), Error> {
     }
     if params.aspiration {
         return Err(Error::Invalid(
-            "aspiration is not available for regular searches".into(),
+            "aspiration is not available for regular or path searches".into(),
+        ));
+    }
+    if params.path && params.regular.is_some() {
+        return Err(Error::Invalid(
+            "a path search has no degree: search for a path or for a regular subgraph".into(),
         ));
     }
     Ok(())
@@ -220,7 +232,7 @@ impl Workspace {
             sub_opt: vec![0; v],
             rest_opt: vec![0; v],
             rand_perm: Vec::with_capacity(v - v_fix),
-            components: params.connected.then(|| Components::new(v)),
+            components: (params.connected || params.path).then(|| Components::new(v)),
         };
         ws.reset(graph, params);
         ws
@@ -258,11 +270,10 @@ impl Workspace {
         params: &SearchParams,
         rng: &mut R,
     ) -> Experiment {
-        let regular = params.regular.expect("a regular search");
-        let (g_opt_val, moves, success, trace) = if regular.two_phase {
-            self.run_two_phase(graph, params, regular.degree, rng)
-        } else {
-            self.run_regular(graph, params, regular.degree, rng)
+        let (g_opt_val, moves, success, trace) = match params.regular {
+            Some(r) if r.two_phase => self.run_two_phase(graph, params, r.degree, rng),
+            Some(r) => self.run_regular(graph, params, r.degree, rng),
+            None => self.run_regular(graph, params, 2, rng), // a path search
         };
         let vertices = (0..self.v).filter(|&k| self.opt_ch[k] != 0).collect();
         for k in 0..self.v_sub {
@@ -561,7 +572,18 @@ impl Workspace {
             self.sub_ch[rest_vert] = 1;
             self.swap_lists(sub_vert, rest_vert, sub_row, rest_col);
 
-            let conflict = obj_val + self.extra_components(graph, &params.fixed);
+            let extra = self.extra_components(graph, &params.fixed);
+            let conflict = if params.path {
+                let twice_edges: i64 = params
+                    .fixed
+                    .iter()
+                    .chain(&self.sub_verts)
+                    .map(|&u| self.sub_degs[u])
+                    .sum();
+                abs(obj_val - 2) + abs(twice_edges / 2 - (params.size as i64 - 1)) + extra
+            } else {
+                obj_val + extra
+            };
             if let Some(t) = trace.as_mut() {
                 t.push(conflict.clamp(0, u32::MAX as i64) as u32);
             }
@@ -605,6 +627,8 @@ impl Workspace {
                 for l in 0..w_cols {
                     let rv = self.u_list[l];
                     let val = self.swap_value(degree, d_sub, sv, rv);
+                    // a path search aims at a deviation of 2, for the path's two endpoints
+                    let val = if params.path { abs(val - 2) } else { val };
                     self.store(val, &mut opt_val, &mut opt_mov, sv, rv);
                 }
                 self.restore_diffs(sv);
@@ -916,6 +940,69 @@ mod tests {
                 assert_ne!(as_c, fixed, "{rng:?}");
             }
         }
+    }
+
+    /// Whether `vs` induces a path: connected, one edge fewer than vertices, no degree above 2.
+    fn is_induced_path(g: &Graph, vs: &[usize]) -> bool {
+        let degrees = degrees_within(g, vs);
+        let (mut reached, mut stack) = (vec![vs[0]], vec![vs[0]]);
+        while let Some(u) = stack.pop() {
+            for &w in vs {
+                if g.has_edge(u, w) && !reached.contains(&w) {
+                    reached.push(w);
+                    stack.push(w);
+                }
+            }
+        }
+        reached.len() == vs.len()
+            && degrees.iter().sum::<usize>() == 2 * (vs.len() - 1)
+            && degrees.iter().all(|&d| d <= 2)
+    }
+
+    #[test]
+    fn path_searches_find_induced_paths() {
+        // a 6x6 grid: plenty of induced paths, and 4-cycles that a search for degree 2 ends on
+        let grid = Graph::from_edges(
+            36,
+            (0..36)
+                .filter(|i| i % 6 < 5)
+                .map(|i| (i, i + 1))
+                .chain((0..30).map(|i| (i, i + 6))),
+        )
+        .unwrap();
+        for rng in [RngKind::Xoshiro, RngKind::Legacy] {
+            for k in [5, 12] {
+                let mut p = SearchParams::new(k, 0);
+                p.path = true;
+                p.rng = rng;
+                p.experiments = 30;
+                p.max_moves = 1000;
+                p.record_trace = true;
+                let r = search(&grid, &p).unwrap();
+                assert!(r.successes() > 0, "{rng:?}, {k}");
+                for e in &r.experiments {
+                    assert!(
+                        !e.success || is_induced_path(&grid, &e.vertices),
+                        "{:?}",
+                        e.vertices
+                    );
+                    let lowest = *e.trace.as_ref().unwrap().iter().min().unwrap();
+                    assert_eq!(i64::from(lowest), e.best_conflict);
+                }
+            }
+        }
+        let mut p = SearchParams::new(8, 0);
+        p.path = true;
+        p.regular = Some(Regular {
+            degree: 2,
+            two_phase: false,
+        });
+        assert!(search(&grid, &p).is_err());
+        p.regular = None;
+        p.aspiration = true;
+        assert!(search(&grid, &p).is_err());
+        p.aspiration = false;
+        assert!(search(&crate::graph::WeightedGraph::from_graph(&grid), &p).is_err());
     }
 
     #[test]

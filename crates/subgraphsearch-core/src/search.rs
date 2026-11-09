@@ -166,6 +166,11 @@ pub struct SearchParams {
     /// degrees in the whole graph.
     #[serde(default)]
     pub connected: bool,
+    /// Search for induced paths on `size` vertices instead, with the regular search's moves aimed at
+    /// the degrees of a path (see [`crate::regular`]); the `edges` target is then ignored, and
+    /// `regular` must be `None`. Needs an unweighted [`Graph`].
+    #[serde(default)]
+    pub path: bool,
     /// Search for regular induced subgraphs instead (the original `reg_search` and `ereg_search`); the
     /// `edges` target is then ignored. Needs an unweighted [`Graph`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -200,6 +205,7 @@ impl SearchParams {
             record_trace: false,
             aspiration: false,
             connected: false,
+            path: false,
             regular: None,
         }
     }
@@ -359,7 +365,7 @@ impl SearchResult {
 /// stream, so results depend only on the seed. With [`RngKind::Legacy`], experiments run one after
 /// another and match the C program exactly.
 pub fn search<G: SearchGraph>(graph: &G, params: &SearchParams) -> Result<SearchResult, Error> {
-    if params.regular.is_some() {
+    if params.regular.is_some() || params.path {
         return crate::regular::search(unweighted(graph)?, params);
     }
     params.validate(graph.num_vertices())?;
@@ -401,7 +407,7 @@ pub fn search_sequential<G: SearchGraph, F>(
 where
     F: FnMut(&Experiment),
 {
-    if params.regular.is_some() {
+    if params.regular.is_some() || params.path {
         return crate::regular::search_sequential(unweighted(graph)?, params, on_experiment);
     }
     params.validate(graph.num_vertices())?;
@@ -463,7 +469,7 @@ fn scan_row<R: AdjacencyRow>(
 fn unweighted<G: SearchGraph>(graph: &G) -> Result<&Graph, Error> {
     graph
         .as_graph()
-        .ok_or_else(|| Error::Invalid("regular searches need an unweighted graph".into()))
+        .ok_or_else(|| Error::Invalid("regular and path searches need an unweighted graph".into()))
 }
 
 /// Search state. Field names follow `sub_search.c`.

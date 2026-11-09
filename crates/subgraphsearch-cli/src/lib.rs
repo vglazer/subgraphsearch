@@ -143,14 +143,17 @@ struct SearchArgs {
     #[arg(
         short = 'm',
         long,
-        required_unless_present = "degree",
-        conflicts_with = "degree"
+        required_unless_present_any = ["degree", "path"],
+        conflicts_with_all = ["degree", "path"]
     )]
     edges: Option<i64>,
     /// Instead of an edge count, look for subgraphs that are regular of this degree (the original
     /// reg_search).
-    #[arg(short = 'd', long)]
+    #[arg(short = 'd', long, conflicts_with = "path")]
     degree: Option<i64>,
+    /// Instead of an edge count, look for induced paths on -k vertices.
+    #[arg(long)]
+    path: bool,
     /// With --degree: first find the right number of edges, then make the subgraph regular
     /// (the original ereg_search).
     #[arg(long)]
@@ -446,6 +449,7 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         record_trace: args.trace,
         aspiration: args.aspiration,
         connected: args.connected,
+        path: args.path,
         regular: args.degree.map(|degree| subgraphsearch_core::Regular {
             degree,
             two_phase: args.two_phase,
@@ -535,9 +539,18 @@ fn write_json(args: &SearchArgs, results: &[(usize, SearchResult)]) -> Result<()
 }
 
 /// What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3", each
-/// followed by ", connected" for a connected search.
+/// followed by ", connected" for a connected search; or, for the three shapes with a name, "forming
+/// a path", "forming a cycle" (connected and regular of degree 2) or "forming a tree" (connected,
+/// with one edge fewer than vertices).
 fn target(params: &SearchParams, weighted: bool) -> String {
+    if params.path {
+        return "forming a path".into();
+    }
     let target = match params.regular {
+        Some(r) if params.connected && r.degree == 2 => return "forming a cycle".into(),
+        None if params.connected && !weighted && params.edges == params.size as i64 - 1 => {
+            return "forming a tree".into();
+        }
         Some(r) => format!("regular of degree {}", r.degree),
         None if weighted => format!("with total weight {}", params.edges),
         None => format!("with {} edges", params.edges),

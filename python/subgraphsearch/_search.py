@@ -51,6 +51,8 @@ class SearchParams:
     two_phase: bool = False
     #: Require a connected subgraph: each component beyond the first adds 1 to the conflict.
     connected: bool = False
+    #: Search for induced paths on ``size`` vertices; ``edges`` is then unused.
+    path: bool = False
 
 
 @dataclass
@@ -64,8 +66,16 @@ class SearchResult:
     @property
     def target(self) -> str:
         """What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3",
-        each followed by ", connected" for a ``connected`` search."""
+        each followed by ", connected" for a ``connected`` search; or, for the three shapes with a
+        name, "forming a path", "forming a cycle" (connected and regular of degree 2) or "forming a
+        tree" (connected, with one edge fewer than vertices)."""
         p = self.params
+        if p.path:
+            return "forming a path"
+        if p.connected and p.degree == 2:
+            return "forming a cycle"
+        if p.connected and p.degree is None and not self.weighted and p.edges == p.size - 1:
+            return "forming a tree"
         if p.degree is not None:
             target = f"regular of degree {p.degree}"
         else:
@@ -185,7 +195,7 @@ class SearchResult:
 
     def __repr__(self) -> str:
         p = self.params
-        target = f"degree={p.degree}" if p.degree is not None else f"edges={p.edges}"
+        target = "path=True" if p.path else f"degree={p.degree}" if p.degree is not None else f"edges={p.edges}"
         return f"SearchResult({self.successes}/{len(self.experiments)} successes, size={p.size}, {target})"
 
     def _repr_html_(self) -> str:
@@ -211,6 +221,7 @@ def search(
     trace: bool = False,
     aspiration: bool = False,
     connected: bool = False,
+    path: bool = False,
 ) -> SearchResult:
     """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges, or, in
     a :class:`WeightedGraph`, with total weight ``edges`` (the original ``wsub_search``).
@@ -237,22 +248,31 @@ def search(
     conflict, so only connected subgraphs that hit the target count as successes, and near misses
     include disconnected ones that hit it. Swaps are still chosen by the target alone, so this suits
     targets that connected subgraphs often meet, such as ``degree=2`` for induced cycles rather than
-    unions of them. It works with every kind of search.
+    unions of them. It works with every kind of search. With ``edges=size - 1`` it finds induced
+    trees, since a connected graph with one edge fewer than vertices is a tree.
+
+    Pass ``path=True`` instead of ``edges`` or ``degree`` to look for induced paths on ``size``
+    vertices. It uses the regular search's moves for degree 2, aimed at the degrees of a path (two
+    endpoints of degree 1, the rest 2) rather than of a cycle; the conflict is 0 exactly for an
+    induced path. Like regular searches, it needs an unweighted graph.
     """
-    if (edges is None) == (degree is None):
-        raise ValueError("give exactly one of edges (an edge count or total weight) and degree (for a regular subgraph)")
+    if (edges is not None) + (degree is not None) + bool(path) != 1:
+        raise ValueError(
+            "give exactly one of edges (an edge count or total weight), degree (for a regular subgraph) "
+            "and path=True (for an induced path)"
+        )
     if two_phase and degree is None:
         raise ValueError("two_phase needs degree: it searches for regular subgraphs")
     fixed = tuple(int(v) for v in fixed)
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
         int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
-        bool(connected),
+        bool(connected), bool(path),
     )
     raw = _core.search(
         graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq,
         params.div_dur, params.seed, rng, params.trace, params.aspiration, params.degree, params.two_phase,
-        params.connected,
+        params.connected, params.path,
     )
     exps = [
         Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))

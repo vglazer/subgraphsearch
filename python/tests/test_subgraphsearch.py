@@ -436,12 +436,39 @@ def test_connected_search():
     for kwargs in ({"edges": 6}, {"degree": 2}, {"degree": 2, "two_phase": True}):
         r = ss.search(g, 6, **kwargs, connected=True, experiments=30, max_moves=500, div_freq=50, trace=True)
         assert r.successes > 0 and r.solutions() == [tuple(range(6, 12))]
-        assert r.target.endswith(", connected") and "connected" in r.summary()
+        assert r.target == ("with 6 edges, connected" if "edges" in kwargs else "forming a cycle")
+        assert r.target in r.summary()
         back = ss.SearchResult.from_dict(json.loads(r.to_json()), g)
         assert back.params.connected
         viz.plot_search_summary(r)
     plain = ss.search(g, 6, degree=2, experiments=30, max_moves=500, div_freq=50)
     assert not plain.params.connected and len(plain.solutions()) == 2
+    assert ss.search(g, 5, 4, connected=True).target == "forming a tree"
+
+
+def is_induced_path(g, vertices):
+    h = g.induced(vertices)
+    return h.components()[1] == 1 and h.m == len(vertices) - 1 and h.degrees().max() <= 2
+
+
+def test_path_search():
+    # a 6x6 grid: plenty of induced paths, and 4-cycles that a search for degree 2 would end on
+    grid = ss.Graph(36, [(i, i + 1) for i in range(36) if i % 6 < 5] + [(i, i + 6) for i in range(30)])
+    for k in (5, 12):
+        r = ss.search(grid, k, path=True, experiments=30, max_moves=1000, seed=2, trace=True)
+        assert r.successes > 0 and r.params.path and r.target == "forming a path" and "path=True" in repr(r)
+        assert all(is_induced_path(grid, e.vertices) for e in r.experiments if e.success)
+        assert all(min(e.trace) == e.best_conflict for e in r.experiments)
+        assert ss.SearchResult.from_dict(json.loads(r.to_json()), grid).params.path
+        viz.plot_search_summary(r)
+    through = ss.search(grid, 8, path=True, fixed=[14], experiments=30, max_moves=1000)
+    assert through.successes > 0 and all(14 in vs for vs in through.solutions())
+    with pytest.raises(ValueError, match="exactly one"):
+        ss.search(grid, 8, 7, path=True)
+    with pytest.raises(ValueError, match="exactly one"):
+        ss.search(grid, 8, degree=2, path=True)
+    with pytest.raises(ValueError, match="unweighted"):
+        ss.search(ss.WeightedGraph.from_graph(grid), 8, path=True)
 
 
 def test_legacy_regular_programs():

@@ -324,6 +324,7 @@ fn run_search<W: Write>(
         record_trace: false,
         aspiration: variant == Variant::Aspiration,
         connected: false,
+        path: false,
         regular: match variant {
             Variant::Regular => Some(Regular {
                 degree: e_sub,

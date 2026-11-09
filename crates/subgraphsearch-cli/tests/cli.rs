@@ -219,7 +219,7 @@ fn connected_searches_report_only_connected_subgraphs() {
     );
     assert!(o.status.success(), "{}", stderr(&o));
     assert!(
-        stdout(&o).contains("regular of degree 2, connected"),
+        stdout(&o).contains("8-vertex subgraph forming a cycle"),
         "{}",
         stdout(&o)
     );
@@ -292,4 +292,54 @@ fn builds_graphs_from_incidence_structures() {
     assert!(stdout(&run(&dir, &["info", "k8.g6"])).contains("edges:      28"));
     let bad = run(&dir, &["incidence", "pairs.txt", "--points", "3"]);
     assert!(!bad.status.success());
+}
+
+#[test]
+fn path_searches_find_induced_paths() {
+    let dir = multi_graph_dir("path");
+    let o = run(
+        &dir,
+        &[
+            "generate",
+            "exponential",
+            "-n",
+            "60",
+            "-d",
+            "0.08",
+            "-s",
+            "3",
+            "-o",
+            "sparse.g6",
+        ],
+    );
+    assert!(o.status.success(), "{}", stderr(&o));
+    let o = run(
+        &dir,
+        &[
+            "search",
+            "sparse.g6",
+            "-k",
+            "20",
+            "--path",
+            "-n",
+            "20",
+            "-q",
+        ],
+    );
+    assert!(o.status.success(), "{}", stderr(&o));
+    assert!(
+        stdout(&o).contains("20-vertex subgraph forming a path"),
+        "{}",
+        stdout(&o)
+    );
+    let o = run(
+        &dir,
+        &["search", "sparse.g6", "-k", "20", "-m", "19", "--path"],
+    );
+    assert_eq!(
+        o.status.code(),
+        Some(2),
+        "-m and --path conflict: {}",
+        stderr(&o)
+    );
 }

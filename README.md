@@ -71,8 +71,8 @@ viz.save_html("result.html", r)                       # interactive viewer; viz.
 
 In Jupyter, graphs and results display as summaries with small charts.
 
-- **What to search for:** `edges=` (an exact edge count), `degree=` (a regular subgraph), or a
-  total weight in a `WeightedGraph`. `fixed=` names vertices the subgraph must contain,
+- **What to search for:** `edges=` (an exact edge count), `degree=` (a regular subgraph),
+  `path=True` (an induced path), or a total weight in a `WeightedGraph`. `fixed=` names vertices the subgraph must contain,
   `connected=True` requires a connected subgraph, and `max_conflict` in
   `r.solutions(max_conflict=2)` also returns near misses.
 - **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
@@ -119,6 +119,7 @@ subgraphsearch search g.g6 -k 11 -m 55                            # 11-cliques
 subgraphsearch search g.g6 -k 30 -m 340 --max-conflict 2          # also report near misses
 subgraphsearch search g.g6 -k 10 --degree 4                       # 4-regular subgraphs
 subgraphsearch search sparse.g6 -k 12 --degree 2 --connected      # induced 12-cycles
+subgraphsearch search sparse.g6 -k 20 --path                      # induced 20-vertex paths
 subgraphsearch generate weighted -n 200 -d 0.65 -o w.mtx          # a weighted graph
 subgraphsearch search w.mtx --weighted -k 15 -m 140               # total weight 140
 subgraphsearch search many.g6 --all -k 10 -m 30 -q                # every graph in a file
@@ -139,6 +140,7 @@ python -m subgraphsearch explore g.g6 --result result.json        # explore them
 | `-k`, `--vertices` | subgraph vertices | required |
 | `-m`, `--edges` | subgraph edges (total weight, with `--weighted`) | required, unless `--degree` |
 | `-d`, `--degree` | instead, a subgraph regular of this degree | |
+| `--path` | instead, an induced path | |
 | `--connected` | require a connected subgraph | off |
 | `--fixed` | vertices the subgraph must contain | none |
 | `-n`, `--experiments` | independent restarts | 40 |
@@ -253,6 +255,15 @@ Each experiment reports the best conflict it reached and the moves it needed:
   Counting components after every move costs little in sparse graphs but can double the time in
   dense ones, whose dense subgraphs are connected anyway, so use it only where disconnected solutions
   turn up.
+- **Paths** (`--path`, `path=True`): induced paths on $`k`$ vertices. A path is a tree, but the tree
+  search rarely ends on one beyond a few vertices, so paths have a search of their own. It makes
+  the regular search's moves for degree 2, but values each swap by how far the deviation from
+  regularity would be from 2 rather than 0: a path's two endpoints have degree 1, and every other
+  vertex degree 2. The conflict is `|deviation - 2| + |edges - (k - 1)|` plus the components
+  beyond the first, which is 0 exactly for an induced path. On the 60-vertex graph above it finds
+  paths of 29 vertices, longer than the graph's longest induced cycle, and in hypercubes it reaches
+  the known [snake-in-the-box](https://en.wikipedia.org/wiki/Snake-in-the-box) records up to the
+  8-cube's 99 vertices. Like regular searches, it needs an unweighted graph.
 
 ### Random graphs and operations
 
@@ -303,6 +314,7 @@ parameters, but not isomorphic to $`T(8)`$.
 | subgraphs containing given vertices | `--fixed`, or for cliques, search their common neighborhood (below) |
 | regular subgraphs of degree $`d`$ | `--degree d --two-phase`, or `--degree d` alone with `--fixed` |
 | induced cycles on $`k`$ vertices | `--degree 2 --connected` (`degree=2, connected=True`) |
+| induced paths on $`k`$ vertices | `--path` (`path=True`) |
 | induced trees on $`k`$ vertices | `-m` set to $`k - 1`$, with `--connected` (`edges=k-1, connected=True`) |
 | a total weight in a weighted graph | `--weighted -m w` |
 

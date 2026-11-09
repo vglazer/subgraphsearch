@@ -26,13 +26,13 @@ cells = [
 `subgraphsearch` finds **[induced subgraphs]({W}Induced_subgraph) with a given number of vertices and
 edges**: [independent sets]({W}Independent_set_(graph_theory)), [cycles]({W}Cycle_graph),
 [cliques]({W}Clique_(graph_theory)) and everything in between. It also finds [regular]({W}Regular_graph)
-subgraphs, connected subgraphs and subgraphs of a given total weight. The method is a randomized
-[tabu search]({W}Tabu_search).
+subgraphs, connected subgraphs, induced paths and subgraphs of a given total weight. The method is a
+randomized [tabu search]({W}Tabu_search).
 
 The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
-vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs and cycles, and
-combines them with switching and block designs to construct strongly regular graphs. It ends with weighted
-graphs, views of a graph's structure, and file formats.
+vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles, trees and
+paths, and combines regular subgraphs with switching and block designs to construct strongly regular graphs.
+It ends with weighted graphs, views of a graph's structure, and file formats.
 """),
     code("""
 import subgraphsearch as ss
@@ -65,6 +65,7 @@ Every search picks $k$ vertices and swaps one of them for an outside vertex at e
 | a [$d$-regular]({W}Regular_graph) subgraph on $k$ vertices | `ss.search(g, k, degree=d)` | $\\sum_{{v \\in S}} \\lvert d_S(v) - d \\rvert$ |
 | the same, in two phases | `ss.search(g, k, degree=d, two_phase=True)` | first $\\lvert e - kd/2 \\rvert$, then regularity |
 | any of these, connected | add `connected=True` | plus 1 for each component beyond the first |
+| an [induced path]({W}Induced_path) on $k$ vertices | `ss.search(g, k, path=True)` | $\\lvert \\text{{deviation}} - 2 \\rvert + \\lvert e - (k - 1) \\rvert$, plus extra components |
 
 Here $d_S(v)$ is the number of neighbors $v$ has among the chosen vertices $S$. Any of these can also
 require some vertices with `fixed=`, return near misses with `solutions(max_conflict=...)`, and record the
@@ -244,7 +245,7 @@ for two_phase in (False, True):
     print(f"two_phase={two_phase}: {res.successes}/100 successes, {1000 * elapsed / max(res.successes, 1):.1f} ms per success")
 """),
     md(f"""
-## Cycles and trees
+## Cycles, trees and paths
 
 Cycles are the most important special case of regular subgraphs. Every vertex of an
 [induced cycle]({W}Induced_path) has exactly two neighbors on it, so `degree=2` searches for them. An
@@ -314,6 +315,31 @@ for k in (10, 20):
     print(f"{k} vertices spanning {k - 1} edges: {trees} of 200 experiments ended on a tree")
 induced_trees = {k: ss.search(sparse, k, k - 1, connected=True, experiments=200, seed=1).successes for k in (10, 20, 30, 35, 40)}
 print("with connected=True, experiments that found a k-vertex tree, by k:", induced_trees)
+"""),
+    md(f"""
+A path is a tree whose vertices all have degree at most 2, but beyond a few vertices the tree search rarely
+ends on one. `path=True` searches for induced [paths]({W}Path_graph) directly. It makes the regular search's
+moves for degree 2, but aims at a deviation from regularity of 2 instead of 0, for the path's two endpoints
+of degree 1, so it is drawn to paths rather than cycles; its conflict is 0 exactly for an induced path. In
+this graph it finds paths of 29 vertices, longer than its longest induced cycle:
+"""),
+    code("""
+trees = ss.search(sparse, 12, 11, connected=True, experiments=200, seed=1).solutions()
+print("12-vertex trees that are paths:", sum(int(sparse.induced(vs).degrees().max()) <= 2 for vs in trees), "of", len(trees))
+paths = {k: ss.search(sparse, k, path=True, experiments=200, seed=1).successes for k in (12, 20, 25, 29, 31)}
+print("path=True, experiments that found a k-vertex path, by k:", paths)
+"""),
+    md(f"""
+In the $n$-dimensional [hypercube]({W}Hypercube_graph), whose vertices are the $n$-bit strings and whose edges
+join strings that differ in one bit, the longest induced paths are the [snake-in-the-box]({W}Snake-in-the-box)
+problem, and the longest induced cycles the coil-in-the-box problem. Their known records make a good test:
+the longest snake in the 7-cube has 51 vertices, and the path search finds one in under a second.
+"""),
+    code("""
+n = 7
+cube = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])
+snakes = ss.search(cube, 51, path=True, experiments=400, max_moves=2000, div_freq=300, div_dur=8)
+print(snakes.summary())
 """),
     md(f"""
 ## Switching
