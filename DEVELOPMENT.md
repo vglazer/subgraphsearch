@@ -36,6 +36,7 @@ for how they are made and what they test.
 ```sh
 uv run python examples/make_quickstart.py         # rebuild the quickstart notebooks
 uv run python examples/make_figures.py            # redraw the README figures
+uv run python examples/snake_9cube.py             # reproduce the README's 189-vertex 9-cube snake
 ```
 
 - **The quickstart notebook** is generated from `examples/make_quickstart.py`, in two copies: the

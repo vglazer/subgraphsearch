@@ -266,7 +266,10 @@ Each experiment reports the best conflict it reached and the moves it needed:
   the known [snake-in-the-box](https://en.wikipedia.org/wiki/Snake-in-the-box) records up to the
   8-cube's 99 vertices. In the 9-cube, the lowest dimension where the longest snake is unknown, it
   finds snakes of 185 vertices in under three minutes, within 4% of the long-standing record of 191
-  vertices (190 edges); see [Performance](#performance). Like regular searches, it needs an
+  vertices (190 edges); see [Performance](#performance). Fixing a 95-vertex snake of the 8-cube in
+  one half of the 9-cube with `fixed=` gets closer: the search for the rest then finds snakes of 189
+  vertices in most experiments, 2 short of the record, though only some 8-cube snakes work as the
+  half ([examples/snake_9cube.py](examples/snake_9cube.py)). Like regular searches, it needs an
   unweighted graph.
 
 ### Random graphs and operations
@@ -383,6 +386,7 @@ maximum, determine the time.
 | induced paths on 99 vertices in the 8-cube (the record) | 400 × 20,000 | 7,951,718 | 21&nbsp;s | 3 of 400 |
 | induced paths on 180 vertices in the 9-cube (the record is 191) | 100 × 200,000 | 13,226,544 | 110&nbsp;s | 44 of 100 |
 | induced paths on 185 vertices in the 9-cube | 64 × 300,000 | 18,928,147 | 163&nbsp;s | 1 of 64 |
+| induced paths on 189 vertices in the 9-cube through a fixed 95-vertex snake in one half | 64 × 200,000 | 4,256,688 | 36&nbsp;s | 62 of 64 |
 
 A search that misses its target makes every move it is allowed, so its time is the cost of a move
 times the number of moves. The cost of a move grows in proportion to the number of vertices, and a
