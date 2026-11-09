@@ -25,9 +25,14 @@ cells = [
 
 `subgraphsearch` finds **[induced subgraphs]({W}Induced_subgraph) with a given number of vertices and
 edges**: [independent sets]({W}Independent_set_(graph_theory)), [cycles]({W}Cycle_graph),
-[cliques]({W}Clique_(graph_theory)) and everything in between. It also finds [regular]({W}Regular_graph) subgraphs and subgraphs of a given total
-weight. The method is a randomized [tabu search]({W}Tabu_search). This notebook generates a graph,
-searches it in several ways, and shows how to read and visualize the results.
+[cliques]({W}Clique_(graph_theory)) and everything in between. It also finds [regular]({W}Regular_graph)
+subgraphs, connected subgraphs and subgraphs of a given total weight. The method is a randomized
+[tabu search]({W}Tabu_search).
+
+The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
+vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs and cycles, and
+combines them with switching and block designs to construct strongly regular graphs. It ends with weighted
+graphs, views of a graph's structure, and file formats.
 """),
     code("""
 import subgraphsearch as ss
@@ -68,7 +73,7 @@ which lets the search undo its last swap when that would beat the best conflict 
 criterion* of a tabu search). The sections below try each one.
 """),
     md("""
-## Cliques
+## Cliques and independent sets
 
 An 11-vertex clique has all 11 · 10 / 2 = 55 edges, so this asks for 11 vertices spanning 55 edges. Each of
 the 40 *experiments* (independent restarts) reports the best subgraph it found.
@@ -84,6 +89,16 @@ Many experiments find the same clique; `solutions()` lists each distinct vertex 
     code("""
 print(len(cliques.solutions()), "distinct 11-cliques")
 viz.plot_graph(g, cliques.best.vertices, title="an 11-clique");
+"""),
+    md("""
+An independent set is the opposite: vertices with no edges among them, so the target is 0. It is also a
+clique of the complement, `g.complement()`, and the two searches find the same sets. This graph is dense, so
+its independent sets are smaller than its cliques: the search finds 7 vertices every time and 8 never.
+"""),
+    code("""
+independent = ss.search(g, 7, 0)
+print(independent.successes, "of 40 experiments found a 7-vertex independent set")
+print("the same as 7-cliques of the complement:", independent.solutions() == ss.search(g.complement(), 7, 21).solutions())
 """),
     md("""
 ## A harder target
@@ -156,62 +171,22 @@ print("with fixed=[v]:", through_v.successes, "of 40 experiments found an 11-cli
 print("in its neighborhood:", in_nbhd.successes, "of 40 found one")
 assert all(g.induced_edge_count(c) == 55 for c in cliques_via_nbhd)
 """),
-    md(f"""
-## Graph structure
-
-`viz.plot_graph_summary` shows three views of a graph: its [degree distribution]({W}Degree_distribution) next to
-that of an Erdős–Rényi graph of the same density, its Laplacian spectrum, and its adjacency matrix with a
-subgraph's vertices moved to the top-left block.
-"""),
-    code("""
-viz.plot_graph_summary(g, highlight=r.best.vertices);
-"""),
-    md(f"""
-The [Laplacian]({W}Laplacian_matrix) of a graph is $L = D - A$, where $D$ is the diagonal matrix of degrees
-and $A$ the adjacency matrix. Its eigenvalues $\\lambda_0 \\le \\lambda_1 \\le \\dots$ are never negative,
-$\\lambda_0$ is always 0, and the number of eigenvalues equal to 0 is the number of connected components. So the
-second-smallest, $\\lambda_1$, called the [algebraic connectivity]({W}Algebraic_connectivity), is positive
-exactly when the graph is connected. It also measures how well connected the graph is. *Fiedler's bound*
-(1973) says that unless the graph is complete, $\\lambda_1 \\le \\kappa$, where $\\kappa$ is the
-[vertex connectivity]({W}Connectivity_(graph_theory)), the fewest vertices whose removal disconnects the graph.
-So removing fewer than $\\lambda_1$ vertices can never disconnect it.
-
-The middle panel is a histogram of all 100 eigenvalues. The lone bar at 0 is $\\lambda_0$, and the red line
-marks $\\lambda_1$, far from 0, so this graph is connected and hard to break apart. The vertex connectivity
-can never exceed the smallest degree, since removing a vertex's neighbors cuts it off, so $\\kappa$ lies
-between $\\lambda_1$ and the smallest degree. Here that means between 46 and 48, and computing it gives 48. Two separate 4-cycles, by contrast, have two zero eigenvalues and $\\lambda_1 = 0$:
-"""),
-    code("""
-import networkx as nx
-
-from subgraphsearch import convert
-
-fiedler = viz.spectral_summary(g)["algebraic_connectivity"]
-kappa = nx.node_connectivity(convert.to_networkx(g))
-print(f"Fiedler's bound: algebraic connectivity {fiedler:.1f} <= vertex connectivity {kappa} "
-      f"<= smallest degree {g.degrees().min()}")
-
-two_cycles = ss.Graph(8, [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4)])
-for name, h in [("g", g), ("two 4-cycles", two_cycles)]:
-    eigenvalues = viz.laplacian_spectrum(h)
-    print(f"{name}: {sum(abs(eigenvalues) < 1e-9)} zero eigenvalue(s), algebraic connectivity "
-          f"{viz.spectral_summary(h)['algebraic_connectivity']:.1f}")
-"""),
-    md(f"""
-Despite its name, the `"power"` model has no heavy tail, so its graphs are not
-[scale-free]({W}Scale-free_network); the comparison makes that plain:
-"""),
-    code("""
-viz.plot_degree_distribution(ss.generate("power", 1500, 0.2, seed=52));
-"""),
     md("""
-## Interactive view
+## Saving and repeating results
 
-`viz.show` displays a self-contained page: drag to pan, scroll to zoom, hover or click vertices, and pick a
-solution to highlight. `viz.save_html` writes the same page to a file.
+`result.save(path)` writes a result as JSON, and `ss.SearchResult.load(path, g)` reads it back given the
+graph. Results depend only on the seed and the settings, not on the number of threads, so a search can be
+repeated exactly; change the seed for independent runs.
 """),
     code("""
-viz.show(ss.search(g, 30, 330, experiments=8, seed=2), max_conflict=0)
+import pathlib
+import tempfile
+
+result = ss.search(g, 30, 330, experiments=8, seed=2)
+path = pathlib.Path(tempfile.mkdtemp()) / "result.json"
+result.save(path)
+assert ss.SearchResult.load(path, g).solutions() == result.solutions()
+print("the same seed gives the same solutions:", ss.search(g, 30, 330, experiments=8, seed=2).solutions() == result.solutions())
 """),
     md("""
 ## Tuning
@@ -232,19 +207,8 @@ for aspiration in (False, True):
     res = ss.search(g, 30, 346, aspiration=aspiration, **settings)
     print(f"aspiration={aspiration}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
 """),
-    md("""
-## Weighted graphs
-
-In a `WeightedGraph` every edge has an integer weight, and the target is the total weight of the subgraph's
-edges. This graph has 200 vertices and a mean weight of 0.65 per pair of vertices; the search looks for 15
-vertices whose edges weigh 140 in total.
-"""),
-    code("""
-w = ss.generate_weighted(200, 0.65, seed=1)
-ss.search(w, 15, 140, experiments=40, max_moves=3000, div_freq=300, div_dur=10)
-"""),
     md(f"""
-## Regular subgraphs and switching
+## Regular subgraphs
 
 `degree=` asks for subgraphs in which every vertex has exactly that many neighbors within the subgraph. A
 graph is [strongly regular]({W}Strongly_regular_graph) with parameters $(n, k, \\lambda, \\mu)$ when it has $n$
@@ -280,12 +244,13 @@ for two_phase in (False, True):
     print(f"two_phase={two_phase}: {res.successes}/100 successes, {1000 * elapsed / max(res.successes, 1):.1f} ms per success")
 """),
     md(f"""
-### Cycles
+## Cycles
 
-An [induced cycle]({W}Induced_path) on $k$ vertices spans $k$ edges, but so do many other subgraphs, such as a
-triangle with a path hanging off it, so an edge-count search rarely finds one. Every vertex of a cycle has
-exactly two neighbors on it, so search for 2-regular subgraphs instead. A 2-regular graph is a disjoint union
-of cycles, though, not always a single one. `connected=True` adds 1 to the conflict for each component beyond
+Cycles are the most important special case of regular subgraphs. Every vertex of an
+[induced cycle]({W}Induced_path) has exactly two neighbors on it, so `degree=2` searches for them. An
+edge-count search is no substitute: a $k$-cycle spans $k$ edges, but so do many other subgraphs, such as a
+triangle with a path hanging off it. A 2-regular graph is a disjoint union of cycles, though, not always a
+single one, so cycles get special support: `connected=True` adds 1 to the conflict for each component beyond
 the first, so only single cycles count as successes. Below 6 vertices it changes nothing, since the smallest
 union of two cycles is two triangles. Here are 12-vertex searches of a sparse random graph, the one in the
 README figure:
@@ -327,15 +292,32 @@ def induced_cycles(k, **kwargs):
 print("10-cycles through vertex 0:", len(induced_cycles(10, fixed=[0])))
 print("distinct k-cycles found, by k:", {k: len(induced_cycles(k)) for k in (24, 26, 28, 30)})
 """),
+    md("""
+`viz.show` displays a search's solutions on an interactive page: pick one from the menu to highlight it, drag
+to pan, scroll to zoom, hover over a vertex for details and click it to pin it. Here the menu steps through
+distinct induced 20-cycles. `viz.save_html` writes the same page to a file, and on the command line,
+`python -m subgraphsearch explore graph.g6 --result result.json` makes one from a saved result.
+"""),
+    code("""
+viz.show(ss.search(sparse, 20, degree=2, connected=True, seed=1))
+"""),
     md(f"""
+## Switching
+
 [Seidel switching]({W}Two-graph#Switching_and_graphs) with respect to a vertex set $S$ swaps edges and
 non-edges between $S$ and the rest of the graph. Switching a strongly regular graph with respect to a
 suitable regular subgraph can give a different strongly regular graph with the same parameters. The 4×4
-[rook's graph]({W}Rook%27s_graph), with parameters $(16, 6, 2, 2)$, switched with respect to a 2-regular
-subgraph on 8 vertices gives the [Shrikhande graph]({W}Shrikhande_graph), the only other graph with those
-parameters.
+[rook's graph]({W}Rook%27s_graph), with parameters $(16, 6, 2, 2)$, switched with respect to an induced
+8-cycle gives the [Shrikhande graph]({W}Shrikhande_graph), the only other graph with those parameters. Here
+the difference between a cycle and a union of cycles matters: switching with respect to two 4-cycles, also a
+2-regular subgraph on 8 vertices, gives the rook's graph back, so the search asks for a connected one.
 """),
     code("""
+import networkx as nx
+
+from subgraphsearch import convert
+
+
 def srg_parameters(h):
     \"\"\"(n, k, λ, μ) if h is strongly regular, else None.\"\"\"
     A = h.adjacency_matrix().astype(int)
@@ -347,8 +329,8 @@ def srg_parameters(h):
 
 
 rook = ss.Graph(16, [(a, b) for a in range(16) for b in range(a + 1, 16) if a // 4 == b // 4 or a % 4 == b % 4])
-two_regular = ss.search(rook, 8, degree=2).best.vertices
-switched = rook.switch(two_regular)
+eight_cycle = ss.search(rook, 8, degree=2, connected=True).best.vertices
+switched = rook.switch(eight_cycle)
 print("rook's graph:", srg_parameters(rook), "| switched:", srg_parameters(switched))
 print("isomorphic:", nx.is_isomorphic(convert.to_networkx(rook), convert.to_networkx(switched)))
 """),
@@ -421,9 +403,9 @@ pair of these graphs:
 """),
     code("""
 # 3. switch, and keep the strongly regular graphs not isomorphic to T(8) or to each other
-def clique_sizes(g):
+def clique_sizes(h):
     \"\"\"The sizes of all maximal cliques, sorted: isomorphic graphs have the same.\"\"\"
-    return sorted(len(c) for c in nx.find_cliques(convert.to_networkx(g)))
+    return sorted(len(c) for c in nx.find_cliques(convert.to_networkx(h)))
 
 
 def described(vertices):
@@ -444,8 +426,8 @@ for vertices in independent + two_regular:
         seen.append(sizes)
         chang.append((described(vertices), vertices, switched))
 
-for how, _, g in chang:
-    print(f"switching T(8) with respect to {how}: {srg_parameters(g)}, not isomorphic to T(8) or the others")
+for how, _, h in chang:
+    print(f"switching T(8) with respect to {how}: {srg_parameters(h)}, not isomorphic to T(8) or the others")
 """),
     md("""
 The top row draws each set of pairs on the 8 points, and the bottom row the graph it gives, with the switched
@@ -460,15 +442,68 @@ viz.plot_switchings(
 );
 """),
     md("""
+## Weighted graphs
+
+In a `WeightedGraph` every edge has an integer weight, and the target is the total weight of the subgraph's
+edges. This graph has 200 vertices and a mean weight of 0.65 per pair of vertices; the search looks for 15
+vertices whose edges weigh 140 in total.
+"""),
+    code("""
+w = ss.generate_weighted(200, 0.65, seed=1)
+ss.search(w, 15, 140, experiments=40, max_moves=3000, div_freq=300, div_dur=10)
+"""),
+    md(f"""
+## Graph structure
+
+`viz.plot_graph_summary` shows three views of a graph: its [degree distribution]({W}Degree_distribution) next to
+that of an Erdős–Rényi graph of the same density, its Laplacian spectrum, and its adjacency matrix with a
+subgraph's vertices moved to the top-left block. Here it is for the dense graph from the start, with the
+30-vertex, 346-edge subgraph found earlier.
+"""),
+    code("""
+viz.plot_graph_summary(g, highlight=r.best.vertices);
+"""),
+    md(f"""
+The [Laplacian]({W}Laplacian_matrix) of a graph is $L = D - A$, where $D$ is the diagonal matrix of degrees
+and $A$ the adjacency matrix. Its eigenvalues $\\lambda_0 \\le \\lambda_1 \\le \\dots$ are never negative,
+$\\lambda_0$ is always 0, and the number of eigenvalues equal to 0 is the number of connected components. So the
+second-smallest, $\\lambda_1$, called the [algebraic connectivity]({W}Algebraic_connectivity), is positive
+exactly when the graph is connected. It also measures how well connected the graph is. *Fiedler's bound*
+(1973) says that unless the graph is complete, $\\lambda_1 \\le \\kappa$, where $\\kappa$ is the
+[vertex connectivity]({W}Connectivity_(graph_theory)), the fewest vertices whose removal disconnects the graph.
+So removing fewer than $\\lambda_1$ vertices can never disconnect it.
+
+The middle panel is a histogram of all 100 eigenvalues. The lone bar at 0 is $\\lambda_0$, and the red line
+marks $\\lambda_1$, far from 0, so this graph is connected and hard to break apart. The vertex connectivity
+can never exceed the smallest degree, since removing a vertex's neighbors cuts it off, so $\\kappa$ lies
+between $\\lambda_1$ and the smallest degree. Here that means between 46 and 48, and computing it gives 48. Two separate 4-cycles, by contrast, have two zero eigenvalues and $\\lambda_1 = 0$:
+"""),
+    code("""
+fiedler = viz.spectral_summary(g)["algebraic_connectivity"]
+kappa = nx.node_connectivity(convert.to_networkx(g))
+print(f"Fiedler's bound: algebraic connectivity {fiedler:.1f} <= vertex connectivity {kappa} "
+      f"<= smallest degree {g.degrees().min()}")
+
+two_cycles = ss.Graph(8, [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4)])
+for name, h in [("g", g), ("two 4-cycles", two_cycles)]:
+    eigenvalues = viz.laplacian_spectrum(h)
+    print(f"{name}: {sum(abs(eigenvalues) < 1e-9)} zero eigenvalue(s), algebraic connectivity "
+          f"{viz.spectral_summary(h)['algebraic_connectivity']:.1f}")
+"""),
+    md(f"""
+Despite its name, the `"power"` model has no heavy tail, so its graphs are not
+[scale-free]({W}Scale-free_network); the comparison makes that plain:
+"""),
+    code("""
+viz.plot_degree_distribution(ss.generate("power", 1500, 0.2, seed=52));
+"""),
+    md("""
 ## Formats and other libraries
 
 Graphs read and write graph6, sparse6, Matrix Market, edge lists, DOT and GraphML, and convert to and
 from networkx, igraph, SciPy and NumPy.
 """),
     code("""
-import pathlib
-import tempfile
-
 path = pathlib.Path(tempfile.mkdtemp()) / "g.g6"
 g.write(path)
 assert ss.read(path) == g
