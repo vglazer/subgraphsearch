@@ -4,7 +4,7 @@ A snake is an induced path in a hypercube (see snake-in-the-box). The 9-cube is 
 vertices below 256 and those above, with each vertex joined to its copy in the other half. A plain
 path search for 189 vertices in the 9-cube does not succeed, but fixing a 95-vertex 8-cube snake in
 the lower half with fixed= leaves only the other 94 vertices to place, most of them in the upper
-half, and that search succeeds in most experiments. The record is 191 vertices.
+half, and that search succeeds in most experiments. The record is 192 vertices (191 edges).
 
 Not every 8-cube snake works: of the 95- to 97-vertex ones tried, about one in fifteen gave 189,
 and the one found here, with seed 26, is one of them. Snakes of 98 or 99 vertices block too much of

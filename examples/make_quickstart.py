@@ -335,10 +335,10 @@ join strings that differ in one bit, the longest induced paths are the [snake-in
 problem, and the longest induced cycles the coil-in-the-box problem. Their known records make a good test:
 the longest snake in the 7-cube has 51 vertices, and the path search finds one in under a second. In the
 9-cube, the lowest dimension where the longest snake is unknown, the same search finds snakes of 185 vertices
-in under three minutes, within 4% of the long-standing record of 191 vertices. Splitting the 9-cube into two
-8-cubes gets closer: fixing a 95-vertex 8-cube snake in one half with `fixed=` leaves the search only the rest
-to place, and it then finds snakes of 189 vertices in most experiments, though only some 8-cube snakes work
-as the half. The script
+in under three minutes, 7 short of the record of 192 vertices (191 edges), reported in 2026. Splitting the
+9-cube into two 8-cubes gets closer: fixing a 95-vertex 8-cube snake in one half with `fixed=` leaves the
+search only the rest to place, and it then finds snakes of 189 vertices in most experiments, 3 short of the
+record, though only some 8-cube snakes work as the half. The script
 [snake_9cube.py](https://github.com/vglazer/subgraphsearch/blob/main/examples/snake_9cube.py) reproduces one
 in under a minute.
 """),
