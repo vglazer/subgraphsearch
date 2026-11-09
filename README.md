@@ -72,8 +72,9 @@ viz.save_html("result.html", r)                       # interactive viewer; viz.
 In Jupyter, graphs and results display as summaries with small charts.
 
 - **What to search for:** `edges=` (an exact edge count), `degree=` (a regular subgraph), or a
-  total weight in a `WeightedGraph`. `fixed=` names vertices the subgraph must contain, and
-  `max_conflict` in `r.solutions(max_conflict=2)` also returns near misses.
+  total weight in a `WeightedGraph`. `fixed=` names vertices the subgraph must contain,
+  `connected=True` requires a connected subgraph, and `max_conflict` in
+  `r.solutions(max_conflict=2)` also returns near misses.
 - **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
   `g.induced(vs)`, `g.switch(vs)`, `g.common_neighborhood(vs)`, `g.adjacency_matrix()`,
   `g.laplacian()`, `g.layout()`, and from an incidence structure, `ss.Graph.point_graph(blocks)`
@@ -117,6 +118,7 @@ subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6    # a random gra
 subgraphsearch search g.g6 -k 11 -m 55                            # 11-cliques
 subgraphsearch search g.g6 -k 30 -m 340 --max-conflict 2          # also report near misses
 subgraphsearch search g.g6 -k 10 --degree 4                       # 4-regular subgraphs
+subgraphsearch search sparse.g6 -k 12 --degree 2 --connected      # induced 12-cycles
 subgraphsearch generate weighted -n 200 -d 0.65 -o w.mtx          # a weighted graph
 subgraphsearch search w.mtx --weighted -k 15 -m 140               # total weight 140
 subgraphsearch search many.g6 --all -k 10 -m 30 -q                # every graph in a file
@@ -137,6 +139,7 @@ python -m subgraphsearch explore g.g6 --result result.json        # explore them
 | `-k`, `--vertices` | subgraph vertices | required |
 | `-m`, `--edges` | subgraph edges (total weight, with `--weighted`) | required, unless `--degree` |
 | `-d`, `--degree` | instead, a subgraph regular of this degree | |
+| `--connected` | require a connected subgraph | off |
 | `--fixed` | vertices the subgraph must contain | none |
 | `-n`, `--experiments` | independent restarts | 40 |
 | `--moves` | maximum moves per experiment | 250 |
@@ -234,6 +237,18 @@ Each experiment reports the best conflict it reached and the moves it needed:
   *aspiration criterion*, which lifts the tabu on a move that would beat the best conflict so far.
   After each move it also considers the swaps involving the two vertices just swapped, and takes one
   of them whenever it would. It can help a search that stalls, but usually makes little difference.
+- **Connected subgraphs** (`--connected`, any search): each component of the subgraph beyond the
+  first adds 1 to the conflict, so only connected subgraphs that hit the target count as successes.
+  Swaps are still chosen by the target alone. A disconnected subgraph that hits it leaves the search
+  on a plateau, which it crosses by swaps that keep the target until it reaches a connected one, so
+  this works best when connected subgraphs are common among those that hit the target. The main use
+  is `--degree 2 --connected`, which finds
+  [induced cycles](https://en.wikipedia.org/wiki/Induced_path) rather than unions of them: on a
+  60-vertex random graph of density 0.08, all 200 of 200 experiments find a single 12-cycle, where
+  `--degree 2` alone ends on one in 110. The two-phase search's second phase makes no random moves, so
+  it crosses such plateaus less often; leave out `--two-phase` here. Counting components after
+  every move costs little in sparse graphs but can double the time in dense ones, whose dense
+  subgraphs are connected anyway, so use it only where disconnected solutions turn up.
 
 ### Random graphs and operations
 
@@ -283,6 +298,7 @@ parameters, but not isomorphic to $`T(8)`$.
 | subgraphs close to a target | add `--max-conflict n` (`r.solutions(max_conflict=n)`) |
 | subgraphs containing given vertices | `--fixed`, or for cliques, search their common neighborhood (below) |
 | regular subgraphs of degree $`d`$ | `--degree d --two-phase`, or `--degree d` alone with `--fixed` |
+| induced cycles on $`k`$ vertices | `--degree 2 --connected` (`degree=2, connected=True`) |
 | a total weight in a weighted graph | `--weighted -m w` |
 
 Some reformulations make a search easier:

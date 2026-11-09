@@ -59,6 +59,7 @@ Every search picks $k$ vertices and swaps one of them for an outside vertex at e
 | $k$ vertices whose edges weigh $m$ in total | `ss.search(w, k, m)` on a `WeightedGraph` | $\\lvert \\text{{weight}} - m \\rvert$ |
 | a [$d$-regular]({W}Regular_graph) subgraph on $k$ vertices | `ss.search(g, k, degree=d)` | $\\sum_{{v \\in S}} \\lvert d_S(v) - d \\rvert$ |
 | the same, in two phases | `ss.search(g, k, degree=d, two_phase=True)` | first $\\lvert e - kd/2 \\rvert$, then regularity |
+| any of these, connected | add `connected=True` | plus 1 for each component beyond the first |
 
 Here $d_S(v)$ is the number of neighbors $v$ has among the chosen vertices $S$. Any of these can also
 require some vertices with `fixed=`, return near misses with `solutions(max_conflict=...)`, and record the
@@ -284,9 +285,10 @@ for two_phase in (False, True):
 An [induced cycle]({W}Induced_path) on $k$ vertices spans $k$ edges, but so do many other subgraphs, such as a
 triangle with a path hanging off it, so an edge-count search rarely finds one. Every vertex of a cycle has
 exactly two neighbors on it, so search for 2-regular subgraphs instead. A 2-regular graph is a disjoint union
-of cycles, though, not always a single one: count the components of each solution and keep those with one.
-Below 6 vertices there is nothing to check, since the smallest union of two cycles is two triangles. Here are
-12-vertex searches of a sparse random graph, the one in the README figure:
+of cycles, though, not always a single one. `connected=True` adds 1 to the conflict for each component beyond
+the first, so only single cycles count as successes. Below 6 vertices it changes nothing, since the smallest
+union of two cycles is two triangles. Here are 12-vertex searches of a sparse random graph, the one in the
+README figure:
 """),
     code("""
 import collections
@@ -303,26 +305,27 @@ def cycle_lengths(h):
     return tuple(sorted(collections.Counter(labels).values()))
 
 
-unions = ss.search(sparse, 12, degree=2, two_phase=True, experiments=400, seed=1).solutions()
-print("2-regular, by cycle lengths:", collections.Counter(cycle_lengths(sparse.induced(vs)) for vs in unions).most_common(4))
-cycles = [vs for vs in unions if sparse.induced(vs).components()[1] == 1]
-print(len(cycles), "of", len(unions), "are a single 12-cycle")
-viz.plot_graph(sparse, cycles[0], layout=sparse.layout("spring", seed=27), title="an induced 12-cycle");   # a seed that draws it uncrossed
+unions = ss.search(sparse, 12, degree=2, experiments=200, seed=1).solutions()
+print("degree=2, by cycle lengths:", collections.Counter(cycle_lengths(sparse.induced(vs)) for vs in unions).most_common(4))
+cycles = ss.search(sparse, 12, degree=2, connected=True, experiments=200, seed=1)
+print(f"degree=2, connected=True: {cycles.successes} of 200 experiments found a single 12-cycle")
+viz.plot_graph(sparse, cycles.best.vertices, layout=sparse.layout("spring", seed=2), title="an induced 12-cycle");   # a seed that draws it uncrossed
 """),
     md("""
-The same filter gives cycles through chosen vertices, with `fixed=`, and the longest induced cycles the search
-can find, by raising $k$ until single cycles stop turning up. Here they get rare at 28 vertices and none are
-found at 30. As with near misses, the longest one found is a lower bound, not a proof that none is longer.
+`connected=True` combines with the other options: `fixed=` gives cycles through chosen vertices, and raising
+$k$ until successes stop finds the longest induced cycles the search can reach. Here they get rare at 28
+vertices and none are found at 30. As with near misses, the longest one found is a lower bound, not a proof
+that none is longer. Leave out `two_phase=True` for connected searches: its second phase makes no random
+moves, so it gets stuck on unions of cycles more often.
 """),
     code("""
-def single_cycles(k, **kwargs):
+def induced_cycles(k, **kwargs):
     \"\"\"The distinct induced k-cycles of the sparse graph that the search finds.\"\"\"
-    found = ss.search(sparse, k, degree=2, experiments=200, seed=1, **kwargs).solutions()
-    return [vs for vs in found if sparse.induced(vs).components()[1] == 1]
+    return ss.search(sparse, k, degree=2, connected=True, experiments=200, seed=1, **kwargs).solutions()
 
 
-print("10-cycles through vertex 0:", len(single_cycles(10, fixed=[0])))
-print("k-cycles found, by k:", {k: len(single_cycles(k, two_phase=True)) for k in (24, 26, 28, 30)})
+print("10-cycles through vertex 0:", len(induced_cycles(10, fixed=[0])))
+print("distinct k-cycles found, by k:", {k: len(induced_cycles(k)) for k in (24, 26, 28, 30)})
 """),
     md(f"""
 [Seidel switching]({W}Two-graph#Switching_and_graphs) with respect to a vertex set $S$ swaps edges and

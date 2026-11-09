@@ -18,6 +18,11 @@
 //!   lifts the tabu: the swaps involving the two vertices just swapped are also examined after
 //!   each move, and one is taken whenever it would beat the best value so far.
 //!
+//! - With [`SearchParams::connected`], every component of the subgraph beyond the first adds 1 to
+//!   the conflict, so an experiment succeeds only on a connected subgraph that hits the target.
+//!   Moves are still chosen by the target alone: a disconnected subgraph that hits it leaves the
+//!   search on a plateau, which it walks across until it reaches a connected one.
+//!
 //! With [`RngKind::Legacy`] the search consumes random numbers exactly as the C programs do, so
 //! the same seed gives the same experiments, move for move (see [`search_sequential`]).
 
@@ -156,6 +161,11 @@ pub struct SearchParams {
     /// of them whenever it would beat the best value so far.
     #[serde(default)]
     pub aspiration: bool,
+    /// Require a connected subgraph: each component beyond the first adds 1 to the conflict. The
+    /// components are counted after every move, at a cost of about the sum of the subgraph's
+    /// degrees in the whole graph.
+    #[serde(default)]
+    pub connected: bool,
     /// Search for regular induced subgraphs instead (the original `reg_search` and `ereg_search`); the
     /// `edges` target is then ignored. Needs an unweighted [`Graph`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -189,6 +199,7 @@ impl SearchParams {
             rng: RngKind::Xoshiro,
             record_trace: false,
             aspiration: false,
+            connected: false,
             regular: None,
         }
     }
@@ -218,10 +229,64 @@ impl SearchParams {
     }
 }
 
+/// Counts the components of the current subgraph, for [`SearchParams::connected`].
+pub(crate) struct Components {
+    /// The pass that last reached each vertex; a new pass needs no clearing.
+    seen: Vec<u32>,
+    pass: u32,
+    stack: Vec<usize>,
+}
+
+impl Components {
+    pub(crate) fn new(n: usize) -> Self {
+        Components {
+            seen: vec![0; n],
+            pass: 0,
+            stack: Vec::new(),
+        }
+    }
+
+    /// The number of components beyond the first among `members`, the vertices with
+    /// `in_sub[v] != 0`, with each vertex's neighbors in the whole graph given by `neighbors`.
+    pub(crate) fn extra<'g>(
+        &mut self,
+        members: impl Iterator<Item = usize>,
+        in_sub: &[u8],
+        neighbors: impl Fn(usize) -> &'g [u32],
+    ) -> i64 {
+        if self.pass == u32::MAX {
+            self.seen.fill(0);
+            self.pass = 0;
+        }
+        self.pass += 1;
+        let pass = self.pass;
+        let mut components = 0;
+        for start in members {
+            if self.seen[start] == pass {
+                continue;
+            }
+            components += 1;
+            self.seen[start] = pass;
+            self.stack.push(start);
+            while let Some(u) = self.stack.pop() {
+                for &x in neighbors(u) {
+                    let x = x as usize;
+                    if in_sub[x] != 0 && self.seen[x] != pass {
+                        self.seen[x] = pass;
+                        self.stack.push(x);
+                    }
+                }
+            }
+        }
+        (components - 1).max(0)
+    }
+}
+
 /// The outcome of one experiment.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Experiment {
-    /// The smallest objective value `|e - target|` reached.
+    /// The smallest objective value `|e - target|` reached (plus the components beyond the first,
+    /// with [`SearchParams::connected`]).
     pub best_conflict: i64,
     /// Moves made: the index of the successful move, or `max_moves` if none succeeded.
     pub moves: usize,
@@ -432,6 +497,8 @@ struct Workspace {
     rest_asp: Vec<usize>,
     /// Non-fixed vertices; a partial shuffle of it picks each starting subgraph.
     rand_perm: Vec<usize>,
+    /// With `params.connected`.
+    components: Option<Components>,
 }
 
 impl Workspace {
@@ -463,6 +530,7 @@ impl Workspace {
                 Vec::new()
             },
             rand_perm: Vec::with_capacity(v - v_fix),
+            components: params.connected.then(|| Components::new(v)),
         };
         ws.reset(params);
         ws
@@ -601,10 +669,7 @@ impl Workspace {
             new_min_val += i64::from(self.sub_degs[rest_vert])
                 - i64::from(self.sub_degs[sub_vert])
                 - graph.edge_value(sub_vert, rest_vert);
-            let obj_val = new_min_val.abs();
-            if let Some(t) = trace.as_mut() {
-                t.push(obj_val.min(u32::MAX as i64) as u32);
-            }
+            let mut obj_val = new_min_val.abs();
 
             // update subgraph degrees; mark vertices adjacent to exactly one of the two swapped
             for &x in graph.neighbors(sub_vert) {
@@ -621,15 +686,23 @@ impl Workspace {
             self.sub_ch[sub_vert] = 0;
             self.sub_ch[rest_vert] = 1;
 
-            if obj_val < g_opt_val {
-                g_opt_val = obj_val;
-                self.opt_ch.copy_from_slice(&self.sub_ch);
-            }
-
             self.sub_verts[sub_row] = rest_vert;
             self.vert_inds[rest_vert] = sub_row;
             self.rest_verts[rest_col] = sub_vert;
             self.vert_inds[sub_vert] = rest_col;
+
+            if let Some(c) = self.components.as_mut() {
+                let members = params.fixed.iter().chain(&self.sub_verts).copied();
+                obj_val += c.extra(members, &self.sub_ch, |u| graph.neighbors(u));
+            }
+            if let Some(t) = trace.as_mut() {
+                t.push(obj_val.min(u32::MAX as i64) as u32);
+            }
+
+            if obj_val < g_opt_val {
+                g_opt_val = obj_val;
+                self.opt_ch.copy_from_slice(&self.sub_ch);
+            }
 
             if obj_val == 0 {
                 success = true;
@@ -774,6 +847,61 @@ mod tests {
                 .iter()
                 .all(|e| e.trace.as_ref().unwrap().len() == e.moves + usize::from(e.success))
         );
+    }
+
+    #[test]
+    fn connected_searches_succeed_only_on_connected_subgraphs() {
+        // two triangles and a 6-cycle: 6 vertices spanning 6 edges, all of degree 2, are either
+        // both triangles or the 6-cycle, and only the 6-cycle is connected
+        let g = Graph::from_edges(
+            12,
+            [(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3)]
+                .into_iter()
+                .chain((6..12).map(|i| (i, 6 + (i - 5) % 6))),
+        )
+        .unwrap();
+        let hexagon: Vec<usize> = (6..12).collect();
+        let regular = |two_phase| {
+            Some(Regular {
+                degree: 2,
+                two_phase,
+            })
+        };
+        for target in [None, regular(false), regular(true)] {
+            for rng in [RngKind::Xoshiro, RngKind::Legacy] {
+                let mut p = SearchParams::new(6, 6);
+                p.regular = target;
+                p.rng = rng;
+                p.experiments = 30;
+                p.max_moves = 500;
+                p.div_freq = 50;
+                p.record_trace = true;
+                let plain = search(&g, &p).unwrap();
+                p.connected = true;
+                let connected = search(&g, &p).unwrap();
+                let label = format!("{target:?}, {rng:?}");
+                assert!(connected.successes() > 0, "{label}");
+                for e in &connected.experiments {
+                    assert!(
+                        !e.success || e.vertices == hexagon,
+                        "{label}: {:?}",
+                        e.vertices
+                    );
+                    // a two-phase search's best conflict starts over in its second phase
+                    if !target.is_some_and(|r| r.two_phase) {
+                        let lowest = *e.trace.as_ref().unwrap().iter().min().unwrap();
+                        assert_eq!(i64::from(lowest), e.best_conflict, "{label}");
+                    }
+                }
+                assert!(
+                    plain
+                        .experiments
+                        .iter()
+                        .any(|e| e.success && e.vertices != hexagon),
+                    "{label}: the plain search also finds the two triangles"
+                );
+            }
+        }
     }
 
     #[test]

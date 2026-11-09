@@ -19,7 +19,7 @@ use rayon::prelude::*;
 use crate::Error;
 use crate::graph::Graph;
 use crate::rng::{Randu, RngKind, SearchRng, Xoshiro};
-use crate::search::{Experiment, SearchParams, SearchResult};
+use crate::search::{Components, Experiment, SearchParams, SearchResult};
 
 /// The most vertices a regular search supports: like the C programs, it stores neighbor
 /// positions in 16-bit integers.
@@ -41,7 +41,7 @@ pub(crate) fn search(graph: &Graph, params: &SearchParams) -> Result<SearchResul
                 |ws, i| {
                     ws.reset(graph, params);
                     let mut rng = Xoshiro::for_stream(params.seed as u64, i as u64);
-                    ws.run(params, &mut rng)
+                    ws.run(graph, params, &mut rng)
                 },
             )
             .collect(),
@@ -68,7 +68,7 @@ where
         RngKind::Legacy => {
             let mut rng = Randu::new(params.seed);
             for _ in 0..params.experiments {
-                let e = ws.run(params, &mut rng);
+                let e = ws.run(graph, params, &mut rng);
                 on_experiment(&e, &ws.adj_list);
             }
         }
@@ -76,7 +76,7 @@ where
             for i in 0..params.experiments {
                 ws.reset(graph, params);
                 let mut rng = Xoshiro::for_stream(params.seed as u64, i as u64);
-                let e = ws.run(params, &mut rng);
+                let e = ws.run(graph, params, &mut rng);
                 on_experiment(&e, &ws.adj_list);
             }
         }
@@ -132,6 +132,8 @@ struct Workspace {
     sub_opt: Vec<usize>,
     rest_opt: Vec<usize>,
     rand_perm: Vec<usize>,
+    /// With `params.connected`.
+    components: Option<Components>,
 }
 
 impl Workspace {
@@ -159,6 +161,7 @@ impl Workspace {
             sub_opt: vec![0; v],
             rest_opt: vec![0; v],
             rand_perm: Vec::with_capacity(v - v_fix),
+            components: params.connected.then(|| Components::new(v)),
         };
         ws.reset(graph, params);
         ws
@@ -190,12 +193,17 @@ impl Workspace {
         self.adj[a * self.v + b] >= 0
     }
 
-    fn run<R: SearchRng>(&mut self, params: &SearchParams, rng: &mut R) -> Experiment {
+    fn run<R: SearchRng>(
+        &mut self,
+        graph: &Graph,
+        params: &SearchParams,
+        rng: &mut R,
+    ) -> Experiment {
         let regular = params.regular.expect("a regular search");
         let (g_opt_val, moves, success, trace) = if regular.two_phase {
-            self.run_two_phase(params, regular.degree, rng)
+            self.run_two_phase(graph, params, regular.degree, rng)
         } else {
-            self.run_regular(params, regular.degree, rng)
+            self.run_regular(graph, params, regular.degree, rng)
         };
         let vertices = (0..self.v).filter(|&k| self.opt_ch[k] != 0).collect();
         for k in 0..self.v_sub {
@@ -402,9 +410,21 @@ impl Workspace {
         self.vert_inds[sub_vert] = rest_col;
     }
 
+    /// The components of the current subgraph beyond the first, with `params.connected`; else 0.
+    fn extra_components(&mut self, graph: &Graph, fixed: &[usize]) -> i64 {
+        match self.components.as_mut() {
+            Some(c) => {
+                let members = fixed.iter().chain(&self.sub_verts).copied();
+                c.extra(members, &self.sub_ch, |u| graph.neighbors(u))
+            }
+            None => 0,
+        }
+    }
+
     /// One `reg_search` experiment: `(best value, moves, success, trace)`.
     fn run_regular<R: SearchRng>(
         &mut self,
+        graph: &Graph,
         params: &SearchParams,
         d_sub: i64,
         rng: &mut R,
@@ -477,23 +497,25 @@ impl Workspace {
 
             self.diffs[rest_vert] = self.sub_degs[rest_vert] - d_sub;
             obj_val += abs(self.diffs[rest_vert]);
-            if let Some(t) = trace.as_mut() {
-                t.push(obj_val.clamp(0, u32::MAX as i64) as u32);
-            }
 
             self.sub_ch[sub_vert] = 0;
             self.sub_ch[rest_vert] = 1;
+            self.swap_lists(sub_vert, rest_vert, sub_row, rest_col);
+
+            let conflict = obj_val + self.extra_components(graph, &params.fixed);
+            if let Some(t) = trace.as_mut() {
+                t.push(conflict.clamp(0, u32::MAX as i64) as u32);
+            }
 
             let new_min_val = obj_val;
-            if obj_val < g_opt_val {
-                g_opt_val = obj_val;
+            if conflict < g_opt_val {
+                g_opt_val = conflict;
                 self.opt_ch.copy_from_slice(&self.sub_ch);
             }
 
-            self.swap_lists(sub_vert, rest_vert, sub_row, rest_col);
             self.update_partition(sub_vert, rest_vert);
 
-            if obj_val == 0 {
+            if conflict == 0 {
                 return (g_opt_val, j, true, trace);
             }
 
@@ -541,6 +563,7 @@ impl Workspace {
     /// One `ereg_search` experiment: `(best value, moves, success, trace)`.
     fn run_two_phase<R: SearchRng>(
         &mut self,
+        graph: &Graph,
         params: &SearchParams,
         d_sub: i64,
         rng: &mut R,
@@ -620,9 +643,6 @@ impl Workspace {
                     self.diffs[vert] += 1;
                 }
             }
-            if let Some(t) = trace.as_mut() {
-                t.push(obj_val.clamp(0, u32::MAX as i64) as u32);
-            }
 
             for k in 0..self.degs[sub_vert] {
                 let x = self.adj_list[sub_vert][k] as usize;
@@ -635,13 +655,18 @@ impl Workspace {
 
             self.sub_ch[sub_vert] = 0;
             self.sub_ch[rest_vert] = 1;
+            self.swap_lists(sub_vert, rest_vert, sub_row, rest_col);
 
-            if obj_val < g_opt_val {
-                g_opt_val = obj_val;
-                self.opt_ch.copy_from_slice(&self.sub_ch);
+            let extra = self.extra_components(graph, &params.fixed);
+            let mut conflict = obj_val + extra;
+            if let Some(t) = trace.as_mut() {
+                t.push(conflict.clamp(0, u32::MAX as i64) as u32);
             }
 
-            self.swap_lists(sub_vert, rest_vert, sub_row, rest_col);
+            if conflict < g_opt_val {
+                g_opt_val = conflict;
+                self.opt_ch.copy_from_slice(&self.sub_ch);
+            }
 
             let (mut u_cols, mut m) = (0, 0);
             if sol_found {
@@ -674,12 +699,13 @@ impl Workspace {
                         obj_val += abs(self.diffs[k]);
                     }
                 }
-                if obj_val != 0 {
+                conflict = obj_val + extra;
+                if conflict != 0 {
                     g_opt_val = v_sq;
                 }
             }
 
-            if obj_val == 0 {
+            if conflict == 0 {
                 return (g_opt_val, j, true, trace);
             }
 

@@ -34,7 +34,8 @@ def plot_traces(result: SearchResult, ax=None, max_experiments: int = 12, show_d
             ax.plot(len(t) - 1, 0, "o", color=ACCENT, ms=4)
     ax.set_yscale("symlog", linthresh=1)
     ax.set_xlabel("move")
-    ax.set_ylabel("deviation from regular" if p.degree is not None else "|edges − target|")
+    label = "deviation from regular" if p.degree is not None else "|edges − target|"
+    ax.set_ylabel(f"{label} + extra components" if p.connected else label)
     hidden = len(traces) - len(shown)
     title = f"objective per move ({len(shown)} of {len(traces)} experiments)" if hidden else "objective per move"
     return finish(ax, title)
@@ -88,7 +89,7 @@ def plot_conflicts(result: SearchResult, ax=None):
     c = np.bincount([e.best_conflict for e in result.experiments]) if result.experiments else np.zeros(1, int)
     colors = [ACCENT] + [SECONDARY] * (len(c) - 1)
     ax.bar(np.arange(len(c)), c, color=colors, edgecolor="white", lw=0.5)
-    ax.set_xlabel("best |edges − target|")
+    ax.set_xlabel("best conflict" if result.params.connected else "best |edges − target|")
     ax.set_ylabel("experiments")
     ax.set_xticks(np.arange(len(c)) if len(c) <= 15 else ax.get_xticks())
     return finish(ax, f"best conflict (mean {result.average_conflict:.2f})")

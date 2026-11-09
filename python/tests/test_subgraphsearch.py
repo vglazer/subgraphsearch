@@ -430,6 +430,20 @@ def test_regular_search():
         ss.search(ss.WeightedGraph.from_graph(g), 10, degree=4)
 
 
+def test_connected_search():
+    # two triangles and a 6-cycle: of the subgraphs on 6 vertices with 6 edges, only the 6-cycle is connected
+    g = ss.Graph(12, [(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3)] + [(i, 6 + (i - 5) % 6) for i in range(6, 12)])
+    for kwargs in ({"edges": 6}, {"degree": 2}, {"degree": 2, "two_phase": True}):
+        r = ss.search(g, 6, **kwargs, connected=True, experiments=30, max_moves=500, div_freq=50, trace=True)
+        assert r.successes > 0 and r.solutions() == [tuple(range(6, 12))]
+        assert r.target.endswith(", connected") and "connected" in r.summary()
+        back = ss.SearchResult.from_dict(json.loads(r.to_json()), g)
+        assert back.params.connected
+        viz.plot_search_summary(r)
+    plain = ss.search(g, 6, degree=2, experiments=30, max_moves=500, div_freq=50)
+    assert not plain.params.connected and len(plain.solutions()) == 2
+
+
 def test_legacy_regular_programs():
     strip = lambda s: re.sub(r"T> .*", "T>", s)
     for program in ("reg_search", "ereg_search"):

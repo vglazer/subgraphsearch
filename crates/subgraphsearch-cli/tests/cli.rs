@@ -181,6 +181,55 @@ fn degree_searches_for_regular_subgraphs() {
 }
 
 #[test]
+fn connected_searches_report_only_connected_subgraphs() {
+    // a sparse random graph with many induced 8-cycles; in the geometric graph of
+    // multi_graph_dir, the 2-regular subgraphs on 8 vertices are all unions of triangles and more
+    let dir = multi_graph_dir("connected");
+    let o = run(
+        &dir,
+        &[
+            "generate",
+            "exponential",
+            "-n",
+            "60",
+            "-d",
+            "0.08",
+            "-s",
+            "3",
+            "-o",
+            "sparse.g6",
+        ],
+    );
+    assert!(o.status.success(), "{}", stderr(&o));
+    let o = run(
+        &dir,
+        &[
+            "search",
+            "sparse.g6",
+            "-k",
+            "8",
+            "--degree",
+            "2",
+            "--connected",
+            "-n",
+            "20",
+            "--json",
+            "out.json",
+        ],
+    );
+    assert!(o.status.success(), "{}", stderr(&o));
+    assert!(
+        stdout(&o).contains("regular of degree 2, connected"),
+        "{}",
+        stdout(&o)
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("out.json")).unwrap()).unwrap();
+    let results = json.to_string();
+    assert!(results.contains(r#""connected":true"#), "{results}");
+}
+
+#[test]
 fn stops_quietly_when_the_reader_goes_away() {
     // as in `subgraphsearch generate ... | head -1`: far more output than a pipe buffers
     use std::io::Read;

@@ -195,6 +195,10 @@ struct SearchArgs {
     /// vertices just swapped when they would beat the best value so far.
     #[arg(long)]
     aspiration: bool,
+    /// Require the subgraph to be connected: each component beyond the first adds 1 to the
+    /// conflict. With --degree 2, finds induced cycles rather than unions of them.
+    #[arg(long)]
+    connected: bool,
     /// Search every graph in a multi-graph file (graph6 or sparse6), one after another.
     #[arg(long, conflicts_with = "index")]
     all: bool,
@@ -441,6 +445,7 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         rng: args.rng.into(),
         record_trace: args.trace,
         aspiration: args.aspiration,
+        connected: args.connected,
         regular: args.degree.map(|degree| subgraphsearch_core::Regular {
             degree,
             two_phase: args.two_phase,
@@ -529,12 +534,18 @@ fn write_json(args: &SearchArgs, results: &[(usize, SearchResult)]) -> Result<()
     Ok(())
 }
 
-/// What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3".
+/// What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3", each
+/// followed by ", connected" for a connected search.
 fn target(params: &SearchParams, weighted: bool) -> String {
-    match params.regular {
+    let target = match params.regular {
         Some(r) => format!("regular of degree {}", r.degree),
         None if weighted => format!("with total weight {}", params.edges),
         None => format!("with {} edges", params.edges),
+    };
+    if params.connected {
+        target + ", connected"
+    } else {
+        target
     }
 }
 

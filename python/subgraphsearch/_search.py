@@ -19,11 +19,11 @@ class Experiment:
     """One independent run (restart) of the search."""
 
     index: int
-    #: Smallest ``|edges - target|`` reached.
+    #: Smallest ``|edges - target|`` reached (plus the components beyond the first, with ``connected``).
     best_conflict: int
     #: Moves made: the index of the successful move, or ``max_moves`` if none succeeded.
     moves: int
-    #: Whether the target edge count was hit exactly.
+    #: Whether the target was hit exactly (by a connected subgraph, with ``connected``).
     success: bool
     #: Sorted vertices (fixed ones included) of the subgraph that reached ``best_conflict``.
     vertices: tuple[int, ...]
@@ -48,6 +48,8 @@ class SearchParams:
     degree: int | None = None
     #: With ``degree``: first find the right number of edges (the original ``ereg_search``).
     two_phase: bool = False
+    #: Require a connected subgraph: each component beyond the first adds 1 to the conflict.
+    connected: bool = False
 
 
 @dataclass
@@ -60,11 +62,14 @@ class SearchResult:
 
     @property
     def target(self) -> str:
-        """What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3"."""
+        """What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3",
+        each followed by ", connected" for a ``connected`` search."""
         p = self.params
         if p.degree is not None:
-            return f"regular of degree {p.degree}"
-        return f"with total weight {p.edges}" if self.weighted else f"with {p.edges} edges"
+            target = f"regular of degree {p.degree}"
+        else:
+            target = f"with total weight {p.edges}" if self.weighted else f"with {p.edges} edges"
+        return f"{target}, connected" if p.connected else target
 
     @property
     def weighted(self) -> bool:
@@ -204,6 +209,7 @@ def search(
     rng: str = "xoshiro",
     trace: bool = False,
     aspiration: bool = False,
+    connected: bool = False,
 ) -> SearchResult:
     """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges, or, in
     a :class:`WeightedGraph`, with total weight ``edges`` (the original ``wsub_search``).
@@ -225,6 +231,12 @@ def search(
     ``aspiration=True`` adds the aspiration criterion of the original ``asub_search``: tabu swaps,
     those involving the two vertices just swapped, are taken whenever they would beat the best
     value found so far.
+
+    ``connected=True`` requires a connected subgraph: each component beyond the first adds 1 to the
+    conflict, so only connected subgraphs that hit the target count as successes, and near misses
+    include disconnected ones that hit it. Swaps are still chosen by the target alone, so this suits
+    targets that connected subgraphs often meet, such as ``degree=2`` for induced cycles rather than
+    unions of them. It works with every kind of search.
     """
     if (edges is None) == (degree is None):
         raise ValueError("give exactly one of edges (an edge count or total weight) and degree (for a regular subgraph)")
@@ -234,10 +246,12 @@ def search(
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
         int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
+        bool(connected),
     )
     raw = _core.search(
         graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq,
         params.div_dur, params.seed, rng, params.trace, params.aspiration, params.degree, params.two_phase,
+        params.connected,
     )
     exps = [
         Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))

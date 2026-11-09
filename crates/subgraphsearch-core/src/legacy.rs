@@ -323,6 +323,7 @@ fn run_search<W: Write>(
         rng: RngKind::Legacy,
         record_trace: false,
         aspiration: variant == Variant::Aspiration,
+        connected: false,
         regular: match variant {
             Variant::Regular => Some(Regular {
                 degree: e_sub,
