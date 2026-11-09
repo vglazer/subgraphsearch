@@ -38,11 +38,9 @@ def main(out: Path = OUT) -> None:
     fig = plt.figure(figsize=(12, 9.6), layout="constrained")
     grid = fig.add_gridspec(2, 6, height_ratios=[1.3, 1])
 
-    # a regular subgraph: every chosen vertex has exactly two chosen neighbors, here forming one cycle
+    # a connected regular subgraph: every chosen vertex has exactly two chosen neighbors, forming one cycle
     rnd = ss.generate("exponential", 60, 0.08, seed=3)
-    r = ss.search(rnd, 12, degree=2, two_phase=True, seed=1, experiments=400)
-    found(r)
-    cycle = next(vs for vs in r.solutions() if rnd.induced(list(vs)).components()[1] == 1)
+    cycle = found(ss.search(rnd, 12, degree=2, connected=True, seed=1))
     cycle_edges = [(u, v) for i, u in enumerate(cycle) for v in cycle[i + 1:] if rnd.has_edge(u, v)]
     layout = min((rnd.layout("spring", seed=seed) for seed in range(1, 41)), key=lambda pos: crossings(pos, cycle_edges))
     viz.plot_graph(rnd, cycle, fig.add_subplot(grid[0, :3]), layout=layout,
