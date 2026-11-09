@@ -263,7 +263,10 @@ Each experiment reports the best conflict it reached and the moves it needed:
   beyond the first, which is 0 exactly for an induced path. On the 60-vertex graph above it finds
   paths of 29 vertices, longer than the graph's longest induced cycle, and in hypercubes it reaches
   the known [snake-in-the-box](https://en.wikipedia.org/wiki/Snake-in-the-box) records up to the
-  8-cube's 99 vertices. Like regular searches, it needs an unweighted graph.
+  8-cube's 99 vertices. In the 9-cube, the lowest dimension where the longest snake is unknown, it
+  finds snakes of 180 vertices in about a minute and a half, within 6% of the long-standing record
+  of 191 vertices (190 edges); see [Performance](#performance). Like regular searches, it needs an
+  unweighted graph.
 
 ### Random graphs and operations
 
@@ -375,6 +378,9 @@ maximum, determine the time.
 | 15-cliques in the same graph | 200 × 2000 | 396,104 | 394&nbsp;ms | 4 of 200 |
 | 8-regular subgraphs on 20 vertices of the [Paley graph](https://en.wikipedia.org/wiki/Paley_graph) on 61 vertices | 100 × 2000, two phases | 183,319 | 49&nbsp;ms | 11 of 100 |
 | 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 634 | 1&nbsp;ms | 40 of 40 |
+| induced paths on 51 vertices in the 7-cube (the [snake-in-the-box](https://en.wikipedia.org/wiki/Snake-in-the-box) record) | 400 × 2000 | 669,620 | 0.49&nbsp;s | 126 of 400 |
+| induced paths on 99 vertices in the 8-cube (the record) | 400 × 20,000 | 7,949,909 | 16&nbsp;s | 4 of 400 |
+| induced paths on 180 vertices in the 9-cube (the record is 191) | 100 × 200,000 | 19,204,866 | 92&nbsp;s | 5 of 100 |
 
 A search that misses its target makes every move it is allowed, so its time is the cost of a move
 times the number of moves. The cost of a move grows in proportion to the number of vertices, and a
