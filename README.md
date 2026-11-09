@@ -241,14 +241,18 @@ Each experiment reports the best conflict it reached and the moves it needed:
   first adds 1 to the conflict, so only connected subgraphs that hit the target count as successes.
   Swaps are still chosen by the target alone. A disconnected subgraph that hits it leaves the search
   on a plateau, which it crosses by swaps that keep the target until it reaches a connected one, so
-  this works best when connected subgraphs are common among those that hit the target. The main use
-  is `--degree 2 --connected`, which finds
+  this works best when connected subgraphs are common among those that hit the target. It has two
+  main uses. `--degree 2 --connected` finds
   [induced cycles](https://en.wikipedia.org/wiki/Induced_path) rather than unions of them: on a
   60-vertex random graph of density 0.08, all 200 of 200 experiments find a single 12-cycle, where
-  `--degree 2` alone ends on one in 110. The two-phase search's second phase makes no random moves, so
-  it crosses such plateaus less often; leave out `--two-phase` here. Counting components after
-  every move costs little in sparse graphs but can double the time in dense ones, whose dense
-  subgraphs are connected anyway, so use it only where disconnected solutions turn up.
+  `--degree 2` alone ends on one in 110. And `-k k -m k-1 --connected` finds induced
+  [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory)), since a connected graph on $`k`$
+  vertices with $`k - 1`$ edges is a tree: on the same graph it finds 10-vertex trees in all 200
+  experiments, where the edge count alone gives a tree in 25. The two-phase search's second phase
+  makes no random moves, so it crosses such plateaus less often; leave out `--two-phase` here.
+  Counting components after every move costs little in sparse graphs but can double the time in
+  dense ones, whose dense subgraphs are connected anyway, so use it only where disconnected solutions
+  turn up.
 
 ### Random graphs and operations
 
@@ -299,6 +303,7 @@ parameters, but not isomorphic to $`T(8)`$.
 | subgraphs containing given vertices | `--fixed`, or for cliques, search their common neighborhood (below) |
 | regular subgraphs of degree $`d`$ | `--degree d --two-phase`, or `--degree d` alone with `--fixed` |
 | induced cycles on $`k`$ vertices | `--degree 2 --connected` (`degree=2, connected=True`) |
+| induced trees on $`k`$ vertices | `-m` set to $`k - 1`$, with `--connected` (`edges=k-1, connected=True`) |
 | a total weight in a weighted graph | `--weighted -m w` |
 
 Some reformulations make a search easier:

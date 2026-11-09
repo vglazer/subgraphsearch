@@ -244,7 +244,7 @@ for two_phase in (False, True):
     print(f"two_phase={two_phase}: {res.successes}/100 successes, {1000 * elapsed / max(res.successes, 1):.1f} ms per success")
 """),
     md(f"""
-## Cycles
+## Cycles and trees
 
 Cycles are the most important special case of regular subgraphs. Every vertex of an
 [induced cycle]({W}Induced_path) has exactly two neighbors on it, so `degree=2` searches for them. An
@@ -300,6 +300,20 @@ distinct induced 20-cycles. `viz.save_html` writes the same page to a file, and 
 """),
     code("""
 viz.show(ss.search(sparse, 20, degree=2, connected=True, seed=1))
+"""),
+    md(f"""
+`connected=True` works with edge-count searches too, and there it finds induced
+[trees]({W}Tree_(graph_theory)): a connected graph on $k$ vertices with $k - 1$ edges is a tree. The edge count
+alone is not enough, since $k - 1$ edges can also form a forest that contains a cycle. Raising $k$ as for cycles
+finds large induced trees, a classic hard problem; in this graph they grow larger than its induced cycles.
+"""),
+    code("""
+for k in (10, 20):
+    plain = ss.search(sparse, k, k - 1, experiments=200, seed=1)
+    trees = sum(sparse.induced(e.vertices).components()[1] == 1 for e in plain.experiments if e.success)
+    print(f"{k} vertices spanning {k - 1} edges: {trees} of 200 experiments ended on a tree")
+induced_trees = {k: ss.search(sparse, k, k - 1, connected=True, experiments=200, seed=1).successes for k in (10, 20, 30, 35, 40)}
+print("with connected=True, experiments that found a k-vertex tree, by k:", induced_trees)
 """),
     md(f"""
 ## Switching
