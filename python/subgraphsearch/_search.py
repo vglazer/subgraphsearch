@@ -55,6 +55,9 @@ class SearchParams:
     path: bool = False
     #: With ``path``: the two vertices the path must run between, as its ends.
     endpoints: tuple[int, int] | None = None
+    #: Region kicks: see :func:`search`. 0 means off.
+    kick_radius: int = 0
+    kick_ban: int = 20
 
 
 @dataclass
@@ -228,6 +231,8 @@ def search(
     connected: bool = False,
     path: bool = False,
     endpoints: tuple[int, int] | None = None,
+    kick_radius: int = 0,
+    kick_ban: int = 20,
 ) -> SearchResult:
     """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges, or, in
     a :class:`WeightedGraph`, with total weight ``edges`` (the original ``wsub_search``).
@@ -266,6 +271,13 @@ def search(
     The search attaches a new vertex to each of them, which an induced path can only contain as an
     end, and looks for a path two vertices longer through all four; the results leave the new
     vertices out, so every subgraph returned, near misses included, contains ``s`` and ``t``.
+
+    ``kick_radius=r`` starts each diversification cycle with a *region kick* instead of random
+    moves: every free subgraph vertex within graph distance ``r`` of a random one is swapped out, one
+    per move, for the best vertex to swap in, and the vertices removed may not return for
+    ``kick_ban`` moves. It rebuilds one part of the subgraph at a time, like the large-neighborhood
+    moves of searches for codes, where the graph joins words that are too close, so that the region
+    is a ball of nearby words. Edge-count searches only.
     """
     if (edges is not None) + (degree is not None) + bool(path) != 1:
         raise ValueError(
@@ -282,12 +294,13 @@ def search(
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
         int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
-        bool(connected), bool(path), endpoints,
+        bool(connected), bool(path), endpoints, int(kick_radius), int(kick_ban),
     )
     raw = _core.search(
         graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq,
         params.div_dur, params.seed, rng, params.trace, params.aspiration, params.degree, params.two_phase,
-        params.connected, params.path, None if endpoints is None else list(endpoints),
+        params.connected, params.path, None if endpoints is None else list(endpoints), params.kick_radius,
+        params.kick_ban,
     )
     exps = [
         Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))
@@ -364,6 +377,8 @@ def largest(
     rng: str = "xoshiro",
     trace: bool = False,
     aspiration: bool = False,
+    kick_radius: int = 0,
+    kick_ban: int = 20,
 ) -> LargestResult:
     """Searches ``graph`` for the largest ``shape`` it can find: an induced ``"path"``, ``"cycle"`` or
     ``"tree"``, a ``"clique"``, or an ``"independent"`` set.
@@ -392,14 +407,14 @@ def largest(
     _, sizes = _core.largest(
         graph._g, shape, None if start is None else int(start), int(lookahead), list(fixed),
         None if endpoints is None else list(endpoints), int(experiments), int(max_moves), int(div_freq),
-        int(div_dur), int(seed), rng, bool(trace), bool(aspiration),
+        int(div_dur), int(seed), rng, bool(trace), bool(aspiration), int(kick_radius), int(kick_ban),
     )
     results = {}
     for size, edges, raw in sizes:
         params = SearchParams(
             size, edges, fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng,
             bool(trace), bool(aspiration), 2 if shape == "cycle" else None, False, shape in ("cycle", "tree"),
-            shape == "path", endpoints if shape == "path" else None,
+            shape == "path", endpoints if shape == "path" else None, int(kick_radius), int(kick_ban),
         )
         exps = [
             Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))

@@ -150,6 +150,7 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 | `-n`, `--experiments` | independent restarts | 40 |
 | `--moves` | maximum moves per experiment | 250 |
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
+| `--kick-radius`, `--kick-ban` | instead, start every `div-freq` moves by rebuilding the subgraph within this distance of a random vertex, keeping the vertices removed out for `kick-ban` moves | off, 20 |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
 

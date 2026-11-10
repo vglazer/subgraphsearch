@@ -149,6 +149,16 @@ pub struct SearchParams {
     pub div_freq: usize,
     /// Diversification duration: the number of random moves at the start of each cycle (0 = none).
     pub div_dur: usize,
+    /// With a positive radius, each diversification cycle starts with a *region kick* instead of
+    /// random moves: every free subgraph vertex within this graph distance of a random one is swapped
+    /// out, one per move, for the best vertex to swap in, and the vertices removed may not return for
+    /// `kick_ban` moves. It rebuilds one part of the subgraph at a time, as large-neighborhood moves in
+    /// searches for codes do; 0 (the default) keeps the random moves. Edge-count searches only.
+    #[serde(default)]
+    pub kick_radius: usize,
+    /// How many moves a vertex removed by a region kick stays out (see `kick_radius`).
+    #[serde(default = "default_kick_ban")]
+    pub kick_ban: usize,
     /// Random seed.
     pub seed: i64,
     /// Random number generator.
@@ -192,6 +202,10 @@ pub struct Regular {
     pub two_phase: bool,
 }
 
+fn default_kick_ban() -> usize {
+    20
+}
+
 impl SearchParams {
     /// Parameters with the given subgraph size and edge count and otherwise reasonable defaults:
     /// 40 experiments of up to 250 moves (many short runs usually beat a few long ones), 4 random
@@ -205,6 +219,8 @@ impl SearchParams {
             max_moves: 250,
             div_freq: 250,
             div_dur: 4,
+            kick_radius: 0,
+            kick_ban: default_kick_ban(),
             seed: 1,
             rng: RngKind::Xoshiro,
             record_trace: false,
@@ -532,6 +548,11 @@ struct Workspace {
     rand_perm: Vec<usize>,
     /// With `params.connected`.
     components: Option<Components>,
+    /// With a region kick (`params.kick_radius`): the move until which each vertex may not return,
+    /// whether each vertex is fixed, and the vertices still to be kicked out.
+    banned_until: Vec<usize>,
+    fixed: Vec<bool>,
+    kick_queue: Vec<usize>,
 }
 
 impl Workspace {
@@ -564,9 +585,77 @@ impl Workspace {
             },
             rand_perm: Vec::with_capacity(v - v_fix),
             components: params.connected.then(|| Components::new(v)),
+            banned_until: Vec::new(),
+            fixed: Vec::new(),
+            kick_queue: Vec::new(),
         };
+        if params.kick_radius > 0 {
+            ws.banned_until = vec![0; v];
+            ws.fixed = vec![false; v];
+            for &f in &params.fixed {
+                ws.fixed[f] = true;
+            }
+        }
         ws.reset(params);
         ws
+    }
+
+    /// The free subgraph vertices within graph distance `radius` of a random free subgraph vertex,
+    /// for a region kick.
+    fn region<G: SearchGraph, R: SearchRng>(
+        &self,
+        graph: &G,
+        radius: usize,
+        rng: &mut R,
+    ) -> Vec<usize> {
+        let center = self.sub_verts[rng.below(self.v_sub as u32) as usize];
+        let mut seen = std::collections::HashSet::from([center]);
+        let (mut frontier, mut out) = (vec![center], vec![center]);
+        for _ in 0..radius {
+            let mut next = Vec::new();
+            for &u in &frontier {
+                for &w in graph.neighbors(u) {
+                    let w = w as usize;
+                    if seen.insert(w) {
+                        next.push(w);
+                        if self.sub_ch[w] != 0 && !self.fixed[w] {
+                            out.push(w);
+                        }
+                    }
+                }
+            }
+            frontier = next;
+        }
+        out
+    }
+
+    /// For a region kick: the best vertex to swap in for `sub_vert`, by the usual move value, among
+    /// the outside vertices not banned at move `j`; ties are broken at random.
+    fn best_swap_in<G: SearchGraph, R: SearchRng>(
+        &self,
+        graph: &G,
+        new_min_val: i64,
+        sub_vert: usize,
+        j: usize,
+        rng: &mut R,
+    ) -> Option<usize> {
+        let degree = new_min_val - i64::from(self.sub_degs[sub_vert]);
+        let (mut best, mut count, mut choice) = (i64::MAX, 0u32, None);
+        for &r in &self.rest_verts[..self.v_rest] {
+            if self.banned_until[r] > j {
+                continue;
+            }
+            let val = (degree + i64::from(self.sub_degs[r]) - graph.edge_value(sub_vert, r)).abs();
+            if val < best {
+                (best, count, choice) = (val, 1, Some(r));
+            } else if val == best {
+                count += 1;
+                if rng.below(count) == 0 {
+                    choice = Some(r);
+                }
+            }
+        }
+        choice
     }
 
     /// Lists the aspiration moves: swaps involving the two vertices just swapped (`rest_vert` now
@@ -682,10 +771,32 @@ impl Workspace {
         let mut opt_mov = 0usize;
         let mut asp_mov = 0usize;
         let mut success = false;
+        let kick = params.kick_radius > 0;
+        if kick {
+            self.banned_until.fill(0);
+            self.kick_queue.clear();
+        }
         let mut j = 0;
         while j < params.max_moves {
-            // choose a random (diversifying) move, an aspiration move, or a locally optimal one
-            let (sub_vert, rest_vert) = if j % params.div_freq < params.div_dur || opt_mov == 0 {
+            // a region kick starts each diversification cycle, with the kick on
+            if kick && j > 0 && params.div_dur > 0 && j % params.div_freq == 0 {
+                self.kick_queue = self.region(graph, params.kick_radius, rng);
+            }
+            let mut kicked = None;
+            while let Some(s) = self.kick_queue.pop() {
+                if self.sub_ch[s] != 0 {
+                    if let Some(r) = self.best_swap_in(graph, new_min_val, s, j, rng) {
+                        self.banned_until[s] = j + params.kick_ban;
+                        kicked = Some((s, r));
+                    }
+                    break;
+                }
+            }
+            // choose a kick move, a random (diversifying) move, an aspiration move, or a locally
+            // optimal one
+            let (sub_vert, rest_vert) = if let Some(swap) = kicked {
+                swap
+            } else if (!kick && j % params.div_freq < params.div_dur) || opt_mov == 0 {
                 let s = self.sub_verts[rng.below(v_sub as u32) as usize];
                 let r = self.rest_verts[rng.below(v_rest as u32) as usize];
                 (s, r)
@@ -742,13 +853,21 @@ impl Workspace {
                 break;
             }
 
-            // list candidate columns: active ones from the front, inactive ones from the back
+            // list candidate columns: active ones from the front, inactive ones from the back (and,
+            // with a region kick, none that are banned)
             let mut u_cols = 0;
             self.u_ch[sub_vert] = 0;
-            let m = v_rest - 1;
+            let banned = |w: usize| kick && self.banned_until[w] > j;
+            let m = if kick {
+                (0..v_rest)
+                    .filter(|&k| k != rest_col && !banned(self.rest_verts[k]))
+                    .count()
+            } else {
+                v_rest - 1
+            };
             let mut temp = m;
             for k in 0..v_rest {
-                if k == rest_col {
+                if k == rest_col || banned(self.rest_verts[k]) {
                     continue;
                 }
                 let vert = self.rest_verts[k];
@@ -935,6 +1054,55 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn region_kicks() {
+        // the 6-cube: independent sets of 32 (the even-weight half) and 4-cycles, with kicks on
+        let n = 6;
+        let cube = Graph::from_edges(
+            1 << n,
+            (0..1usize << n)
+                .flat_map(|u| (0..n).map(move |b| (u, u ^ (1 << b))))
+                .filter(|&(u, w)| u < w),
+        )
+        .unwrap();
+        for (size, edges) in [(32, 0), (16, 32), (4, 4)] {
+            let mut p = SearchParams::new(size, edges);
+            p.experiments = 20;
+            p.max_moves = 2000;
+            p.div_freq = 100;
+            p.div_dur = 4;
+            p.kick_radius = 2;
+            let r = search(&cube, &p).unwrap();
+            assert!(r.successes() > 0, "{size} {edges}");
+            for e in r.experiments.iter().filter(|e| e.success) {
+                assert_eq!(cube.induced_edge_count(&e.vertices), edges as usize);
+            }
+            // sequential and parallel runs still agree, and fixed vertices stay
+            let mut out = Vec::new();
+            search_sequential(&cube, &p, |e| out.push(e.clone())).unwrap();
+            assert_eq!(out, r.experiments);
+            p.fixed = vec![0];
+            assert!(
+                search(&cube, &p)
+                    .unwrap()
+                    .experiments
+                    .iter()
+                    .all(|e| e.vertices.contains(&0))
+            );
+        }
+        // kicks change the search: the same seed gives different experiments
+        let mut p = SearchParams::new(32, 0);
+        p.experiments = 4;
+        p.max_moves = 1000;
+        p.div_freq = 100;
+        let plain = search(&cube, &p).unwrap();
+        p.kick_radius = 2;
+        assert_ne!(plain.experiments, search(&cube, &p).unwrap().experiments);
+        // not for regular or path searches
+        p.path = true;
+        assert!(search(&cube, &p).is_err());
     }
 
     #[test]

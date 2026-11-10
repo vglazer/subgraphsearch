@@ -411,6 +411,16 @@ def test_words_and_codes():
     with pytest.raises(ValueError, match="64 bits"):
         ss.Graph.from_words(np.zeros((2, 65), dtype=int), [1])
 
+    # the same code as an independent set in the "too close" graph, with region kicks (Hamming balls)
+    close = ss.Graph.from_words(words, range(1, d))
+    kicked = ss.search(close, 16, 0, kick_radius=1, experiments=16, max_moves=2000, div_freq=100)
+    assert kicked.successes and kicked.params.kick_radius == 1
+    assert all(v.min_distance(words[list(vs)]) >= d for vs in kicked.solutions())
+    assert ss.SearchResult.from_dict(json.loads(kicked.to_json()), close).params.kick_radius == 1
+    assert ss.largest(close, "independent", kick_radius=1, experiments=16, max_moves=2000, div_freq=100).size == 16
+    with pytest.raises(ValueError, match="edge-count searches only"):
+        ss.search(close, 8, path=True, kick_radius=1)
+
     # Hadamard checks
     assert v.is_hadamard([[1, 1], [1, -1]]) and not v.is_hadamard([[1, 1], [1, 1]]) and not v.is_hadamard([[1, 0]])
 
