@@ -62,62 +62,31 @@ g = ss.generate("exponential", 100, 0.6, seed=1)   # a random graph: 100 vertice
 r = ss.search(g, size=11, edges=55)    # 11-cliques
 r = ss.search(g, size=30, edges=340)   # 30 vertices spanning exactly 340 edges
 r = ss.search(g, size=10, degree=4)    # 4-regular induced subgraphs
-
-big = ss.largest(g, "clique")          # the largest clique the search finds; also "path", "cycle",
-big.size, big.best.solutions()         # "tree" and "independent"; its size, and the cliques found
-g.induced(big.best.best.vertices).is_clique()   # check: also is_path, is_cycle, is_tree, is_independent
+big = ss.largest(g, "clique")          # the largest clique the search can find
 
 print(r.summary())
-r.solutions()                                         # the distinct vertex sets found
-viz.plot_graph(g, highlight=r.best.vertices)          # draw it
-viz.plot_search_summary(r)                            # how the search went
-viz.plot_graph_summary(g, highlight=r.best.vertices)  # degrees, spectrum, adjacency matrix
-viz.save_html("result.html", r)                       # interactive viewer; viz.show(r) in Jupyter
+r.solutions()                                  # the distinct vertex sets found
+viz.plot_graph(g, highlight=r.best.vertices)   # draw one
+viz.plot_search_summary(r)                     # how the search went
+viz.save_html("result.html", r)                # an interactive viewer; viz.show(r) in Jupyter
 ```
 
 In Jupyter, graphs and results display as summaries with small charts.
 
-- **What to search for:** `edges=` (an exact edge count), `degree=` (a regular subgraph),
-  `path=True` (an induced path), or a total weight in a `WeightedGraph`. `fixed=` names vertices the subgraph must contain,
-  `connected=True` requires a connected subgraph, and `max_conflict` in
-  `r.solutions(max_conflict=2)` also returns near misses.
-- **The largest:** `ss.largest(g, "path" | "cycle" | "tree" | "clique" | "independent")` searches size after size
-  and returns every search, by size: `.size`, `.best` (the search at that size) and `.next` (the
-  closest failure above it, with its near misses).
-- **Checking shapes:** `g.is_path()`, `is_cycle()`, `is_tree()`, `is_clique()`, `is_independent()`
-  and `is_connected()` say whether a graph is one; for a subgraph a search found, ask the graph it
-  induces, `g.induced(vertices).is_path()`.
-- **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
-  `g.induced(vs)`, `g.switch(vs)`, `g.common_neighborhood(vs)`, `g.adjacency_matrix()`,
-  `g.laplacian()`, `g.layout()`, and from an incidence structure, `ss.Graph.point_graph(blocks)`
-  and `ss.Graph.block_graph(blocks)`.
-- **Random graphs:** `ss.generate("exponential" | "power" | "geometric", n, density)`,
-  `ss.generate("exponential", n, mean_degree=3)` for large sparse graphs, and
-  `ss.generate_weighted(n, mean_weight)`; standard graphs: `ss.hypercube(d)` and `ss.grid(r, c)`.
-- **Weighted graphs:** `ss.WeightedGraph(n, [(u, v, w), ...])`, `ss.WeightedGraph.read(path)`.
-- **Many graphs per file:** `ss.read_all(path)`, `ss.read(path, index=3)`,
-  `ss.write_all(path, graphs)`.
-- **Other libraries:** `subgraphsearch.convert.{to,from}_{networkx,igraph,scipy,numpy}`.
-- **Tuning:** `ss.sweep(g, size, edges, "div_dur", [0, 4, 16])` with `viz.plot_sweep`.
-- **Spectra:** `viz.laplacian_spectrum` and `viz.spectral_summary`.
-- **Designs and switching:** `ss.designs.FANO_PLANE`, `viz.plot_fano_plane()`, and
-  `viz.plot_switchings(g, sets)` to draw a graph switched with respect to each of several vertex sets.
-- **Linear algebra:** sets of vectors with prescribed inner products are cliques in the graph
-  `ss.Graph.from_vectors(vectors, inner_products)`, which joins two rows when their inner product
-  is one of those given; it is computed in parallel, straight into the adjacency matrix.
-  [examples/hadamard.py](examples/hadamard.py) finds Hadamard matrices of orders 8, 12, 16 and 20
-  as cliques of pairwise orthogonal ±1 vectors (order 20: 31,752 vectors and 169 million
-  orthogonal pairs, built in under a second and searched in less), and the quickstart notebook
-  finds the 16 equiangular lines in 6 dimensions. `viz.plot_sign_matrix` draws a ±1 matrix such as
-  a Hadamard or Seidel matrix.
-- **Error-correcting codes:** a binary code of length $`n`$ and minimum distance $`d`$ is a clique in
-  the graph on all $`n`$-bit words joined when they differ in at least $`d`$ places,
-  `ss.Graph.from_words(words, range(d, n + 1))`.
-  [examples/codes.py](examples/codes.py) finds codes as large as possible for lengths 9 to 12 and
-  distances 4 and 6, among them the 72-word code of length 11 and distance 4 in about 3 seconds.
-- **Words and vectors:** `ss.vectors.binary_words(n, weight=None)` lists the candidate words,
-  `signs` turns them into ±1 vectors, `min_distance` and `is_hadamard` check what a search found,
-  and `supports` writes a code as the positions of its 1s, as tables of codes do.
+- **Searches:** a number of edges (`edges=`), a regular subgraph (`degree=`), an induced path
+  (`path=True`, between two given vertices with `endpoints=`), a total weight in a weighted
+  graph; any of them connected (`connected=True`) or through given vertices (`fixed=`), with
+  near misses alongside exact solutions. `ss.largest` finds the largest induced path, cycle or
+  tree, clique or independent set the search can reach.
+- **Graphs:** from edges, files, other libraries (networkx, igraph, SciPy, NumPy), random models,
+  hypercubes and grids, incidence structures such as block designs, and sets of vectors or binary
+  words joined by their inner products or Hamming distances (`ss.Graph.from_vectors`,
+  `ss.Graph.from_words`); complements, induced subgraphs and Seidel switching.
+- **Seeing what happened:** drawings of graphs and the subgraphs found, diagnostics of a search,
+  spectra, and parameter sweeps for tuning.
+
+The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+goes through all of these.
 
 ## Rust
 
@@ -181,6 +150,30 @@ python -m subgraphsearch explore g.g6 --result result.json        # explore them
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
+
+## Applications
+
+Many combinatorial objects are induced subgraphs of the right graph, so one search finds them all.
+
+- **Error-correcting codes.** A binary code of minimum distance $`d`$ is a clique in the graph of
+  words joined when they differ in at least $`d`$ places.
+  [examples/codes.py](examples/codes.py) finds codes of the largest possible size for lengths 9 to
+  12, among them the 72-word code of length 11 and distance 4 in about 3 seconds.
+- **Strongly regular graphs.** Switching a strongly regular graph with respect to a regular
+  subgraph the search finds can give a new one with the same parameters: the Shrikhande graph from
+  the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.
+- **Hadamard matrices.** The rows of a Hadamard matrix are pairwise orthogonal ±1 vectors, so it
+  is a clique in the graph of such vectors joined when orthogonal.
+  [examples/hadamard.py](examples/hadamard.py) finds matrices of orders 8 to 20 this way, the order-20
+  graph having 31,752 vertices and 169 million edges.
+- **Snakes and coils in hypercubes.** The longest induced paths and cycles in the $`n`$-cube are the
+  snake-in-the-box and coil-in-the-box problems. The search reaches the known records up to the
+  8-cube, and in the 9-cube finds snakes of 189 vertices, 3 short of the record
+  ([examples/snake_9cube.py](examples/snake_9cube.py); see [Paths](#variants)).
+- **Equiangular lines.** Lines whose vectors have inner products ±c form a clique; the search
+  finds the 16 equiangular lines in 6 dimensions, the most there can be.
+
+The quickstart notebook works through each of these.
 
 ## How the search works
 
