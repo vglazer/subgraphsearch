@@ -325,6 +325,7 @@ fn run_search<W: Write>(
         aspiration: variant == Variant::Aspiration,
         connected: false,
         path: false,
+        endpoints: None,
         regular: match variant {
             Variant::Regular => Some(Regular {
                 degree: e_sub,

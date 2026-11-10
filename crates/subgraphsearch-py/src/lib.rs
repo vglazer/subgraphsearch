@@ -407,7 +407,7 @@ type ExperimentTuple = (i64, usize, bool, Vec<usize>, Option<Vec<u32>>);
 
 /// Runs a search; returns one (best_conflict, moves, success, vertices, trace) per experiment.
 #[pyfunction]
-#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration = false, degree = None, two_phase = false, connected = false, path = false))]
+#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration = false, degree = None, two_phase = false, connected = false, path = false, endpoints = None))]
 #[allow(clippy::too_many_arguments)]
 fn search(
     py: Python<'_>,
@@ -427,6 +427,7 @@ fn search(
     two_phase: bool,
     connected: bool,
     path: bool,
+    endpoints: Option<[usize; 2]>,
 ) -> PyResult<Vec<ExperimentTuple>> {
     let params = SearchParams {
         size,
@@ -442,6 +443,7 @@ fn search(
         aspiration,
         connected,
         path,
+        endpoints,
         regular: degree.map(|degree| subgraphsearch_core::Regular { degree, two_phase }),
     };
     let result = if let Ok(g) = graph.extract::<PyRef<'_, PyGraph>>() {

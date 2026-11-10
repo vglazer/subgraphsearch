@@ -171,6 +171,11 @@ pub struct SearchParams {
     /// `regular` must be `None`. Needs an unweighted [`Graph`].
     #[serde(default)]
     pub path: bool,
+    /// With `path`: the two vertices the path must run between, as its two ends. The search adds a
+    /// new vertex adjacent to each, which an induced path can only contain as an end, and fixes all
+    /// four; the results leave the new vertices out (see [`crate::regular`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoints: Option<[usize; 2]>,
     /// Search for regular induced subgraphs instead (the original `reg_search` and `ereg_search`); the
     /// `edges` target is then ignored. Needs an unweighted [`Graph`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -206,6 +211,7 @@ impl SearchParams {
             aspiration: false,
             connected: false,
             path: false,
+            endpoints: None,
             regular: None,
         }
     }
@@ -229,6 +235,28 @@ impl SearchParams {
             }
             if std::mem::replace(&mut seen[v], true) {
                 return Err(Error::DuplicateVertex(v));
+            }
+        }
+        if let Some([s, t]) = self.endpoints {
+            if !self.path {
+                return Err(Error::Invalid("endpoints need a path search".into()));
+            }
+            for v in [s, t] {
+                if v >= n {
+                    return Err(Error::VertexOutOfRange {
+                        vertex: v as i64,
+                        n,
+                    });
+                }
+            }
+            if s == t {
+                return Err(Error::Invalid(format!(
+                    "a path's two endpoints must differ, got {s} twice"
+                )));
+            }
+            let extra = [s, t].iter().filter(|&&v| !seen[v]).count();
+            if self.size <= self.fixed.len() + extra {
+                return Err(Error::InvalidSubgraphSize(self.size as i64));
             }
         }
         Ok(())

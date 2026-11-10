@@ -122,6 +122,7 @@ subgraphsearch search g.g6 -k 30 -m 340 --max-conflict 2          # also report 
 subgraphsearch search g.g6 -k 10 --degree 4                       # 4-regular subgraphs
 subgraphsearch search sparse.g6 -k 12 --degree 2 --connected      # induced 12-cycles
 subgraphsearch search sparse.g6 -k 20 --path                      # induced 20-vertex paths
+subgraphsearch search sparse.g6 -k 20 --path --endpoints 0,7      # the same, from vertex 0 to vertex 7
 subgraphsearch generate weighted -n 200 -d 0.65 -o w.mtx          # a weighted graph
 subgraphsearch search w.mtx --weighted -k 15 -m 140               # total weight 140
 subgraphsearch search many.g6 --all -k 10 -m 30 -q                # every graph in a file
@@ -143,6 +144,7 @@ python -m subgraphsearch explore g.g6 --result result.json        # explore them
 | `-m`, `--edges` | subgraph edges (total weight, with `--weighted`) | required, unless `--degree` |
 | `-d`, `--degree` | instead, a subgraph regular of this degree | |
 | `--path` | instead, an induced path | |
+| `--endpoints` | with `--path`, the two vertices the path runs between, e.g. `0,7` | none |
 | `--connected` | require a connected subgraph | off |
 | `--fixed` | vertices the subgraph must contain | none |
 | `-n`, `--experiments` | independent restarts | 40 |
@@ -274,6 +276,14 @@ Each experiment reports the best conflict it reached and the moves it needed:
   experiments, 3 short of the record, though only some 8-cube snakes work as the half
   ([examples/snake_9cube.py](examples/snake_9cube.py)). Like regular searches, it needs an
   unweighted graph.
+- **Paths between two vertices** (`--endpoints s,t`, `endpoints=(s, t)`, with a path search): induced
+  paths that run from `s` to `t`. The shortest path between two vertices is always induced and easy
+  to find, but long induced paths between them are as hard to find as long induced paths in general.
+  The search attaches a new vertex to each of `s` and `t`, which an induced path can only contain as
+  an end, and looks for a path two vertices longer that contains all four; the results leave the new
+  vertices out, so every subgraph returned, near misses included, contains `s` and `t`. Between
+  opposite corners of the 7-cube it finds paths of 48 vertices in 140 of 200 experiments, in under a
+  second.
 
 ### Random graphs and operations
 

@@ -29,6 +29,13 @@
 //! graph with `size - 1` edges is a tree, and a tree whose deviation from degree 2 is 2 has two
 //! leaves. Components are not part of a swap's value, since counting them for every swap would
 //! cost too much.
+//!
+//! A path search between two given vertices ([`SearchParams::endpoints`]) searches a graph with a
+//! new vertex attached to each of them for a path two vertices longer, with both new vertices and
+//! both endpoints fixed. A vertex with one neighbor can only be an end of an induced path, so an
+//! exact solution is a path from one new vertex to the other through the two endpoints, and
+//! leaving the new vertices out gives a path between the endpoints. Conflicts are those of the
+//! longer path, so a near miss is as far from a path between the endpoints as from a path.
 
 use rayon::prelude::*;
 
@@ -41,9 +48,48 @@ use crate::search::{Components, Experiment, SearchParams, SearchResult};
 /// positions in 16-bit integers.
 pub const MAX_VERTICES: usize = i16::MAX as usize;
 
+/// For a path search with [`SearchParams::endpoints`] `[s, t]`: the graph with two new vertices,
+/// adjacent to `s` and to `t` alone, and parameters for a path two vertices longer that fix both
+/// new vertices as well as `s` and `t`. A vertex with one neighbor can only be an end of an
+/// induced path, so the paths found run from one new vertex through `s`, ..., `t` to the other;
+/// [`without_pendants`] then leaves the new vertices out. `None` without endpoints.
+fn with_pendants(
+    graph: &Graph,
+    params: &SearchParams,
+) -> Result<Option<(Graph, SearchParams)>, Error> {
+    let Some([s, t]) = params.endpoints else {
+        return Ok(None);
+    };
+    let n = graph.num_vertices();
+    let edges = graph.edges().chain([(n, s), (n + 1, t)]);
+    let pendants = Graph::from_edges(n + 2, edges)?;
+    let mut p = params.clone();
+    p.size += 2;
+    p.endpoints = None;
+    for v in [s, t, n, n + 1] {
+        if !p.fixed.contains(&v) {
+            p.fixed.push(v);
+        }
+    }
+    Ok(Some((pendants, p)))
+}
+
+/// An experiment of a search made by [`with_pendants`], without the two new vertices.
+fn without_pendants(e: &mut Experiment, n: usize) {
+    e.vertices.retain(|&v| v < n);
+}
+
 /// Runs a regular search; see [`crate::search::search`] for how experiments are scheduled.
 pub(crate) fn search(graph: &Graph, params: &SearchParams) -> Result<SearchResult, Error> {
     validate(graph, params)?;
+    if let Some((pendants, p)) = with_pendants(graph, params)? {
+        let mut result = search(&pendants, &p)?;
+        for e in &mut result.experiments {
+            without_pendants(e, graph.num_vertices());
+        }
+        result.params = params.clone();
+        return Ok(result);
+    }
     let experiments = match params.rng {
         RngKind::Legacy => {
             let mut out = Vec::with_capacity(params.experiments);
@@ -79,6 +125,16 @@ pub(crate) fn search_sequential<F>(
 where
     F: FnMut(&Experiment),
 {
+    validate(graph, params)?;
+    if let Some((pendants, p)) = with_pendants(graph, params)? {
+        let n = graph.num_vertices();
+        // a path search's conflicts need no recomputing
+        return search_sequential_as_c(&pendants, &p, |e, _| {
+            let mut e = e.clone();
+            without_pendants(&mut e, n);
+            on_experiment(&e)
+        });
+    }
     search_sequential_as_c(graph, params, |e, _| {
         let mut e = e.clone();
         recompute_conflict(graph, params, &mut e);
@@ -132,6 +188,11 @@ where
     F: FnMut(&Experiment, &[Vec<u32>]),
 {
     validate(graph, params)?;
+    if params.endpoints.is_some() {
+        return Err(Error::Invalid(
+            "endpoints are not available with the original programs' output".into(),
+        ));
+    }
     let mut ws = Workspace::new(graph, params);
     match params.rng {
         RngKind::Legacy => {
@@ -1042,6 +1103,66 @@ mod tests {
         for e in r.experiments.iter().filter(|e| e.success) {
             assert!(is_induced_path(&cube, &e.vertices), "{:?}", e.vertices);
         }
+    }
+
+    #[test]
+    fn path_searches_run_between_given_endpoints() {
+        let n = 6;
+        let cube = Graph::from_edges(
+            1 << n,
+            (0..1usize << n)
+                .flat_map(|u| (0..n).map(move |b| (u, u ^ (1 << b))))
+                .filter(|&(u, w)| u < w),
+        )
+        .unwrap();
+        let (s, t) = (0, 63);
+        let ends_at = |vs: &[usize]| {
+            let ends: Vec<usize> = vs
+                .iter()
+                .copied()
+                .filter(|&v| vs.iter().filter(|&&w| cube.has_edge(v, w)).count() == 1)
+                .collect();
+            ends == [s, t]
+        };
+        for rng in [RngKind::Xoshiro, RngKind::Legacy] {
+            let mut p = SearchParams::new(21, 0);
+            p.path = true;
+            p.endpoints = Some([s, t]);
+            p.experiments = 20;
+            p.max_moves = 2000;
+            p.rng = rng;
+            let r = search(&cube, &p).unwrap();
+            assert!(r.successes() > 0);
+            assert_eq!(r.params.endpoints, Some([s, t]));
+            for e in &r.experiments {
+                assert_eq!(e.vertices.len(), 21);
+                assert!(e.vertices.contains(&s) && e.vertices.contains(&t));
+                if e.success {
+                    assert!(is_induced_path(&cube, &e.vertices), "{:?}", e.vertices);
+                    assert!(ends_at(&e.vertices), "{:?}", e.vertices);
+                }
+            }
+        }
+        // 0 and 63 differ in all six bits, an even number, so every path between them has an odd
+        // number of vertices
+        let mut p = SearchParams::new(20, 0);
+        p.path = true;
+        p.endpoints = Some([s, t]);
+        p.experiments = 20;
+        p.max_moves = 2000;
+        assert_eq!(search(&cube, &p).unwrap().successes(), 0);
+
+        let bad = |f: &dyn Fn(&mut SearchParams)| {
+            let mut p = SearchParams::new(20, 0);
+            p.path = true;
+            p.endpoints = Some([s, t]);
+            f(&mut p);
+            search(&cube, &p).is_err()
+        };
+        assert!(bad(&|p| p.path = false));
+        assert!(bad(&|p| p.endpoints = Some([5, 5])));
+        assert!(bad(&|p| p.endpoints = Some([0, 64])));
+        assert!(bad(&|p| p.size = 2));
     }
 
     #[test]

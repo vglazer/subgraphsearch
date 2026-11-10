@@ -471,6 +471,39 @@ def test_path_search():
         ss.search(ss.WeightedGraph.from_graph(grid), 8, path=True)
 
 
+def test_path_search_between_endpoints(tmp_path):
+    import subprocess
+    import sys
+
+    # opposite corners of a 6x6 grid, 10 steps apart: the paths between them have an odd number of vertices
+    grid = ss.Graph(36, [(i, i + 1) for i in range(36) if i % 6 < 5] + [(i, i + 6) for i in range(30)])
+    r = ss.search(grid, 15, path=True, endpoints=(0, 35), experiments=30, max_moves=1000)
+    assert r.successes > 0 and r.params.endpoints == (0, 35) and r.target == "forming a path from 0 to 35"
+    for e in r.experiments:
+        assert len(e.vertices) == 15 and {0, 35} <= set(e.vertices)
+        if e.success:
+            h = grid.induced(list(e.vertices))
+            ends = [v for v, d in zip(e.vertices, h.degrees().tolist()) if d == 1]
+            assert is_induced_path(grid, e.vertices) and ends == [0, 35]
+    assert ss.SearchResult.from_dict(json.loads(r.to_json()), grid).params.endpoints == (0, 35)
+    assert ss.search(grid, 14, path=True, endpoints=(0, 35), experiments=30, max_moves=1000).successes == 0
+    with pytest.raises(ValueError, match="path search"):
+        ss.search(grid, 8, 7, endpoints=(0, 35))
+    with pytest.raises(ValueError, match="two vertices"):
+        ss.search(grid, 8, path=True, endpoints=(0, 7, 35))
+
+    # the command line takes them too, and its JSON loads in Python
+    graph_path, out = tmp_path / "grid.g6", tmp_path / "r.json"
+    grid.write(graph_path)
+    run = subprocess.run(
+        [sys.executable, "-m", "subgraphsearch._cli", "search", str(graph_path), "-k", "15", "--path",
+         "--endpoints", "0,35", "-n", "30", "--moves", "1000", "--json", str(out), "-q"],
+        check=False, capture_output=True, text=True, encoding="utf-8",
+    )
+    assert "forming a path from 0 to 35" in run.stdout
+    assert [e.vertices for e in ss.SearchResult.load(out, grid).experiments] == [e.vertices for e in r.experiments]
+
+
 def test_legacy_regular_programs():
     strip = lambda s: re.sub(r"T> .*", "T>", s)
     for program in ("reg_search", "ereg_search"):

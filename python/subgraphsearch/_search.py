@@ -53,6 +53,8 @@ class SearchParams:
     connected: bool = False
     #: Search for induced paths on ``size`` vertices; ``edges`` is then unused.
     path: bool = False
+    #: With ``path``: the two vertices the path must run between, as its ends.
+    endpoints: tuple[int, int] | None = None
 
 
 @dataclass
@@ -67,11 +69,12 @@ class SearchResult:
     def target(self) -> str:
         """What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3",
         each followed by ", connected" for a ``connected`` search; or, for the three shapes with a
-        name, "forming a path", "forming a cycle" (connected and regular of degree 2) or "forming a
-        tree" (connected, with one edge fewer than vertices)."""
+        name, "forming a path" (or "forming a path from 0 to 127", with ``endpoints``), "forming a
+        cycle" (connected and regular of degree 2) or "forming a tree" (connected, with one edge
+        fewer than vertices)."""
         p = self.params
         if p.path:
-            return "forming a path"
+            return f"forming a path from {p.endpoints[0]} to {p.endpoints[1]}" if p.endpoints else "forming a path"
         if p.connected and p.degree == 2:
             return "forming a cycle"
         if p.connected and p.degree is None and not self.weighted and p.edges == p.size - 1:
@@ -169,6 +172,8 @@ class SearchResult:
         if regular:
             p["degree"], p["two_phase"] = regular["degree"], regular.get("two_phase", False)
         p["fixed"] = tuple(p.get("fixed", ()))
+        if p.get("endpoints") is not None:
+            p["endpoints"] = tuple(p["endpoints"])
         params = SearchParams(**{k: v for k, v in p.items() if k in SearchParams.__dataclass_fields__})
         exps = [
             Experiment(
@@ -222,6 +227,7 @@ def search(
     aspiration: bool = False,
     connected: bool = False,
     path: bool = False,
+    endpoints: tuple[int, int] | None = None,
 ) -> SearchResult:
     """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges, or, in
     a :class:`WeightedGraph`, with total weight ``edges`` (the original ``wsub_search``).
@@ -255,6 +261,11 @@ def search(
     vertices. It uses the regular search's moves for degree 2, aimed at the degrees of a path (two
     endpoints of degree 1, the rest 2) rather than of a cycle; the conflict is 0 exactly for an
     induced path. Like regular searches, it needs an unweighted graph.
+
+    With ``path=True``, ``endpoints=(s, t)`` asks for induced paths that run from ``s`` to ``t``.
+    The search attaches a new vertex to each of them, which an induced path can only contain as an
+    end, and looks for a path two vertices longer through all four; the results leave the new
+    vertices out, so every subgraph returned, near misses included, contains ``s`` and ``t``.
     """
     if (edges is not None) + (degree is not None) + bool(path) != 1:
         raise ValueError(
@@ -263,16 +274,20 @@ def search(
         )
     if two_phase and degree is None:
         raise ValueError("two_phase needs degree: it searches for regular subgraphs")
+    if endpoints is not None:
+        endpoints = tuple(int(v) for v in endpoints)
+        if len(endpoints) != 2:
+            raise ValueError("endpoints takes two vertices, the ends of the path")
     fixed = tuple(int(v) for v in fixed)
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
         int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
-        bool(connected), bool(path),
+        bool(connected), bool(path), endpoints,
     )
     raw = _core.search(
         graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq,
         params.div_dur, params.seed, rng, params.trace, params.aspiration, params.degree, params.two_phase,
-        params.connected, params.path,
+        params.connected, params.path, None if endpoints is None else list(endpoints),
     )
     exps = [
         Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))

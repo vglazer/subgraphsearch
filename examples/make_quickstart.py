@@ -30,8 +30,8 @@ cells = [
 is a randomized [tabu search]({W}Tabu_search).
 
 The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
-vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles, trees and
-paths, and combines regular subgraphs with switching and block designs to construct strongly regular graphs.
+vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles and trees,
+and induced paths, including paths between two given vertices, and combines regular subgraphs with switching and block designs to construct strongly regular graphs.
 It ends with weighted graphs, views of a graph's structure, and file formats.
 """),
     code("""
@@ -66,6 +66,7 @@ Every search picks $k$ vertices and swaps one of them for an outside vertex at e
 | the same, in two phases | `ss.search(g, k, degree=d, two_phase=True)` | first $\\lvert e - kd/2 \\rvert$, then regularity |
 | any of these, connected | add `connected=True` | plus 1 for each component beyond the first |
 | an [induced path]({W}Induced_path) on $k$ vertices | `ss.search(g, k, path=True)` | $\\lvert \\text{{deviation}} - 2 \\rvert + \\lvert e - (k - 1) \\rvert$, plus extra components |
+| the same, from $s$ to $t$ | add `endpoints=(s, t)` | the same, for a path two vertices longer |
 
 Here $d_S(v)$ is the number of neighbors $v$ has among the chosen vertices $S$. Any of these can also
 require some vertices with `fixed=`, return near misses with `solutions(max_conflict=...)`, and record the
@@ -246,7 +247,7 @@ for two_phase in (False, True):
     print(f"two_phase={two_phase}: {res.successes}/100 successes, {1000 * elapsed / max(res.successes, 1):.1f} ms per success")
 """),
     md(f"""
-## Cycles, trees and paths
+## Cycles and trees
 
 Cycles are the most important special case of regular subgraphs. Every vertex of an
 [induced cycle]({W}Induced_path) has exactly two neighbors on it, so `degree=2` searches for them. An
@@ -318,6 +319,14 @@ induced_trees = {k: ss.search(sparse, k, k - 1, connected=True, experiments=200,
 print("with connected=True, experiments that found a k-vertex tree, by k:", induced_trees)
 """),
     md(f"""
+## Induced paths
+
+The shortest path between two vertices is always an induced path, and breadth-first search finds it at once.
+Long induced paths are another matter: finding the longest is NP-hard, and exact searches, which must rule
+out every alternative, give out on graphs of modest size. In the hypercubes below, the longest induced path
+is known exactly only up to dimension 8. A heuristic search that finds long paths quickly, and reports how
+close it came when it does not, fills that gap.
+
 A path is a tree whose vertices all have degree at most 2, but beyond a few vertices the tree search rarely
 ends on one. `path=True` searches for induced [paths]({W}Path_graph) directly. It makes the regular search's
 moves for degree 2, but aims at a deviation from regularity of 2 instead of 0, for the path's two endpoints
@@ -348,6 +357,34 @@ n = 7
 cube = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])
 snakes = ss.search(cube, 51, path=True, experiments=400, max_moves=2000, div_freq=300, div_dur=8)
 print(snakes.summary())
+"""),
+    md("""
+`endpoints=(s, t)` asks for induced paths that run from $s$ to $t$. The search attaches a new vertex to each
+of them, which an induced path can only contain as an end, looks for a path two vertices longer through all
+four, and leaves the new vertices out of the results. Here are paths between opposite corners of the 7-cube,
+0 = 0000000 and 127 = 1111111. Each step along a path flips one bit, and the two corners differ in all seven,
+an odd number, so a path between them has an even number of vertices: the search finds none of 47.
+"""),
+    code("""
+corner_paths = {}
+for k in (40, 44, 47, 48):
+    corner_paths[k] = ss.search(cube, k, path=True, endpoints=(0, 127), experiments=200, max_moves=5000, div_freq=300, div_dur=8)
+    print(f"{k} vertices from 0 to 127: {corner_paths[k].successes} of 200 experiments")
+"""),
+    md("""
+Near misses come back as for any search, with `solutions(max_conflict=...)`, and every one of them contains
+both endpoints. With endpoints, a near miss of conflict 1 has the right number of vertices, but only some of
+them lie on a path from $s$ to $t$: the rest form a separate cycle. Leaving the cycle out still gives a path
+from $s$ to $t$, though, as here, it can be a good deal shorter than the one asked for.
+"""),
+    code("""
+for vs in corner_paths[48].solutions(max_conflict=1):
+    h = cube.induced(list(vs))
+    labels, pieces = h.components()
+    if pieces > 1:
+        sizes = sorted((int((labels == c).sum()) for c in range(pieces)), reverse=True)
+        print(f"a near miss: a path of {sizes[0]} vertices from 0 to 127, and a separate cycle of {sizes[1]}")
+        break
 """),
     md(f"""
 ## Switching

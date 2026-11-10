@@ -154,6 +154,9 @@ struct SearchArgs {
     /// Instead of an edge count, look for induced paths on -k vertices.
     #[arg(long)]
     path: bool,
+    /// With --path: the two vertices the path must run between, e.g. 0,127.
+    #[arg(long, value_delimiter = ',', num_args = 1, requires = "path")]
+    endpoints: Vec<usize>,
     /// With --degree: first find the right number of edges, then make the subgraph regular
     /// (the original ereg_search).
     #[arg(long)]
@@ -450,6 +453,11 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         aspiration: args.aspiration,
         connected: args.connected,
         path: args.path,
+        endpoints: match args.endpoints[..] {
+            [] => None,
+            [s, t] => Some([s, t]),
+            _ => bail!("--endpoints takes two vertices, e.g. --endpoints 0,127"),
+        },
         regular: args.degree.map(|degree| subgraphsearch_core::Regular {
             degree,
             two_phase: args.two_phase,
@@ -540,11 +548,14 @@ fn write_json(args: &SearchArgs, results: &[(usize, SearchResult)]) -> Result<()
 
 /// What was searched for: "with 12 edges", "with total weight 30", "regular of degree 3", each
 /// followed by ", connected" for a connected search; or, for the three shapes with a name, "forming
-/// a path", "forming a cycle" (connected and regular of degree 2) or "forming a tree" (connected,
-/// with one edge fewer than vertices).
+/// a path" (or "forming a path from 0 to 127", with endpoints), "forming a cycle" (connected and
+/// regular of degree 2) or "forming a tree" (connected, with one edge fewer than vertices).
 fn target(params: &SearchParams, weighted: bool) -> String {
     if params.path {
-        return "forming a path".into();
+        return match params.endpoints {
+            Some([s, t]) => format!("forming a path from {s} to {t}"),
+            None => "forming a path".into(),
+        };
     }
     let target = match params.regular {
         Some(r) if params.connected && r.degree == 2 => return "forming a cycle".into(),
