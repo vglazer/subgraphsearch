@@ -32,8 +32,9 @@ is a randomized [tabu search]({W}Tabu_search).
 The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
 vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles and trees,
 and induced paths, including paths between two given vertices. It combines regular subgraphs with switching
-and block designs to construct strongly regular graphs, and finds Hadamard matrices and equiangular lines as
-cliques of vectors. It ends with weighted graphs, views of a graph's structure, and file formats.
+and block designs to construct strongly regular graphs, and finds Hadamard matrices, equiangular lines and
+error-correcting codes as cliques of vectors. It ends with weighted graphs, views of a graph's structure, and
+file formats.
 """),
     code("""
 import subgraphsearch as ss
@@ -701,6 +702,45 @@ axs[1].scatter(*zip(*corner.values()), s=70, color="#868e96", zorder=3)
 axs[1].set_aspect("equal")
 axs[1].axis("off")
 axs[1].set_title("lines 1 to 15 as the edges of K6:\\nacute exactly when the edges share an endpoint", fontsize=10, loc="left");
+"""),
+    md(f"""
+## Error-correcting codes
+
+A binary [code]({W}Error_correction_code) of length $n$ and minimum distance $d$ is a set of $n$-bit words,
+any two of which differ in at least $d$ places. Then a word sent with up to $(d - 1)/2$ bits flipped is still
+closer to the word sent than to any other, so the receiver can correct those errors, and up to $d - 1$ flipped
+bits are always noticed, since they cannot turn one word into another. The more words, the more messages; the
+largest number of words possible, $A(n, d)$, is known only for small $n$ and $d$.
+
+Codes are cliques too: in the graph on all $2^n$ words, joined when they differ in at least $d$ places, a code
+is a clique, and $A(n, d)$ is the size of the largest. They are also vectors with prescribed inner products:
+written as $\\pm 1$ vectors, two words that differ in $t$ places have inner product $n - 2t$, so they are at
+least $d$ apart exactly when their inner product is at most $n - 2d$. For length 11 and distance 4 the most
+words a code can have is 72, and the search finds such a code in a fraction of a second; `examples/codes.py`
+finds the largest codes for lengths 9 to 12 and distances 4 and 6.
+"""),
+    code("""
+n, d = 11, 4
+words = np.array(list(itertools.product((1, -1), repeat=n)))       # all 2048 words, as +-1 vectors
+far_apart = ss.Graph.from_vectors(words, range(-n, n - 2 * d + 1, 2))   # inner products n - 2t with t >= d
+found = ss.search(far_apart, 72, 72 * 71 // 2, experiments=16, max_moves=2000)
+code = words[list(found.best.vertices)]
+distances = (n - code @ code.T) // 2
+print(f"{found.successes} of 16 experiments found a code of 72 words")
+print("smallest distance between two words:", distances[np.triu_indices(72, 1)].min())
+
+# send each word with bits flipped, and decode to the nearest word of the code
+rng = np.random.default_rng(1)
+def received(word, flips):
+    out = word.copy()
+    out[rng.choice(n, flips, replace=False)] *= -1
+    return out
+one = [received(w, 1) for w in code]
+corrected = sum(np.argmax(code @ r) == i for i, r in enumerate(one))    # nearest word: largest inner product
+two = [received(w, 2) for w in code]
+noticed = sum(not (code @ r == n).any() for r in two)                   # not equal to any word of the code
+print(f"one bit flipped: {corrected} of 72 words decoded correctly")
+print(f"two bits flipped: {noticed} of 72 noticed as errors")
 """),
     md("""
 ## Weighted graphs

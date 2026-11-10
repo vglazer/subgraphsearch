@@ -38,6 +38,7 @@ uv run python examples/make_quickstart.py         # rebuild the quickstart noteb
 uv run python examples/make_figures.py            # redraw the README figures
 uv run python examples/snake_9cube.py             # reproduce the README's 189-vertex 9-cube snake
 uv run python examples/hadamard.py                # Hadamard matrices of orders 8 to 20 as cliques
+uv run python examples/codes.py                   # the largest binary codes of lengths 9 to 12 as cliques
 ```
 
 - **The quickstart notebook** is generated from `examples/make_quickstart.py`, in two copies: the

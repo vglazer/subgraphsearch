@@ -110,6 +110,11 @@ In Jupyter, graphs and results display as summaries with small charts.
   orthogonal pairs, built in under a second and searched in less), and the quickstart notebook
   finds the 16 equiangular lines in 6 dimensions. `viz.plot_sign_matrix` draws a ±1 matrix such as
   a Hadamard or Seidel matrix.
+- **Error-correcting codes:** a binary code of length $`n`$ and minimum distance $`d`$ is a clique in
+  the graph on all $`n`$-bit words joined when they differ in at least $`d`$ places, which is
+  `from_vectors` on the words as ±1 vectors.
+  [examples/codes.py](examples/codes.py) finds codes as large as possible for lengths 9 to 12 and
+  distances 4 and 6, among them the 72-word code of length 11 and distance 4 in about 3 seconds.
 
 ## Rust
 
