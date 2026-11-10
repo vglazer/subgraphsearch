@@ -111,10 +111,13 @@ In Jupyter, graphs and results display as summaries with small charts.
   finds the 16 equiangular lines in 6 dimensions. `viz.plot_sign_matrix` draws a ±1 matrix such as
   a Hadamard or Seidel matrix.
 - **Error-correcting codes:** a binary code of length $`n`$ and minimum distance $`d`$ is a clique in
-  the graph on all $`n`$-bit words joined when they differ in at least $`d`$ places, which is
-  `from_vectors` on the words as ±1 vectors.
+  the graph on all $`n`$-bit words joined when they differ in at least $`d`$ places,
+  `ss.Graph.from_words(words, range(d, n + 1))`.
   [examples/codes.py](examples/codes.py) finds codes as large as possible for lengths 9 to 12 and
   distances 4 and 6, among them the 72-word code of length 11 and distance 4 in about 3 seconds.
+- **Words and vectors:** `ss.vectors.binary_words(n, weight=None)` lists the candidate words,
+  `signs` turns them into ±1 vectors, `min_distance` and `is_hadamard` check what a search found,
+  and `supports` writes a code as the positions of its 1s, as tables of codes do.
 
 ## Rust
 

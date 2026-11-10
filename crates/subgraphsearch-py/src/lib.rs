@@ -91,6 +91,24 @@ impl PyGraph {
         Ok(Self::wrap(g))
     }
 
+    /// The graph on binary words packed as little-endian uint64 integers, joined when their Hamming
+    /// distance is in `distances`; see `Graph::from_words`.
+    #[staticmethod]
+    fn from_word_bytes(py: Python<'_>, data: &[u8], distances: Vec<u32>) -> PyResult<Self> {
+        if !data.len().is_multiple_of(8) {
+            return Err(PyValueError::new_err(
+                "word data must be a whole number of uint64 entries",
+            ));
+        }
+        let words: Vec<u64> = data
+            .chunks_exact(8)
+            .map(|c| u64::from_le_bytes(c.try_into().expect("8 bytes")))
+            .collect();
+        Ok(Self::wrap(
+            py.detach(move || Graph::from_words(&words, &distances)),
+        ))
+    }
+
     /// Reads a graph file; the format is inferred from the extension unless given.
     #[staticmethod]
     #[pyo3(signature = (path, format = None))]

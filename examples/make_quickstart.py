@@ -577,19 +577,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 n = 12
-rows = []
-for plus in itertools.combinations(range(1, n), n // 2 - 1):   # where the other +1s go
-    v = -np.ones(n, dtype=int)
-    v[0] = 1
-    v[list(plus)] = 1
-    rows.append(v)
-rows = np.array(rows)
+# +1 followed by the 11-entry +-1 vectors with six -1s: all candidates for the rows after the first
+rest = ss.vectors.signs(ss.vectors.binary_words(n - 1, weight=n // 2))
+rows = np.hstack([np.ones((len(rest), 1), dtype=int), rest])
 orthogonal = ss.Graph.from_vectors(rows, [0])
 
 found = ss.search(orthogonal, n - 1, (n - 1) * (n - 2) // 2, experiments=16, max_moves=1000)
 h = np.vstack([np.ones(n, dtype=int), rows[list(found.best.vertices)]])
 print(f"{orthogonal.n} vectors; {found.successes} of 16 experiments found a clique of {n - 1}")
-print("H H^T = 12 I:", (h @ h.T == n * np.eye(n, dtype=int)).all())
+print("a Hadamard matrix:", ss.vectors.is_hadamard(h))
 """),
     md(f"""
 The matrix the search found looks random, on the left below ($+1$ dark, $-1$ white). But reordering the rows
@@ -613,7 +609,7 @@ paley = np.eye(n, dtype=int)
 paley[0, 1:] = 1
 paley[1:, 0] = -1
 paley[1:, 1:] += Q
-print("Paley's matrix is Hadamard:", (paley @ paley.T == n * np.eye(n, dtype=int)).all())
+print("Paley's matrix is a Hadamard matrix:", ss.vectors.is_hadamard(paley))
 
 
 def signed(m):
@@ -658,7 +654,8 @@ $\\lvert \\cos \\rvert = a$ span $n - m$ dimensions, where $m$ is the multiplici
 """),
     code("""
 d = 6
-lines = np.array([(1,) + s for s in itertools.product((1, -1), repeat=d - 1)])   # one vector per line
+signs = ss.vectors.signs(ss.vectors.binary_words(d - 1))
+lines = np.hstack([np.ones((len(signs), 1), dtype=int), signs])   # the 32 +-1 vectors starting with +1
 equiangular = ss.largest(ss.Graph.from_vectors(lines, [-2, 2]), "clique", experiments=64, max_moves=3000)
 chosen = lines[list(equiangular.best.best.vertices)]
 gram = np.abs(chosen @ chosen.T)
@@ -713,21 +710,20 @@ bits are always noticed, since they cannot turn one word into another. The more 
 largest number of words possible, $A(n, d)$, is known only for small $n$ and $d$.
 
 Codes are cliques too: in the graph on all $2^n$ words, joined when they differ in at least $d$ places, a code
-is a clique, and $A(n, d)$ is the size of the largest. They are also vectors with prescribed inner products:
-written as $\\pm 1$ vectors, two words that differ in $t$ places have inner product $n - 2t$, so they are at
-least $d$ apart exactly when their inner product is at most $n - 2d$. For length 11 and distance 4 the most
+is a clique, and $A(n, d)$ is the size of the largest. `ss.Graph.from_words(words, distances)` builds that graph.
+They are also vectors with prescribed inner products: written as $\\pm 1$ vectors, two words that differ in $t$
+places have inner product $n - 2t$, which is how the decoding below finds the nearest word. For length 11 and distance 4 the most
 words a code can have is 72, and the search finds such a code in a fraction of a second; `examples/codes.py`
 finds the largest codes for lengths 9 to 12 and distances 4 and 6.
 """),
     code("""
 n, d = 11, 4
-words = np.array(list(itertools.product((1, -1), repeat=n)))       # all 2048 words, as +-1 vectors
-far_apart = ss.Graph.from_vectors(words, range(-n, n - 2 * d + 1, 2))   # inner products n - 2t with t >= d
+words = ss.vectors.binary_words(n)                        # all 2048 words, as rows of 0s and 1s
+far_apart = ss.Graph.from_words(words, range(d, n + 1))   # joined when at distance d or more
 found = ss.search(far_apart, 72, 72 * 71 // 2, experiments=16, max_moves=2000)
-code = words[list(found.best.vertices)]
-distances = (n - code @ code.T) // 2
 print(f"{found.successes} of 16 experiments found a code of 72 words")
-print("smallest distance between two words:", distances[np.triu_indices(72, 1)].min())
+print("minimum distance:", ss.vectors.min_distance(words[list(found.best.vertices)]))
+code = ss.vectors.signs(words[list(found.best.vertices)])    # as +-1 vectors, for decoding by inner products
 
 # send each word with bits flipped, and decode to the nearest word of the code
 rng = np.random.default_rng(1)

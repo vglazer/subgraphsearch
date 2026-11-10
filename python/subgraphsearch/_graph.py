@@ -90,6 +90,32 @@ class Graph:
         return Graph(_core.Graph.from_vector_bytes(data, int(a.shape[1]), [int(c) for c in inner_products]))
 
     @staticmethod
+    def from_words(words, distances: Iterable[int]) -> Graph:
+        """The graph on the rows of ``words`` (an array of 0s and 1s, one binary word of up to 64 bits
+        per row), with two joined when their Hamming distance, the number of places in which they
+        differ, is in ``distances``.
+
+        A binary code of length ``n`` and minimum distance ``d`` is a clique when ``distances`` is
+        ``range(d, n + 1)``, and an independent set when it is ``range(1, d)``. Each distance takes
+        one exclusive or and a bit count, computed in parallel in Rust straight into the adjacency
+        matrix. :func:`subgraphsearch.vectors.binary_words` makes the words.
+
+        >>> g = Graph.from_words([[0, 0, 0], [1, 1, 0], [1, 1, 1]], [2, 3])
+        >>> g.edge_list()
+        [(0, 1), (0, 2)]
+        """
+        a = np.asarray(words)
+        if a.ndim != 2:
+            raise ValueError(f"words must be a 2-D array, one word per row; got shape {a.shape}")
+        if a.shape[1] > 64:
+            raise ValueError(f"words can have at most 64 bits, got {a.shape[1]}")
+        if a.size and not np.isin(a, (0, 1)).all():
+            raise ValueError("words must have entries 0 and 1")
+        packed = (a.astype(np.uint64) << np.arange(a.shape[1], dtype=np.uint64)).sum(axis=1, dtype=np.uint64)
+        data = np.ascontiguousarray(packed, dtype="<u8").tobytes()
+        return Graph(_core.Graph.from_word_bytes(data, [int(d) for d in distances]))
+
+    @staticmethod
     def point_graph(blocks: Iterable[Iterable[int]], k: int = 1, *, points: int | None = None) -> Graph:
         """The graph on the points of an incidence structure (for example a block design), in which
         two points are adjacent when exactly ``k`` of the ``blocks`` contain both.

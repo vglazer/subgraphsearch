@@ -17,7 +17,6 @@ search a fraction of a second.
     uv run python examples/hadamard.py
 """
 
-import itertools
 import time
 
 import numpy as np
@@ -25,16 +24,11 @@ import numpy as np
 import subgraphsearch as ss
 
 
-def balanced(length: int, plus: int, first: int | None = None) -> np.ndarray:
-    """The +-1 vectors of the given length with `plus` entries +1, one per row; with `first`, only
-    those whose first entry is `first`."""
-    rows = []
-    for where in itertools.combinations(range(length), plus):
-        v = -np.ones(length, dtype=np.int64)
-        v[list(where)] = 1
-        if first is None or v[0] == first:
-            rows.append(v)
-    return np.array(rows)
+def balanced(length: int, minus: int, lead: bool = False) -> np.ndarray:
+    """The +-1 vectors of the given length with `minus` entries -1, one per row; with `lead`, a +1 is
+    put in front of each."""
+    rows = ss.vectors.signs(ss.vectors.binary_words(length, weight=minus))
+    return np.hstack([np.ones((len(rows), 1), dtype=np.int64), rows]) if lead else rows
 
 
 def find(n: int, fixed: np.ndarray, candidates: np.ndarray) -> np.ndarray:
@@ -48,7 +42,7 @@ def find(n: int, fixed: np.ndarray, candidates: np.ndarray) -> np.ndarray:
     found = time.perf_counter() - t0
     assert r.successes and g.induced(r.best.vertices).is_clique()
     h = np.vstack([fixed, candidates[list(r.best.vertices)]])
-    assert (h @ h.T == n * np.eye(n, dtype=np.int64)).all()
+    assert ss.vectors.is_hadamard(h)
     print(f"order {n}: {len(candidates):,} vectors, {g.m:,} orthogonal pairs, graph built in {built:.2f} s; "
           f"{r.successes} of 16 experiments found a clique of {k} in {found:.3f} s; H H^T = {n} I")
     return h
@@ -56,11 +50,11 @@ def find(n: int, fixed: np.ndarray, candidates: np.ndarray) -> np.ndarray:
 
 ones = {n: np.ones((1, n), dtype=np.int64) for n in (8, 12, 16, 20)}
 for n in (8, 12, 16):
-    h = find(n, ones[n], balanced(n, n // 2, first=1))
+    h = find(n, ones[n], balanced(n - 1, n // 2, lead=True))   # +1, then n/2 of the other n - 1 entries -1
     if n == 12:
         print("\n".join("".join("+" if x > 0 else "-" for x in row) for row in h))
 
 # order 20, with the second row fixed as well: five +1s in each half, the first entry +1
-halves = [np.concatenate([a, b]) for a in balanced(10, 5, first=1) for b in balanced(10, 5)]
+halves = [np.concatenate([a, b]) for a in balanced(9, 5, lead=True) for b in balanced(10, 5)]
 second = np.r_[np.ones(10), -np.ones(10)].astype(np.int64)
 find(20, np.vstack([ones[20], second]), np.array(halves))

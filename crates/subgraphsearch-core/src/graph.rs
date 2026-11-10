@@ -170,6 +170,41 @@ impl Graph {
         Ok(b.build())
     }
 
+    /// The graph on binary words of up to 64 bits, each given as an integer whose bit `i` is the
+    /// word's `i`-th entry, with two joined when their Hamming distance (the number of places in
+    /// which they differ) is one of `distances`.
+    ///
+    /// A binary code of minimum distance `d` is then a clique when `distances` is `d..=len`, and an
+    /// independent set in the graph with `distances` `1..d`. Distances are computed in parallel
+    /// straight into the adjacency matrix, each as one exclusive or and a bit count.
+    pub fn from_words(words: &[u64], distances: &[u32]) -> Graph {
+        use rayon::prelude::*;
+
+        let n = words.len();
+        let mut wanted = [false; 65];
+        for &d in distances {
+            if let Some(slot) = wanted.get_mut(d as usize) {
+                *slot = true;
+            }
+        }
+        let mut b = GraphBuilder::new(n);
+        let words_per_row = b.words_per_row;
+        if words_per_row > 0 {
+            b.bits
+                .par_chunks_mut(words_per_row)
+                .enumerate()
+                .for_each(|(u, row)| {
+                    let x = words[u];
+                    for (v, &y) in words.iter().enumerate() {
+                        if v != u && wanted[(x ^ y).count_ones() as usize] {
+                            row[v / 64] |= 1 << (v % 64);
+                        }
+                    }
+                });
+        }
+        b.build()
+    }
+
     /// Builds a graph on `n` vertices from an edge list.
     pub fn from_edges<I>(n: usize, edges: I) -> Result<Graph, Error>
     where
@@ -442,6 +477,30 @@ impl WeightedGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn graphs_of_words_join_allowed_distances() {
+        // all 3-bit words: distance 3 joins each word to its complement, distances 2 and 3 give the
+        // complement of the 3-cube
+        let words: Vec<u64> = (0..8).collect();
+        let opposite = Graph::from_words(&words, &[3]);
+        assert_eq!(opposite.num_edges(), 4);
+        assert!(opposite.has_edge(0b000, 0b111) && opposite.has_edge(0b010, 0b101));
+        let cube = Graph::from_words(&words, &[1]);
+        assert_eq!(cube.num_edges(), 12);
+        assert_eq!(Graph::from_words(&words, &[2, 3]).num_edges(), 28 - 12);
+        // the same as distances from inner products of +-1 vectors, n - 2t
+        let signs: Vec<i64> = words
+            .iter()
+            .flat_map(|w| (0..3).map(move |b| if w >> b & 1 == 1 { -1 } else { 1 }))
+            .collect();
+        assert_eq!(
+            Graph::from_vectors(&signs, 3, &[-1, -3]).unwrap(),
+            Graph::from_words(&words, &[2, 3])
+        );
+        assert_eq!(Graph::from_words(&[], &[1]).num_vertices(), 0);
+        assert_eq!(Graph::from_words(&words, &[70]).num_edges(), 0);
+    }
 
     #[test]
     fn graphs_of_vectors_join_allowed_inner_products() {

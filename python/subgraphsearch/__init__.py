@@ -11,7 +11,7 @@ standard formats, conversions to networkx / igraph / SciPy, and visualization.
 5
 """
 
-from . import _core, convert, designs, legacy, viz
+from . import _core, convert, designs, legacy, vectors, viz
 from ._core import __version__
 from ._graph import (
     MODELS,
@@ -68,6 +68,7 @@ __all__ = [
     "read_all",
     "search",
     "sweep",
+    "vectors",
     "viz",
     "write_all",
 ]

@@ -386,6 +386,35 @@ def test_graphs_of_vectors():
     matplotlib.pyplot.close("all")
 
 
+def test_words_and_codes():
+    v = ss.vectors
+    words = v.binary_words(4)
+    assert words.shape == (16, 4) and words[5].tolist() == [1, 0, 1, 0]   # word k spells k, bit i first
+    assert v.binary_words(5, weight=2).shape == (10, 5) and (v.binary_words(5, weight=2).sum(1) == 2).all()
+    assert (v.signs([[0, 1, 1]]) == [[1, -1, -1]]).all()
+    with pytest.raises(ValueError, match="weight"):
+        v.binary_words(4, weight=5)
+
+    # from_words agrees with from_vectors on the same words as +-1 vectors (inner product n - 2t)
+    n, d = 7, 3
+    words = v.binary_words(n)
+    far = ss.Graph.from_words(words, range(d, n + 1))
+    assert far == ss.Graph.from_vectors(v.signs(words), range(-n, n - 2 * d + 1, 2))
+    assert ss.Graph.from_words(words, range(1, d)) == far.complement()
+    # the Hamming code of length 7: 16 words at distance 3, as a clique
+    r = ss.search(far, 16, 120, experiments=16, max_moves=2000)
+    code = words[list(r.best.vertices)]
+    assert r.successes and v.min_distance(code) == 3
+    assert v.supports([[0, 1, 1, 0]]) == [(2, 3)] and v.supports([[0, 1, 1, 0]], base=0) == [(1, 2)]
+    with pytest.raises(ValueError, match="0 and 1"):
+        ss.Graph.from_words([[0, 2]], [1])
+    with pytest.raises(ValueError, match="64 bits"):
+        ss.Graph.from_words(np.zeros((2, 65), dtype=int), [1])
+
+    # Hadamard checks
+    assert v.is_hadamard([[1, 1], [1, -1]]) and not v.is_hadamard([[1, 1], [1, 1]]) and not v.is_hadamard([[1, 0]])
+
+
 def test_standard_graphs_and_mean_degree():
     n = 6
     by_hand = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])
