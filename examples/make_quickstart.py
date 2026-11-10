@@ -892,21 +892,37 @@ noticed = sum(not (code @ r == n).any() for r in two)                   # not eq
 print(f"one bit flipped: {corrected} of 72 words decoded correctly")
 print(f"two bits flipped: {noticed} of 72 noticed as errors")
 """),
-    md("""
+    md(f"""
 A code can be searched the other way round too: as an independent set in the graph of words that are *too
 close*, joined when they differ in fewer than $d$ places. That graph is sparse, and distances in it mean
 something: the codewords nearest a codeword lie in one region of the space of words. This is where a *region
-kick* pays off. With `kick_size=32`, at the start of each diversification cycle the search removes the 32
+kick* can pay off. With `kick_size=k`, at the start of each diversification cycle the search removes the $k$
 codewords nearest a random one, instead of making random moves, and refills the gap with the best words it can
-find, so it rebuilds one region of the code at a time, the kind of move searches for codes use. Here that
-makes reaching the largest code far more reliable, with much less work per success. For other codes much
-smaller kicks are best, so the size is worth comparing:
+find, so it rebuilds one region of the code at a time, the kind of move searches for codes use.
+
+How large a region to rebuild depends on the problem, so the size is a setting to compare. Here it is for the
+72-word code above and for a [constant-weight code]({W}Constant-weight_code): 69 words of length 15, each with
+seven 1s, at distance at least 6 from one another, also the most there can be:
 """),
     code("""
-too_close = ss.Graph.from_words(words, range(1, d))   # joined when at distance less than d
-for kick_size in (0, 32):
-    res = ss.search(too_close, 72, 0, kick_size=kick_size, experiments=64, max_moves=5000, div_freq=300, div_dur=8)
-    print(f"kick_size={kick_size}: {res.successes}/64 found a code of 72 words, {res.true_cost:.0f} moves per success")
+weight_7 = ss.vectors.binary_words(15, weight=7)
+codes = {
+    "72 words of length 11": (ss.Graph.from_words(words, range(1, 4)), 72),       # joined when less than 4 apart
+    "69 words of weight 7": (ss.Graph.from_words(weight_7, range(1, 6)), 69),     # joined when less than 6 apart
+}
+print(f"{'':12}" + "".join(f"{name:>30}" for name in codes))
+for kick_size in (0, 4, 32):
+    row = []
+    for too_close, size in codes.values():
+        res = ss.search(too_close, size, 0, kick_size=kick_size, experiments=64, max_moves=5000, div_freq=300, div_dur=8)
+        row.append(f"{res.successes:2}/64 found, {res.true_cost:6.0f} moves")
+    print(f"kick_size={kick_size:<2}" + "".join(f"{cell:>30}" for cell in row))
+"""),
+    md("""
+Each code wants what the other cannot stand. The 72-word code gains from rebuilding large regions: kicks of 32
+codewords, nearly half the code, find it in every experiment with a seventh of the work. The constant-weight code
+is best with small kicks of 4 and is wrecked by large ones. So compare a few sizes on a problem, as for any
+setting, before relying on one.
 """),
     md("""
 ## Weighted graphs

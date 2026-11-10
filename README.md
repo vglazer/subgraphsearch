@@ -230,6 +230,14 @@ Local search gets stuck in local minima. To shake it loose, the first `--div-dur
 (`--div-dur 0` turns them off). Each *experiment* is an independent restart from random vertices.
 Experiments run in parallel on all cores, and results still depend only on the seed.
 
+A *region kick* (`--kick-size k`) shakes harder: instead of the random moves, it swaps out the
+$`k`$ subgraph vertices nearest a random one, each for the best replacement, and keeps them out
+for a while, rebuilding one part of the subgraph at a time. It pays off where nearness in the
+graph means something, as for codes searched as independent sets in the graph of words that are
+too close: there it finds the 72-word code of length 11 and distance 4 in every experiment instead
+of half. The best size differs a lot between problems, a few vertices for some and half the
+subgraph for others, so compare a few.
+
 ### Reading the results
 
 Each experiment reports the best conflict it reached and the moves it needed:
