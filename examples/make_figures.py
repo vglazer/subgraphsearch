@@ -6,24 +6,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
 
 import subgraphsearch as ss
 from subgraphsearch import viz
 
 OUT = Path(__file__).resolve().parents[1] / "assets"
-
-
-def crossings(pos, edges) -> int:
-    """How many pairs of the given edges cross in a drawing: fewer makes a subgraph easier to follow."""
-    def ccw(a, b, c):
-        return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
-    count = 0
-    for i, (u, v) in enumerate(edges):
-        for x, y in edges[i + 1:]:
-            if len({u, v, x, y}) == 4:
-                a, b, c, d = pos[u], pos[v], pos[x], pos[y]
-                count += ccw(a, c, d) != ccw(b, c, d) and ccw(a, b, c) != ccw(a, b, d)
-    return count
 
 
 def found(result: ss.SearchResult) -> tuple[int, ...]:
@@ -33,47 +22,86 @@ def found(result: ss.SearchResult) -> tuple[int, ...]:
     return result.best.vertices
 
 
+def within(g: ss.Graph, vs) -> dict[int, list[int]]:
+    """Each vertex's neighbors among ``vs``."""
+    s = set(vs)
+    return {v: [w for w in g.neighbors(v).tolist() if w in s] for v in vs}
+
+
+def in_order(g: ss.Graph, vs) -> list[int]:
+    """The vertices of an induced path or cycle, in order along it."""
+    nbrs = within(g, vs)
+    order = [next((v for v in vs if len(nbrs[v]) == 1), vs[0])]
+    while len(order) < len(vs):
+        order.append(next(w for w in nbrs[order[-1]] if w not in order))
+    return order
+
+
+def ring(order, radius: float) -> dict[int, tuple[float, float]]:
+    """Positions around a circle, in the given order."""
+    t = 2 * np.pi * np.arange(len(order)) / len(order) + np.pi / 2
+    return {v: (0.5 + radius * np.cos(a), 0.5 + radius * np.sin(a)) for v, a in zip(order, t)}
+
+
+def wave(order) -> dict[int, tuple[float, float]]:
+    """Positions along one period of a sine wave, in the given order."""
+    x = np.linspace(0.1, 0.9, len(order))
+    return {v: (xi, 0.5 + 0.18 * np.sin(2 * np.pi * (xi - 0.1) / 0.8)) for v, xi in zip(order, x)}
+
+
+def layered(g: ss.Graph, vs) -> dict[int, tuple[float, float]]:
+    """A tree drawn top down from a central vertex: leaves evenly spaced, parents above their children."""
+    tree = nx.Graph([(u, w) for u, ws in within(g, vs).items() for w in ws])
+    root = nx.center(tree)[0]
+    depth = nx.single_source_shortest_path_length(tree, root)
+    children = {v: [w for w in tree[v] if depth[w] == depth[v] + 1] for v in tree}
+    x: dict[int, float] = {}
+
+    def place(v):
+        for w in children[v]:
+            place(w)
+        x[v] = sum(x[w] for w in children[v]) / len(children[v]) if children[v] else len(x)
+
+    place(root)
+    leaves, height = max(x.values()) or 1, max(depth.values()) or 1
+    return {v: (0.08 + 0.84 * x[v] / leaves, 0.88 - 0.76 * depth[v] / height) for v in tree}
+
+
+def around(g: ss.Graph, shape: dict[int, tuple[float, float]]) -> np.ndarray:
+    """A layout with the subgraph pinned in its shape and the other vertices placed around it."""
+    graph = nx.Graph([(u, v) for u in range(g.n) for v in g.neighbors(u).tolist() if u < v])
+    rng = np.random.default_rng(1)
+    start = {v: shape.get(v, tuple(rng.random(2))) for v in range(g.n)}
+    pos = nx.spring_layout(graph, pos=start, fixed=list(shape), seed=1, k=0.22, iterations=200)
+    return np.array([pos[v] for v in range(g.n)])
+
+
 def main(out: Path = OUT) -> None:
     out.mkdir(exist_ok=True)
-    fig = plt.figure(figsize=(12, 9.6), layout="constrained")
-    grid = fig.add_gridspec(2, 6, height_ratios=[1.3, 1])
+    # one random graph, searched for each of the four kinds of subgraph
+    g = ss.generate("exponential", 36, 0.25, seed=4)
+    settings = {"experiments": 100, "max_moves": 2000, "seed": 1}
+    cycle = found(ss.search(g, 12, degree=2, connected=True, **settings))
+    path = found(ss.search(g, 15, path=True, **settings))
+    # the tree with the most leaves, so that it looks least like a path
+    trees = ss.search(g, 16, 15, connected=True, **settings).solutions()
+    if not trees:
+        raise SystemExit("no solution for a figure: no 16-vertex tree")
+    tree = max(trees, key=lambda vs: int((g.induced(list(vs)).degrees() == 1).sum()))
+    clique = found(ss.search(g, 5, 10, **settings))
 
-    # a connected regular subgraph: every chosen vertex has exactly two chosen neighbors, forming one cycle
-    rnd = ss.generate("exponential", 60, 0.08, seed=3)
-    cycle = found(ss.search(rnd, 12, degree=2, connected=True, seed=1))
-    cycle_edges = [(u, v) for i, u in enumerate(cycle) for v in cycle[i + 1:] if rnd.has_edge(u, v)]
-    layout = min((rnd.layout("spring", seed=seed) for seed in range(1, 41)), key=lambda pos: crossings(pos, cycle_edges))
-    viz.plot_graph(rnd, cycle, fig.add_subplot(grid[0, :3]), layout=layout,
-                   title="an induced 12-cycle (a 2-regular subgraph) in a random graph")
+    panels = [
+        (cycle, ring(in_order(g, cycle), 0.36), "an induced 12-cycle", "search(g, 12, degree=2, connected=True)"),
+        (path, wave(in_order(g, path)), "an induced path on 15 vertices", "search(g, 15, path=True)"),
+        (tree, layered(g, tree), "an induced tree on 16 vertices", "search(g, 16, 15, connected=True)"),
+        (clique, ring(list(clique), 0.2), "a 5-clique", "search(g, 5, 10)"),
+    ]
+    fig, axs = plt.subplots(2, 2, figsize=(11, 10.5), layout="constrained")
+    for ax, (vs, shape, what, call) in zip(axs.flat, panels):
+        viz.plot_graph(g, vs, ax, layout=around(g, shape), title=f"{what}\n{call}")
+    fig.suptitle("one random graph (36 vertices, 156 edges), four searches", fontsize=12)
 
-    # a search confined to a fixed vertex's neighborhood, in a random geometric graph
-    geo = ss.generate("geometric", 200, 0.05, seed=6)
-    v = int(geo.degrees().argmax())
-    nbrs = geo.common_neighborhood([v])
-    rn = ss.search(geo.induced(nbrs), 9, 32 - 9, seed=1)  # v is adjacent to all 9 others: 9 + 23 = 32 edges
-    sub = {v} | {nbrs[i] for i in found(rn)}
-    # draw the part of the graph within two steps of v, zoomed in
-    ball = sorted({v} | set(nbrs) | {w for u in nbrs for w in geo.neighbors(u).tolist()})
-    index = {u: i for i, u in enumerate(ball)}
-    local = geo.induced(ball)
-    pos = local.layout("spring", seed=1)
-    ax = fig.add_subplot(grid[0, 3:])
-    viz.plot_graph(local, [index[u] for u in sub], ax, layout=pos,
-                   title="a dense subgraph in the neighborhood of a fixed vertex (circled)\nof a random geometric graph: 10 vertices, 32 edges")
-    rest = [index[u] for u in nbrs if u not in sub]
-    ax.scatter(pos[rest, 0], pos[rest, 1], s=70, color="#f4a3bf", zorder=4, edgecolors="white", linewidths=0.8,
-               label="the fixed vertex's other neighbors")
-    ax.scatter(*pos[index[v]], s=420, facecolors="none", edgecolors="#343a40", linewidths=1.8, zorder=5)
-    ax.legend(loc="upper left", frameon=False, fontsize=8)
-
-    # one graph, 6 vertices at a time: an independent set, something in between, a clique
-    g = ss.generate("exponential", 32, 0.45, seed=2)
-    for col, (m, label) in enumerate([(0, "an independent set"), (7, "anything in between"), (15, "a clique")]):
-        rm = ss.search(g, 6, m, seed=1, experiments=200)
-        viz.plot_graph(g, found(rm), fig.add_subplot(grid[1, 2 * col:2 * col + 2]), layout="circle",
-                       title=f"6 vertices, {m} edges: {label}")
-
-    fig.savefig(out / "overview.png", dpi=110, facecolor="white")
+    fig.savefig(out / "overview.png", dpi=100, facecolor="white")
     print(out / "overview.png")
 
 

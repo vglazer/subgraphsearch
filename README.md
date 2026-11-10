@@ -5,10 +5,12 @@
 [![crates.io: subgraphsearch](https://img.shields.io/crates/v/subgraphsearch?label=crates.io%3A%20subgraphsearch)](https://crates.io/crates/subgraphsearch)
 [![crates.io: subgraphsearch-core](https://img.shields.io/crates/v/subgraphsearch-core?label=crates.io%3A%20subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
-Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of
-vertices and edges**: cycles, cliques and everything in
-between. Searches are
-[fast](#performance), reproducible from a seed and come with diagnostics for tuning them. Many [graph formats](#graph-formats) are supported.
+Find **induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
+[paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
+and [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory))** in a graph, or any
+[induced subgraph](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of vertices and
+edges. Searches are [fast](#performance), reproducible from a seed and come with diagnostics for
+tuning them. Many [graph formats](#graph-formats) are supported.
 
 A search can be required to fix particular vertices. It can also find regular subgraphs with a prescribed degree and subgraphs with a given total weight in weighted graphs. Graphs can be built from block designs and other incidence structures, as well as switched with respect to the subgraphs a search finds. Near misses are reported in addition to exact solutions, enabling use as an approximation algorithm.
 
@@ -16,7 +18,7 @@ See the
 [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
 for a complete tour.
 
-![Searches drawn with viz.plot_graph: an induced 12-cycle (a 2-regular subgraph) in a random graph; a dense 10-vertex, 32-edge subgraph found within the neighborhood of a fixed vertex of a random geometric graph; and one graph three times, with 6 vertices spanning 0 edges (an independent set), 7 edges, and all 15 (a clique)](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
+![One random graph with 36 vertices and 156 edges, searched four times and drawn with viz.plot_graph: an induced 12-cycle, an induced path on 15 vertices, an induced tree on 16 vertices and a 5-clique, each drawn in its own shape with the rest of the graph around it](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
 
 ## Install
 

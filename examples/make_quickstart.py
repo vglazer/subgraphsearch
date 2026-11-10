@@ -23,10 +23,11 @@ cells = [
     md(f"""
 # subgraphsearch quickstart
 
-`subgraphsearch` finds **[induced subgraphs]({W}Induced_subgraph) with a given number of vertices and
-edges**: [cycles]({W}Cycle_graph), [cliques]({W}Clique_(graph_theory)) and everything in between. It
-also finds [regular]({W}Regular_graph) subgraphs, connected subgraphs, induced paths and subgraphs of a
-given total weight. The method is a randomized [tabu search]({W}Tabu_search).
+`subgraphsearch` finds **induced [cycles]({W}Cycle_(graph_theory)), [paths]({W}Induced_path),
+[trees]({W}Tree_(graph_theory)) and [cliques]({W}Clique_(graph_theory))** in a graph, or any
+[induced subgraph]({W}Induced_subgraph) with a given number of vertices and edges. It also finds
+[regular]({W}Regular_graph) subgraphs, connected subgraphs and subgraphs of a given total weight. The method
+is a randomized [tabu search]({W}Tabu_search).
 
 The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
 vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles, trees and
