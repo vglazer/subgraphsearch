@@ -431,6 +431,15 @@ def generate(
     return Graph(_core.generate_graph(model, int(n), permille, int(seed), rng))
 
 
+def random_regular(n: int, degree: int, *, seed: int = 1) -> Graph:
+    """A random ``degree``-regular graph on ``n`` vertices, close to uniform among them. With high
+    probability it is an expander nearly as good as possible: its eigenvalues other than ``degree``
+    are at most about ``2 sqrt(degree - 1)`` in absolute value, the Ramanujan bound."""
+    if seed <= 0:
+        raise ValueError(f"seed must be a positive integer, got {seed}")
+    return Graph(_core.random_regular_graph(int(n), int(degree), int(seed)))
+
+
 def hypercube(dimension: int) -> Graph:
     """The ``dimension``-dimensional hypercube: vertices ``0`` to ``2**dimension - 1``, joined when
     they differ in one bit. Up to 16 dimensions."""

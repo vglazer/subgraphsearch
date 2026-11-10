@@ -462,6 +462,15 @@ fn sparse_random_graph(py: Python<'_>, n: usize, mean_degree: f64, seed: i64) ->
     Ok(PyGraph::wrap(g))
 }
 
+/// A random regular graph of the given degree.
+#[pyfunction]
+fn random_regular_graph(py: Python<'_>, n: usize, degree: usize, seed: i64) -> PyResult<PyGraph> {
+    let g = py
+        .detach(move || generate::random_regular(n, degree, &mut Xoshiro::new(seed as u64)))
+        .map_err(err)?;
+    Ok(PyGraph::wrap(g))
+}
+
 /// The graph of an incidence structure: on its points (adjacent when exactly `k` blocks contain
 /// both) or, with `on_blocks`, on its blocks (adjacent when they share exactly `k` points).
 #[pyfunction]
@@ -712,7 +721,7 @@ mod _core {
         PyGraph, PyWeightedGraph, cli_main, dumps_all, formats_list, generate_graph,
         generate_weighted, grid_graph, hypercube_graph, incidence_graph, largest,
         legacy_asub_search, legacy_ereg_search, legacy_ggen, legacy_reg_search, legacy_sub_search,
-        legacy_wggen, legacy_wsub_search, search, sparse_random_graph,
+        legacy_wggen, legacy_wsub_search, random_regular_graph, search, sparse_random_graph,
     };
 
     #[pymodule_init]

@@ -167,9 +167,10 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
   the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.
 - **Spectral bounds.** Eigenvalues bound how large an independent set (Hoffman) or a clique
   (Delsarte) can be, and more generally how many edges any $`k`$ vertices can span: the expander
-  mixing lemma, and the easy half of Cheeger's inequality on expansion. The search finds sets
-  that meet these bounds in the rook's graph, the triangular graphs and the hypercubes, so the
-  bounds are sharp there, and in Paley graphs it shows how close to random every set must be.
+  mixing lemma, and Cheeger's inequality on expansion. The search finds sets that meet these
+  bounds in the rook's graph, the triangular graphs and the hypercubes, so the bounds are sharp
+  there; finds the sparse cuts a small spectral gap promises in a poor expander; and in good
+  expanders, random regular and Paley graphs, shows how close to random every set must be.
 - **Hadamard matrices.** The rows of a Hadamard matrix are pairwise orthogonal ±1 vectors, so it
   is a clique in the graph of such vectors joined when orthogonal.
   [examples/hadamard.py](examples/hadamard.py) finds matrices of orders 8 to 20 this way, the order-20
@@ -333,6 +334,8 @@ Each experiment reports the best conflict it reached and the moves it needed:
   geometric graphs only make sense for densities below about 0.5.
 - **weighted**: random pairs of vertices have their weight increased by 1 until the mean weight
   per pair is reached, so weights above 1 are common once it approaches 1.
+- **regular** (`-n n --degree d`, `ss.random_regular(n, d)`): a random $`d`$-regular graph, close
+  to uniform among them; with high probability an expander nearly as good as possible.
 - **hypercube** (`--dimension d`, `ss.hypercube(d)`): the
   [hypercube](https://en.wikipedia.org/wiki/Hypercube_graph) on the $`2^d`$ bit strings of length
   $`d`$, joined when they differ in one bit, up to 16 dimensions. Not random: the home of the

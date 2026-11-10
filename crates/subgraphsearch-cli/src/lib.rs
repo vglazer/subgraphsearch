@@ -289,8 +289,9 @@ struct LargestArgs {
 
 #[derive(Args)]
 struct GenerateArgs {
-    /// Random graph model: exponential, power, geometric, or weighted (the original wggen); or a
-    /// standard graph: hypercube (with --dimension) or grid (with --rows and --cols).
+    /// Random graph model: exponential, power, geometric, weighted (the original wggen), or regular
+    /// (a random regular graph, with -n and --degree); or a standard graph: hypercube (with
+    /// --dimension) or grid (with --rows and --cols).
     #[arg(value_parser = parse_gen_model)]
     model: GenModel,
     /// Number of vertices (random graphs).
@@ -314,6 +315,9 @@ struct GenerateArgs {
     /// Grid: the number of columns.
     #[arg(long)]
     cols: Option<usize>,
+    /// Regular: the degree of every vertex (with -n).
+    #[arg(long)]
+    degree: Option<usize>,
     /// Random seed (positive).
     #[arg(short, long, default_value_t = 1)]
     seed: i64,
@@ -364,6 +368,7 @@ enum GenModel {
     Weighted,
     Hypercube,
     Grid,
+    Regular,
 }
 
 fn parse_gen_model(s: &str) -> Result<GenModel, String> {
@@ -371,11 +376,12 @@ fn parse_gen_model(s: &str) -> Result<GenModel, String> {
         "weighted" => return Ok(GenModel::Weighted),
         "hypercube" => return Ok(GenModel::Hypercube),
         "grid" => return Ok(GenModel::Grid),
+        "regular" => return Ok(GenModel::Regular),
         _ => {}
     }
     s.parse()
         .map(GenModel::Unweighted)
-        .map_err(|e| format!("{e}, weighted, hypercube or grid"))
+        .map_err(|e| format!("{e}, weighted, hypercube, grid or regular"))
 }
 
 #[derive(Args)]
@@ -819,7 +825,18 @@ fn run_generate(args: GenerateArgs) -> Result<()> {
     if args.seed <= 0 {
         bail!("--seed must be a positive integer, got {}", args.seed);
     }
-    let random = matches!(args.model, GenModel::Unweighted(_) | GenModel::Weighted);
+    let random = matches!(
+        args.model,
+        GenModel::Unweighted(_) | GenModel::Weighted | GenModel::Regular
+    );
+    if args.degree.is_some() != matches!(args.model, GenModel::Regular) {
+        bail!("--degree is for random regular graphs, which need it");
+    }
+    if matches!(args.model, GenModel::Regular)
+        && (args.density.is_some() || args.mean_degree.is_some())
+    {
+        bail!("random regular graphs take --degree, not a density");
+    }
     if random && args.vertices.is_none() {
         bail!("random graphs need -n, the number of vertices");
     }
@@ -832,6 +849,16 @@ fn run_generate(args: GenerateArgs) -> Result<()> {
     }
     let graph = match args.model {
         GenModel::Weighted => return generate_weighted(&args),
+        GenModel::Regular => {
+            if matches!(args.rng, RngArg::Legacy) {
+                bail!("random regular graphs need the default --rng");
+            }
+            let (n, d) = (
+                args.vertices.unwrap_or_default(),
+                args.degree.unwrap_or_default(),
+            );
+            generate::random_regular(n, d, &mut Xoshiro::new(args.seed as u64))?
+        }
         GenModel::Hypercube => {
             let Some(d) = args.dimension else {
                 bail!("hypercube needs --dimension");

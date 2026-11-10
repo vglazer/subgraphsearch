@@ -668,10 +668,11 @@ def extreme_edges(graph, k, start, step):
 mixing = {
     "rook's graph, 8 x 8": ss.Graph(8).complement().cartesian(ss.Graph(8).complement()),
     "6-cube": ss.hypercube(6),
-    "T(12)": ss.Graph.block_graph(list(itertools.combinations(range(12), 2))),
+    "circulant: 64 on a circle, 4 each side": ss.Graph(64, [(u, (u + s) % 64) for u in range(64) for s in range(1, 5)]),
+    "random 8-regular, 64 vertices": ss.random_regular(64, 8, seed=1),
     "Paley graph, 61 vertices": paley(61),
 }
-fig, axs = plt.subplots(1, 4, figsize=(15, 3.6), layout="constrained", sharey=True)
+fig, axs = plt.subplots(1, 5, figsize=(18.5, 3.6), layout="constrained", sharey=True)
 for ax, (name, graph) in zip(axs, mixing.items()):
     n = graph.n
     eigenvalues = np.linalg.eigvalsh(graph.adjacency_matrix(dtype=float))
@@ -695,11 +696,18 @@ axs[0].set_ylabel("edges above a random set,\\nper k(n - k)/(2n)");
 Where a point sits on a line, the search has found a set as uneven as the eigenvalues allow, so the bound is
 sharp there. In the rook's graph that happens at every multiple of 8, on both lines: whole rows span the most
 edges, and squares forming permutation patterns the fewest. In the 6-cube it happens at half the cube, 32
-vertices: a 5-dimensional subcube on the upper line, the words of even weight on the lower one. In $T(12)$ the
-lower line is reached and the upper one is not. The Paley graph's lines are close together, because its
-eigenvalues other than $d$ are small: every set of its vertices spans nearly the number of edges a random set
-would, which is what it means for a graph to be pseudo-random. The search's points lie close to both lines,
-so the eigenvalues' bound on how far from random a set can be is not far from the truth.
+vertices: a 5-dimensional subcube on the upper line, the words of even weight on the lower one.
+
+The last three panels have the same degree, or about it, and run from a poor expander to good ones. In the
+circulant, each vertex joined to its 4 nearest neighbors on either side around a circle, $\\theta_2$ is almost $d$:
+the upper line is near the top, and the search finds sets of every size, arcs of the circle, with almost all
+their edges inside and only a few leaving. That is the other half of Cheeger's inequality at work: a small gap
+between $d$ and $\\theta_2$ means some set has few edges leaving it, and the search finds one. A random 8-regular
+graph is the opposite. Its eigenvalues other than $d$ are about as small as they can be, within the Ramanujan
+bound $2\\sqrt{{d - 1}}$, so its lines are close together and every set spans nearly the number of edges a random
+set would: that is what it means for a graph to be an expander. Its points even stay well inside its lines,
+so here the eigenvalues understate how close to random its sets are. The Paley graph, the standard
+pseudo-random graph, is an expander too, and in it the points come close to both lines.
 """),
     md(f"""
 ## Vectors with prescribed inner products

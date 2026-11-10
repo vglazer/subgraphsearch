@@ -457,6 +457,15 @@ def test_standard_graphs_and_mean_degree():
     with pytest.raises(ValueError, match="mean degree"):
         ss.generate("exponential", 20, mean_degree=25)
 
+    # random regular graphs: every degree right, reproducible from the seed, and good expanders
+    r = ss.random_regular(64, 8, seed=1)
+    assert set(r.degrees().tolist()) == {8} and r == ss.random_regular(64, 8, seed=1) and r != ss.random_regular(64, 8, seed=2)
+    eigenvalues = np.linalg.eigvalsh(r.adjacency_matrix(dtype=float))
+    assert max(eigenvalues[-2], -eigenvalues[0]) < 2 * np.sqrt(7) + 0.5
+    assert set(ss.random_regular(20, 15).degrees().tolist()) == {15}
+    with pytest.raises(ValueError, match="no 3-regular"):
+        ss.random_regular(7, 3)
+
 
 def test_generate_weighted_matches_wggen(w200):
     assert w200 == ss.WeightedGraph.read(FIXTURES / "graphs" / "w200_65_1.txt", "wlists")

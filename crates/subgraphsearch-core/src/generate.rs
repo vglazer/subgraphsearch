@@ -165,6 +165,56 @@ pub fn weighted<R: SearchRng>(n: usize, density: u32, rng: &mut R) -> Result<Wei
     Ok(WeightedGraph::from_matrix(n, weights))
 }
 
+/// A random `degree`-regular graph on `n` vertices, close to uniform among them. Random regular
+/// graphs are, with high probability, expanders nearly as good as possible (their second largest
+/// eigenvalue is close to the Ramanujan bound `2 sqrt(degree - 1)`).
+///
+/// Each vertex gets `degree` half-edges, and random pairs of half-edges at distinct, not yet adjacent
+/// vertices are joined until none are left; if no such pair can be found the attempt starts over
+/// (Steger and Wormald's variant of the pairing model). Above `n / 2` it builds the complement of a
+/// random `(n - 1 - degree)`-regular graph instead, which is the same distribution and much faster.
+pub fn random_regular(n: usize, degree: usize, rng: &mut Xoshiro) -> Result<Graph, Error> {
+    if degree >= n.max(1) || (n * degree) % 2 == 1 {
+        return Err(Error::Invalid(format!(
+            "no {degree}-regular graph on {n} vertices: the degree must be below n, and n times the degree even"
+        )));
+    }
+    if 2 * degree > n {
+        return Ok(crate::ops::complement(&random_regular(
+            n,
+            n - 1 - degree,
+            rng,
+        )?));
+    }
+    for _attempt in 0..1000 {
+        let mut b = GraphBuilder::new(n);
+        let mut ends: Vec<usize> = (0..n * degree).map(|i| i / degree).collect();
+        let mut stuck = false;
+        while !ends.is_empty() {
+            let len = ends.len() as u32;
+            // a few random tries find a usable pair unless almost none are left
+            let pair = (0..64 * ends.len()).find_map(|_| {
+                let (i, j) = (rng.below(len) as usize, rng.below(len) as usize);
+                let (u, v) = (ends[i], ends[j]);
+                (u != v && !b.get(u, v)).then_some((i.max(j), i.min(j)))
+            });
+            let Some((hi, lo)) = pair else {
+                stuck = true;
+                break;
+            };
+            b.set(ends[hi], ends[lo], true);
+            ends.swap_remove(hi);
+            ends.swap_remove(lo);
+        }
+        if !stuck {
+            return Ok(b.build());
+        }
+    }
+    Err(Error::Invalid(format!(
+        "could not build a random {degree}-regular graph on {n} vertices"
+    )))
+}
+
 /// The most dimensions [`hypercube`] builds: the 16-cube has 65,536 vertices, and a graph's
 /// adjacency matrix takes a bit per pair of vertices.
 pub const MAX_HYPERCUBE_DIMENSION: usize = 16;
@@ -280,6 +330,20 @@ mod tests {
         let l = (density as usize) * (n - 1) / (2000 - density as usize);
         let g = power(n, density, &mut Randu::new(7));
         assert_eq!(g.num_edges(), (n - l) * l);
+    }
+
+    #[test]
+    fn random_regular_graphs() {
+        for (n, d) in [(64, 8), (100, 3), (30, 25), (10, 9), (11, 0)] {
+            let g = random_regular(n, d, &mut Xoshiro::new(5)).unwrap();
+            assert_eq!(g.num_vertices(), n);
+            assert!(g.degrees().iter().all(|&x| x == d), "{n} {d}");
+        }
+        let again = random_regular(64, 8, &mut Xoshiro::new(5)).unwrap();
+        assert_eq!(again, random_regular(64, 8, &mut Xoshiro::new(5)).unwrap());
+        assert_ne!(again, random_regular(64, 8, &mut Xoshiro::new(6)).unwrap());
+        assert!(random_regular(7, 3, &mut Xoshiro::new(1)).is_err());
+        assert!(random_regular(5, 5, &mut Xoshiro::new(1)).is_err());
     }
 
     #[test]
