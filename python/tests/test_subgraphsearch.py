@@ -415,6 +415,26 @@ def test_words_and_codes():
     assert v.is_hadamard([[1, 1], [1, -1]]) and not v.is_hadamard([[1, 1], [1, 1]]) and not v.is_hadamard([[1, 0]])
 
 
+def test_graph_products():
+    complete = lambda n: ss.Graph(n).complement()
+    path = lambda n: ss.Graph(n, [(i, i + 1) for i in range(n - 1)])
+    rook = ss.Graph(16, [(a, b) for a in range(16) for b in range(a + 1, 16) if a // 4 == b // 4 or a % 4 == b % 4])
+    assert complete(4).cartesian(complete(4)) == rook
+    assert path(3).cartesian(path(4)) == ss.grid(3, 4)
+    assert complete(2).cartesian(complete(2)).cartesian(complete(2)) == ss.hypercube(3)
+    assert complete(2).tensor(complete(2)).m == 2 and complete(2).strong(complete(2)) == complete(4)
+    assert path(8).strong(path(8)).m == 210                       # the king's graph
+    assert path(3).lexicographic(complete(2)).m == 2 * 4 + 3
+    truncated = complete(4).replacement(complete(3))              # the truncated tetrahedron
+    assert (truncated.n, truncated.m) == (12, 18) and set(truncated.degrees().tolist()) == {3}
+    z = complete(5).zigzag(ss.Graph(4, [(0, 1), (1, 2), (2, 3), (3, 0)]))
+    assert z.n == 20 and set(z.degrees().tolist()) == {4}
+    with pytest.raises(ValueError, match="as many vertices"):
+        complete(4).replacement(complete(4))
+    with pytest.raises(ValueError, match="regular"):
+        path(3).zigzag(complete(2))
+
+
 def test_standard_graphs_and_mean_degree():
     n = 6
     by_hand = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])

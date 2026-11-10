@@ -244,6 +244,25 @@ impl PyGraph {
         ))
     }
 
+    /// A product with `other`: "cartesian", "tensor", "strong" or "lexicographic".
+    fn product(&self, py: Python<'_>, other: PyRef<'_, PyGraph>, kind: &str) -> PyResult<Self> {
+        let kind: ops::Product = kind.parse().map_err(err)?;
+        let (g, h) = (Arc::clone(&self.inner), Arc::clone(&other.inner));
+        Ok(Self::wrap(py.detach(move || ops::product(&g, &h, kind))))
+    }
+
+    fn replacement(&self, other: PyRef<'_, PyGraph>) -> PyResult<Self> {
+        Ok(Self::wrap(
+            ops::replacement(&self.inner, &other.inner).map_err(err)?,
+        ))
+    }
+
+    fn zigzag(&self, other: PyRef<'_, PyGraph>) -> PyResult<Self> {
+        Ok(Self::wrap(
+            ops::zigzag(&self.inner, &other.inner).map_err(err)?,
+        ))
+    }
+
     fn common_neighborhood(&self, vertices: Vec<usize>) -> PyResult<Vec<usize>> {
         ops::common_neighborhood(&self.inner, &vertices).map_err(err)
     }

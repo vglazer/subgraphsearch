@@ -81,7 +81,8 @@ In Jupyter, graphs and results display as summaries with small charts.
 - **Graphs:** from edges, files, other libraries (networkx, igraph, SciPy, NumPy), random models,
   hypercubes and grids, incidence structures such as block designs, and sets of vectors or binary
   words joined by their inner products or Hamming distances (`ss.Graph.from_vectors`,
-  `ss.Graph.from_words`); complements, induced subgraphs and Seidel switching.
+  `ss.Graph.from_words`); complements, induced subgraphs, Seidel switching, and products of
+  graphs (Cartesian, tensor, strong, lexicographic, replacement and zig-zag).
 - **Seeing what happened:** drawings of graphs and the subgraphs found, diagnostics of a search,
   spectra, and parameter sweeps for tuning.
 
@@ -122,6 +123,8 @@ subgraphsearch search sparse.g6 -k 20 --path --endpoints 0,7      # the same, fr
 subgraphsearch largest sparse.g6 --shape path                     # the longest induced path it finds
 subgraphsearch generate weighted -n 200 -d 0.65 -o w.mtx          # a weighted graph
 subgraphsearch generate hypercube --dimension 7 -o q7.g6           # the 7-cube; also grid --rows 6 --cols 6
+subgraphsearch generate grid --rows 1 --cols 8 -o path8.g6         # a path on 8 vertices
+subgraphsearch op strong path8.g6 --with path8.g6 king.g6         # the 8 x 8 king's graph
 subgraphsearch search w.mtx --weighted -k 15 -m 140               # total weight 140
 subgraphsearch search many.g6 --all -k 10 -m 30 -q                # every graph in a file
 

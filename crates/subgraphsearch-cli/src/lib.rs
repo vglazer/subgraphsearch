@@ -424,6 +424,18 @@ enum Operation {
     CommonNonNeighbors,
     /// Seidel switching with respect to --vertices.
     Switch,
+    /// The Cartesian product with the graph in --with; vertex (u, v) is u * |with| + v.
+    Cartesian,
+    /// The tensor (direct) product with the graph in --with.
+    Tensor,
+    /// The strong product with the graph in --with.
+    Strong,
+    /// The lexicographic product with the graph in --with.
+    Lexicographic,
+    /// The replacement product of a d-regular graph with the graph in --with, on d vertices.
+    Replacement,
+    /// The zig-zag product of a D-regular graph with the regular graph in --with, on D vertices.
+    Zigzag,
 }
 
 #[derive(Args)]
@@ -438,6 +450,9 @@ struct OpArgs {
     /// The vertex set the operation uses, e.g. 1,5,9.
     #[arg(long, value_delimiter = ',')]
     vertices: Vec<usize>,
+    /// For products: the second graph's file.
+    #[arg(long = "with")]
+    with: Option<PathBuf>,
     /// Output format, if it cannot be inferred from the file extension.
     #[arg(id = "to", long = "to", value_parser = parse_format)]
     format: Option<Format>,
@@ -1105,11 +1120,33 @@ fn info_table(graphs: &[Graph], json: bool) -> Result<()> {
 
 fn run_op(args: OpArgs) -> Result<()> {
     let g = args.input.load()?;
-    let needs_set = !matches!(args.operation, Operation::Complement);
+    let is_product = matches!(
+        args.operation,
+        Operation::Cartesian
+            | Operation::Tensor
+            | Operation::Strong
+            | Operation::Lexicographic
+            | Operation::Replacement
+            | Operation::Zigzag
+    );
+    let needs_set = !is_product && !matches!(args.operation, Operation::Complement);
     if needs_set && args.vertices.is_empty() {
         bail!("this operation needs --vertices");
     }
+    let other = match (&args.with, is_product) {
+        (Some(path), true) => Some(read_graph(path, None)?),
+        (None, true) => bail!("a product needs the second graph: --with FILE"),
+        (Some(_), false) => bail!("--with is for products"),
+        (None, false) => None,
+    };
+    let h = || other.as_ref().expect("checked above");
     let out = match args.operation {
+        Operation::Cartesian => ops::product(&g, h(), ops::Product::Cartesian),
+        Operation::Tensor => ops::product(&g, h(), ops::Product::Tensor),
+        Operation::Strong => ops::product(&g, h(), ops::Product::Strong),
+        Operation::Lexicographic => ops::product(&g, h(), ops::Product::Lexicographic),
+        Operation::Replacement => ops::replacement(&g, h())?,
+        Operation::Zigzag => ops::zigzag(&g, h())?,
         Operation::Complement => ops::complement(&g),
         Operation::Induce => ops::induced(&g, &args.vertices)?,
         Operation::Remove => ops::induced(&g, &ops::rest(&g, &args.vertices)?)?,

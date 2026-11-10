@@ -419,7 +419,8 @@ for vs in corner_paths[48].solutions(max_conflict=1):
 [Seidel switching]({W}Two-graph#Switching_and_graphs) with respect to a vertex set $S$ swaps edges and
 non-edges between $S$ and the rest of the graph. Switching a strongly regular graph with respect to a
 suitable regular subgraph can give a different strongly regular graph with the same parameters. The 4×4
-[rook's graph]({W}Rook%27s_graph), with parameters $(16, 6, 2, 2)$, switched with respect to an induced
+[rook's graph]({W}Rook%27s_graph), the [Cartesian product]({W}Cartesian_product_of_graphs) of two complete
+graphs on 4 vertices, with parameters $(16, 6, 2, 2)$, switched with respect to an induced
 8-cycle gives the [Shrikhande graph]({W}Shrikhande_graph), the only other graph with those parameters. Here
 the difference between a cycle and a union of cycles matters: switching with respect to two 4-cycles, also a
 2-regular subgraph on 8 vertices, gives the rook's graph back, so the search asks for a connected one.
@@ -440,7 +441,8 @@ def srg_parameters(h):
     return (n, *degrees, *lam, *mu) if len(degrees) == len(lam) == len(mu) == 1 else None
 
 
-rook = ss.Graph(16, [(a, b) for a in range(16) for b in range(a + 1, 16) if a // 4 == b // 4 or a % 4 == b % 4])
+k4 = ss.Graph(4).complement()       # the complete graph on 4 vertices
+rook = k4.cartesian(k4)              # squares of a 4 x 4 board, joined when in the same row or column
 eight_cycle = ss.search(rook, 8, degree=2, connected=True).best.vertices
 switched = rook.switch(eight_cycle)
 print("rook's graph:", srg_parameters(rook), "| switched:", srg_parameters(switched))
@@ -589,7 +591,7 @@ five = list(itertools.combinations(range(5), 2))
 spectral = {
     "Petersen": ss.Graph(10, [(i, j) for i, j in itertools.combinations(range(10), 2) if not set(five[i]) & set(five[j])]),
     "T(8)": t8,
-    "rook's 6 x 6": ss.Graph(36, [(a, b) for a, b in itertools.combinations(range(36), 2) if a // 6 == b // 6 or a % 6 == b % 6]),
+    "rook's 6 x 6": ss.Graph(6).complement().cartesian(ss.Graph(6).complement()),
     "5-cube": ss.hypercube(5),
     "Clebsch": ss.Graph(16, ss.hypercube(4).edge_list() + [(u, u ^ 15) for u in range(8)]),
     "Paley 61": paley(61),
@@ -664,7 +666,7 @@ def extreme_edges(graph, k, start, step):
 
 
 mixing = {
-    "rook's graph, 8 x 8": ss.Graph(64, [(a, b) for a, b in itertools.combinations(range(64), 2) if a // 8 == b // 8 or a % 8 == b % 8]),
+    "rook's graph, 8 x 8": ss.Graph(8).complement().cartesian(ss.Graph(8).complement()),
     "6-cube": ss.hypercube(6),
     "T(12)": ss.Graph.block_graph(list(itertools.combinations(range(12), 2))),
     "Paley graph, 61 vertices": paley(61),

@@ -259,6 +259,45 @@ class Graph:
         """Seidel switching with respect to ``vertices``."""
         return Graph(self._g.switch([int(v) for v in vertices]))
 
+    # ---- products: vertex (u, v) of a product of g and h is u * h.n + v
+
+    def cartesian(self, other: Graph) -> Graph:
+        """The Cartesian product: ``(u, v) ~ (u', v')`` when ``u = u'`` and ``v ~ v'``, or ``v = v'``
+        and ``u ~ u'``. The rook's graph is ``K_n`` times ``K_n``, a hypercube a power of ``K_2``,
+        a grid the product of two paths."""
+        return Graph(self._g.product(other._g, "cartesian"))
+
+    def tensor(self, other: Graph) -> Graph:
+        """The tensor (direct, categorical) product: ``(u, v) ~ (u', v')`` when ``u ~ u'`` and
+        ``v ~ v'``."""
+        return Graph(self._g.product(other._g, "tensor"))
+
+    def strong(self, other: Graph) -> Graph:
+        """The strong product: the edges of the Cartesian and tensor products together. The king's
+        graph is the strong product of two paths."""
+        return Graph(self._g.product(other._g, "strong"))
+
+    def lexicographic(self, other: Graph) -> Graph:
+        """The lexicographic product: ``(u, v) ~ (u', v')`` when ``u ~ u'``, or ``u = u'`` and
+        ``v ~ v'``. Each vertex becomes a copy of ``other``, and copies of adjacent vertices are joined
+        completely."""
+        return Graph(self._g.product(other._g, "lexicographic"))
+
+    def replacement(self, other: Graph) -> Graph:
+        """The replacement product of this ``d``-regular graph with a graph on ``d`` vertices: each
+        vertex becomes a copy of ``other`` whose vertices stand for its ``d`` edges, and each edge
+        joins the two copy vertices that stand for it. Each vertex's edges are numbered in the order of
+        its neighbors."""
+        return Graph(self._g.replacement(other._g))
+
+    def zigzag(self, other: Graph) -> Graph:
+        """The zig-zag product (Reingold, Vadhan and Wigderson) of this ``D``-regular graph with a
+        regular graph on ``D`` vertices: on the vertices of the replacement product, a step within a
+        copy of ``other``, a step along an edge of this graph, and another step within a copy. Its
+        degree is the square of ``other``'s, and when both graphs are expanders so is the product, so
+        repeating it builds large expanders of fixed degree."""
+        return Graph(self._g.zigzag(other._g))
+
     def common_neighborhood(self, vertices: Iterable[int]) -> list[int]:
         """Vertices outside ``vertices`` adjacent to all of them."""
         return self._g.common_neighborhood([int(v) for v in vertices])

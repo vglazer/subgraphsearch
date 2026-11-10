@@ -1,5 +1,5 @@
 //! Graph operations from the original `ggen`: complements, induced subgraphs, common neighborhoods
-//! and (Seidel) switching, plus graphs built from incidence structures.
+//! and (Seidel) switching, plus graphs built from incidence structures, and products of graphs.
 
 use crate::Error;
 use crate::graph::{Graph, GraphBuilder};
@@ -192,9 +192,218 @@ impl Incidence {
     }
 }
 
+/// A product of two graphs; see [`product`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Product {
+    /// `(u, v) ~ (u', v')` when `u = u'` and `v ~ v'`, or `v = v'` and `u ~ u'`: the rook's graph is
+    /// `K_n` times `K_n`, the hypercube a power of `K_2`.
+    Cartesian,
+    /// `(u, v) ~ (u', v')` when `u ~ u'` and `v ~ v'` (also called the direct or categorical product).
+    Tensor,
+    /// The edges of both: the king's graph is the strong product of two paths.
+    Strong,
+    /// `(u, v) ~ (u', v')` when `u ~ u'`, or `u = u'` and `v ~ v'`: each vertex of `g` becomes a copy
+    /// of `h`, and adjacent copies are joined completely.
+    Lexicographic,
+}
+
+impl std::str::FromStr for Product {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Error> {
+        match s {
+            "cartesian" => Ok(Product::Cartesian),
+            "tensor" => Ok(Product::Tensor),
+            "strong" => Ok(Product::Strong),
+            "lexicographic" => Ok(Product::Lexicographic),
+            _ => Err(Error::Invalid(format!(
+                "unknown product {s:?}: choose cartesian, tensor, strong or lexicographic"
+            ))),
+        }
+    }
+}
+
+/// The product of `g` and `h` on the pairs of their vertices, vertex `(u, v)` numbered
+/// `u * h.num_vertices() + v`.
+pub fn product(g: &Graph, h: &Graph, kind: Product) -> Graph {
+    let (ng, nh) = (g.num_vertices(), h.num_vertices());
+    let mut b = GraphBuilder::new(ng * nh);
+    let at = |u: usize, v: usize| u * nh + v;
+    for u in 0..ng {
+        for v in 0..nh {
+            let same_u = matches!(
+                kind,
+                Product::Cartesian | Product::Strong | Product::Lexicographic
+            );
+            if same_u {
+                for &w in h.neighbors(v) {
+                    b.set(at(u, v), at(u, w as usize), true);
+                }
+            }
+            for &x in g.neighbors(u) {
+                let x = x as usize;
+                match kind {
+                    Product::Cartesian => b.set(at(u, v), at(x, v), true),
+                    Product::Tensor => {
+                        for &w in h.neighbors(v) {
+                            b.set(at(u, v), at(x, w as usize), true);
+                        }
+                    }
+                    Product::Strong => {
+                        b.set(at(u, v), at(x, v), true);
+                        for &w in h.neighbors(v) {
+                            b.set(at(u, v), at(x, w as usize), true);
+                        }
+                    }
+                    Product::Lexicographic => {
+                        for w in 0..nh {
+                            b.set(at(u, v), at(x, w), true);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    b.build()
+}
+
+/// The degree of a regular graph; fails, naming `what`, if `g` is not regular.
+fn regular_degree(g: &Graph, what: &str) -> Result<usize, Error> {
+    let degrees = g.degrees();
+    match degrees.first() {
+        Some(&d) if degrees.iter().all(|&x| x == d) => Ok(d),
+        Some(_) => Err(Error::Invalid(format!("{what} must be regular"))),
+        None => Err(Error::Invalid(format!("{what} has no vertices"))),
+    }
+}
+
+/// For the edge to `w`, the `i`-th entry of `v`'s sorted neighbor list: its position in `w`'s list.
+/// This numbering of each vertex's edges serves as the rotation map of [`replacement`] and
+/// [`zigzag`]; their spectral bounds hold for any numbering.
+fn back(g: &Graph, v: usize, w: usize) -> usize {
+    g.neighbors(w)
+        .binary_search(&(v as u32))
+        .expect("an edge has two ends")
+}
+
+fn check_cloud(g: &Graph, h: &Graph) -> Result<usize, Error> {
+    let d = regular_degree(g, "the first graph")?;
+    if h.num_vertices() != d {
+        return Err(Error::Invalid(format!(
+            "the second graph must have as many vertices as the first graph's degree, {d}; it has {}",
+            h.num_vertices()
+        )));
+    }
+    Ok(d)
+}
+
+/// The replacement product of a `d`-regular `g` with a graph `h` on `d` vertices: each vertex `u` of
+/// `g` becomes a copy of `h`, a cloud whose vertex `i` stands for `u`'s `i`-th edge, and each edge of
+/// `g` joins the two cloud vertices that stand for it. Vertex `(u, i)` is numbered `u * d + i`.
+pub fn replacement(g: &Graph, h: &Graph) -> Result<Graph, Error> {
+    let d = check_cloud(g, h)?;
+    let mut b = GraphBuilder::new(g.num_vertices() * d);
+    for u in 0..g.num_vertices() {
+        for i in 0..d {
+            for &j in h.neighbors(i) {
+                b.set(u * d + i, u * d + j as usize, true);
+            }
+            let w = g.neighbors(u)[i] as usize;
+            b.set(u * d + i, w * d + back(g, u, w), true);
+        }
+    }
+    Ok(b.build())
+}
+
+/// The zig-zag product of a `D`-regular `g` with a regular graph `h` on `D` vertices (Reingold,
+/// Vadhan and Wigderson): on the vertices of the [`replacement`] product, `(u, i)` is joined to every
+/// vertex reached by a step within its cloud, the step along `g`'s edge, and another step within the
+/// new cloud. When `g` and `h` are expanders so is the product, whose degree is only the square of
+/// `h`'s, so repeating it builds large expanders of fixed degree.
+pub fn zigzag(g: &Graph, h: &Graph) -> Result<Graph, Error> {
+    let d = check_cloud(g, h)?;
+    regular_degree(h, "the second graph")?;
+    let mut b = GraphBuilder::new(g.num_vertices() * d);
+    for u in 0..g.num_vertices() {
+        for i in 0..d {
+            for &zig in h.neighbors(i) {
+                let w = g.neighbors(u)[zig as usize] as usize;
+                let arrive = back(g, u, w);
+                for &zag in h.neighbors(arrive) {
+                    let (from, to) = (u * d + i, w * d + zag as usize);
+                    if from != to {
+                        b.set(from, to, true);
+                    }
+                }
+            }
+        }
+    }
+    Ok(b.build())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn complete(n: usize) -> Graph {
+        complement(&Graph::empty(n))
+    }
+
+    #[test]
+    fn products_of_small_graphs() {
+        // the rook's graph is K_4 times K_4; the 3-cube is K_2 cubed
+        let rook = product(&complete(4), &complete(4), Product::Cartesian);
+        let by_hand = Graph::from_edges(
+            16,
+            (0..16usize)
+                .flat_map(|a| (a + 1..16).map(move |b| (a, b)))
+                .filter(|&(a, b)| a / 4 == b / 4 || a % 4 == b % 4),
+        )
+        .unwrap();
+        assert_eq!(rook, by_hand);
+        let k2 = complete(2);
+        let cube = product(
+            &product(&k2, &k2, Product::Cartesian),
+            &k2,
+            Product::Cartesian,
+        );
+        assert_eq!(
+            cube,
+            Graph::from_edges(
+                8,
+                (0..8usize)
+                    .flat_map(|u| (0..3).map(move |b| (u, u ^ (1 << b))))
+                    .filter(|&(u, v)| u < v)
+            )
+            .unwrap()
+        );
+        // K_2 x K_2 is two disjoint edges; their strong product is K_4
+        assert_eq!(product(&k2, &k2, Product::Tensor).num_edges(), 2);
+        assert_eq!(product(&k2, &k2, Product::Strong), complete(4));
+        // the king's graph on a 3 x 3 board: 20 edges
+        assert_eq!(product(&path(3), &path(3), Product::Strong).num_edges(), 20);
+        // the lexicographic product of a path on 3 with K_2: two complete joins plus three edges
+        let lex = product(&path(3), &k2, Product::Lexicographic);
+        assert_eq!(lex.num_edges(), 2 * 4 + 3);
+        assert!("cube".parse::<Product>().is_err());
+    }
+
+    #[test]
+    fn replacement_and_zigzag_products() {
+        // K_4 is 3-regular; replacing each vertex by a triangle gives the truncated tetrahedron
+        let truncated = replacement(&complete(4), &complete(3)).unwrap();
+        assert_eq!((truncated.num_vertices(), truncated.num_edges()), (12, 18));
+        assert!(truncated.degrees().iter().all(|&d| d == 3));
+        assert_eq!(truncated.components().1, 1);
+        // the zig-zag product of K_5 with the 4-cycle is regular of degree 2 * 2
+        let cycle4 = Graph::from_edges(4, [(0, 1), (1, 2), (2, 3), (3, 0)]).unwrap();
+        let z = zigzag(&complete(5), &cycle4).unwrap();
+        assert_eq!(z.num_vertices(), 20);
+        assert!(z.degrees().iter().all(|&d| d == 4), "{:?}", z.degrees());
+        // the second graph must have as many vertices as the first's degree, and both be regular
+        assert!(replacement(&complete(4), &complete(4)).is_err());
+        assert!(zigzag(&path(3), &complete(2)).is_err());
+    }
 
     fn path(n: usize) -> Graph {
         Graph::from_edges(n, (1..n).map(|i| (i - 1, i))).unwrap()
