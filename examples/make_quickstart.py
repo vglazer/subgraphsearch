@@ -359,6 +359,16 @@ snakes = ss.search(cube, 51, path=True, experiments=400, max_moves=2000, div_fre
 print(snakes.summary())
 """),
     md("""
+The longest induced cycles, *coils*, are found with the cycle search from the previous section, `degree=2`
+with `connected=True`. Their lengths are known exactly up to the 8-cube too: the longest coil in the 7-cube
+has 48 vertices, which the search finds in under a second, and the longest in the 8-cube has 96, which it
+finds in 4 of 200 experiments of up to 20,000 moves, in about 10 seconds.
+"""),
+    code("""
+coils = ss.search(cube, 48, degree=2, connected=True, experiments=400, max_moves=2000, div_freq=300, div_dur=8)
+print(coils.summary())
+"""),
+    md("""
 `endpoints=(s, t)` asks for induced paths that run from $s$ to $t$. The search attaches a new vertex to each
 of them, which an induced path can only contain as an end, looks for a path two vertices longer through all
 four, and leaves the new vertices out of the results. Here are paths between opposite corners of the 7-cube,
