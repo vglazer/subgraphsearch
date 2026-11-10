@@ -303,7 +303,7 @@ def sweep(graph: Graph | WeightedGraph, size: int, edges: int | None, parameter:
     return {v: search(graph, size, edges, **{**kwargs, parameter: v}) for v in values}
 
 
-SHAPES = ("path", "cycle", "tree", "clique")
+SHAPES = ("path", "cycle", "tree", "clique", "independent")
 
 
 @dataclass
@@ -311,7 +311,7 @@ class LargestResult:
     """The outcome of :func:`largest`: every search it made, by size."""
 
     graph: Graph
-    #: ``"path"``, ``"cycle"``, ``"tree"`` or ``"clique"``.
+    #: ``"path"``, ``"cycle"``, ``"tree"``, ``"clique"`` or ``"independent"``.
     shape: str
     #: Every search made, by size, in increasing order of size.
     results: dict[int, SearchResult]
@@ -334,7 +334,8 @@ class LargestResult:
         return self.results[min(above)] if above else None
 
     def summary(self) -> str:
-        noun = {"path": "induced path", "cycle": "induced cycle", "tree": "induced tree", "clique": "clique"}[self.shape]
+        noun = {"path": "induced path", "cycle": "induced cycle", "tree": "induced tree", "clique": "clique",
+                "independent": "independent set"}[self.shape]
         tried = ", ".join(f"{k} ({r.successes}/{len(r.experiments)})" for k, r in self.results.items())
         head = (f"no {noun} found" if self.size is None
                 else f"largest {noun} found: {self.size} vertices, in {self.best.successes} of {len(self.best.experiments)} experiments")
@@ -364,8 +365,8 @@ def largest(
     trace: bool = False,
     aspiration: bool = False,
 ) -> LargestResult:
-    """Searches ``graph`` for the largest induced ``shape`` it can find: ``"path"``, ``"cycle"``,
-    ``"tree"`` or ``"clique"``.
+    """Searches ``graph`` for the largest ``shape`` it can find: an induced ``"path"``, ``"cycle"`` or
+    ``"tree"``, a ``"clique"``, or an ``"independent"`` set.
 
     Starting at ``start`` vertices (by default the fewest the shape and the fixed vertices allow),
     it runs :func:`search` for the shape at size after size: first doubling its steps while searches
@@ -380,7 +381,7 @@ def largest(
     subgraphs that exist, so the size found is a lower bound; more experiments or moves can raise it.
     """
     if shape not in SHAPES:
-        raise ValueError(f"unknown shape {shape!r}: choose path, cycle, tree or clique")
+        raise ValueError(f"unknown shape {shape!r}: choose path, cycle, tree, clique or independent")
     if not isinstance(graph, Graph):
         raise TypeError("largest needs an unweighted Graph")
     fixed = tuple(int(v) for v in fixed)

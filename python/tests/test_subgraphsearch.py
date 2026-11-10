@@ -334,6 +334,31 @@ def test_weighted_graph_basics():
         ss.WeightedGraph(3, [(0, 1, 0)])
 
 
+def test_shape_checks():
+    path = ss.Graph(5, [(0, 1), (1, 2), (2, 3), (3, 4)])
+    cycle = ss.Graph(5, [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)])
+    star = ss.Graph(5, [(0, 1), (0, 2), (0, 3), (0, 4)])
+    forest = ss.Graph(5, [(0, 1), (2, 3)])
+    k4 = ss.Graph(4, [(u, v) for u in range(4) for v in range(u + 1, 4)])
+    checks = ("is_connected", "is_tree", "is_path", "is_cycle", "is_clique", "is_independent")
+    expected = {
+        "path": (path, (True, True, True, False, False, False)),
+        "cycle": (cycle, (True, False, False, True, False, False)),
+        "star": (star, (True, True, False, False, False, False)),
+        "forest": (forest, (False, False, False, False, False, False)),
+        "k4": (k4, (True, False, False, False, True, False)),
+        "empty": (ss.Graph(3), (False, False, False, False, False, True)),
+        "one vertex": (ss.Graph(1), (True, True, True, False, True, True)),
+        "no vertices": (ss.Graph(0), (False, False, False, False, True, True)),
+    }
+    for name, (g, answers) in expected.items():
+        assert tuple(getattr(g, c)() for c in checks) == answers, name
+    # on a subgraph a search found
+    grid = ss.grid(6, 6)
+    r = ss.search(grid, 12, path=True, experiments=20, max_moves=1000)
+    assert all(grid.induced(vs).is_path() for vs in r.solutions())
+
+
 def test_standard_graphs_and_mean_degree():
     n = 6
     by_hand = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])
@@ -535,7 +560,8 @@ def test_largest(tmp_path):
     cube = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])
     settings = {"experiments": 50, "max_moves": 2000, "div_freq": 300, "div_dur": 8}
     # the 6-cube's longest snake has 27 vertices and its longest coil 26; it has no triangles
-    for shape, size in [("path", 27), ("cycle", 26), ("clique", 2)]:
+    # and it is bipartite with two parts of 32, so its largest independent sets have 32 vertices
+    for shape, size in [("path", 27), ("cycle", 26), ("clique", 2), ("independent", 32)]:
         r = ss.largest(cube, shape, **settings)
         assert r.size == size and r.best.params.size == size and r.best.successes > 0, shape
         assert list(r.results) == sorted(r.results) and all(x.successes == 0 for k, x in r.results.items() if k > size)
@@ -544,6 +570,7 @@ def test_largest(tmp_path):
     cycles = ss.largest(cube, "cycle", **settings)
     assert cycles.best.target == "forming a cycle"
     assert all(is_induced_path(cube, vs) for vs in ss.largest(cube, "path", **settings).best.solutions())
+    assert all(cube.induced(vs).is_independent() for vs in ss.largest(cube, "independent", **settings).best.solutions())
     trees = ss.largest(cube, "tree", **settings)
     assert trees.size >= 27 and trees.best.target == "forming a tree"
 

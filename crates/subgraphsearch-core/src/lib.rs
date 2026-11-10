@@ -17,7 +17,8 @@
 //! Modules:
 //! - [`graph`]: the [`Graph`] type.
 //! - [`search`](mod@search): the search itself, and [`regular`]: its regular-subgraph variant.
-//! - [`largest`](mod@largest): the largest induced path, cycle, tree or clique a search finds.
+//! - [`largest`](mod@largest): the largest induced path, cycle or tree, clique or independent set a
+//!   search finds.
 //! - [`generate`] and [`ops`]: random graphs, complements, induced subgraphs, switching,
 //!   incidence structures.
 //! - [`formats`]: graph6, sparse6, Matrix Market, edge lists, `sub_search` adjacency lists, DOT, GraphML.

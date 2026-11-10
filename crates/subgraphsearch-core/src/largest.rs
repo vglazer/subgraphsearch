@@ -1,5 +1,5 @@
-//! The largest induced path, cycle, tree or clique a search finds, by searching one size after
-//! another.
+//! The largest induced path, cycle, tree, clique or independent set a search finds, by searching
+//! one size after another.
 //!
 //! [`largest`] first doubles its steps upward from a starting size while searches succeed, then
 //! bisects between the last size that succeeded and the first that did not. A size counts as
@@ -30,16 +30,19 @@ pub enum Shape {
     Tree,
     /// A clique: every pair of vertices joined.
     Clique,
+    /// An independent set: no pair of vertices joined.
+    Independent,
 }
 
 impl Shape {
-    /// The shape's name: "path", "cycle", "tree" or "clique".
+    /// The shape's name: "path", "cycle", "tree", "clique" or "independent".
     pub fn name(self) -> &'static str {
         match self {
             Shape::Path => "path",
             Shape::Cycle => "cycle",
             Shape::Tree => "tree",
             Shape::Clique => "clique",
+            Shape::Independent => "independent",
         }
     }
 
@@ -67,6 +70,7 @@ impl Shape {
                 p.edges = size as i64 - 1;
             }
             Shape::Clique => p.edges = (size * (size - 1) / 2) as i64,
+            Shape::Independent => p.edges = 0,
         }
         p
     }
@@ -86,8 +90,9 @@ impl std::str::FromStr for Shape {
             "cycle" => Ok(Shape::Cycle),
             "tree" => Ok(Shape::Tree),
             "clique" => Ok(Shape::Clique),
+            "independent" => Ok(Shape::Independent),
             _ => Err(Error::Invalid(format!(
-                "unknown shape {s:?}: choose path, cycle, tree or clique"
+                "unknown shape {s:?}: choose path, cycle, tree, clique or independent"
             ))),
         }
     }
@@ -103,7 +108,7 @@ pub struct Largest {
     pub results: Vec<SearchResult>,
 }
 
-/// Searches `graph` for the largest induced `shape` it can find, starting at `start` vertices (by
+/// Searches `graph` for the largest `shape` it can find, starting at `start` vertices (by
 /// default the fewest the shape and the fixed vertices allow) and trusting a failure only when the
 /// next `lookahead` sizes fail too; see the module documentation. Each search takes its settings
 /// from `base`, except the size and target, which the shape sets.
@@ -254,6 +259,8 @@ mod tests {
             (Shape::Cycle, 14, 14),
             (Shape::Tree, 14, 31),
             (Shape::Clique, 2, 2),
+            // the cube is bipartite with two parts of 16, and no independent set is larger
+            (Shape::Independent, 16, 16),
         ] {
             let r = largest(&g, shape, &settings(), None, 2).unwrap();
             let size = r.size.unwrap();

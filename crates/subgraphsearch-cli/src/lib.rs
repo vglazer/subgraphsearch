@@ -24,7 +24,7 @@ struct Cli {
 enum Command {
     /// Search a graph for induced subgraphs with a given number of vertices and edges.
     Search(SearchArgs),
-    /// Find the largest induced path, cycle or tree, or clique, a search can find.
+    /// Find the largest induced path, cycle or tree, clique or independent set a search can find.
     Largest(LargestArgs),
     /// Generate a random graph.
     Generate(GenerateArgs),
@@ -222,6 +222,8 @@ enum ShapeArg {
     Cycle,
     Tree,
     Clique,
+    /// An independent set.
+    Independent,
 }
 
 impl From<ShapeArg> for subgraphsearch_core::Shape {
@@ -232,6 +234,7 @@ impl From<ShapeArg> for subgraphsearch_core::Shape {
             ShapeArg::Cycle => Shape::Cycle,
             ShapeArg::Tree => Shape::Tree,
             ShapeArg::Clique => Shape::Clique,
+            ShapeArg::Independent => Shape::Independent,
         }
     }
 }
@@ -640,6 +643,7 @@ fn run_largest(args: LargestArgs) -> Result<u8> {
     }
     let noun = match shape {
         subgraphsearch_core::Shape::Clique => "clique".to_string(),
+        subgraphsearch_core::Shape::Independent => "independent set".to_string(),
         s => format!("induced {}", s.name()),
     };
     match found.size {

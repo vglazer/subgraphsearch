@@ -147,6 +147,33 @@ class Graph:
         """Number of edges among ``vertices``."""
         return self._g.induced_edge_count([int(v) for v in vertices])
 
+    # ---- shapes: whether the graph is one; for a subgraph a search found, ask its induced graph,
+    # e.g. g.induced(r.best.vertices).is_path()
+
+    def is_connected(self) -> bool:
+        """Whether the graph has one connected component (and at least one vertex)."""
+        return self.n > 0 and self.components()[1] == 1
+
+    def is_tree(self) -> bool:
+        """Whether the graph is a tree: connected, with one edge fewer than vertices."""
+        return self.is_connected() and self.m == self.n - 1
+
+    def is_path(self) -> bool:
+        """Whether the graph is a path: a tree with no vertex of degree above 2."""
+        return self.is_tree() and int(self.degrees().max()) <= 2
+
+    def is_cycle(self) -> bool:
+        """Whether the graph is a cycle: connected, at least 3 vertices, every degree 2."""
+        return self.n >= 3 and self.is_connected() and bool((self.degrees() == 2).all())
+
+    def is_clique(self) -> bool:
+        """Whether every pair of vertices is joined."""
+        return self.m == self.n * (self.n - 1) // 2
+
+    def is_independent(self) -> bool:
+        """Whether no pair of vertices is joined: the vertices form an independent set."""
+        return self.m == 0
+
     # ---- matrices
 
     def adjacency_matrix(self, dtype=np.int8) -> np.ndarray:

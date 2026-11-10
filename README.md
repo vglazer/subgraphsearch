@@ -63,8 +63,9 @@ r = ss.search(g, size=11, edges=55)    # 11-cliques
 r = ss.search(g, size=30, edges=340)   # 30 vertices spanning exactly 340 edges
 r = ss.search(g, size=10, degree=4)    # 4-regular induced subgraphs
 
-big = ss.largest(g, "clique")          # the largest clique the search finds; also "path", "cycle", "tree"
-big.size, big.best.solutions()         # its size, and the cliques of that size found
+big = ss.largest(g, "clique")          # the largest clique the search finds; also "path", "cycle",
+big.size, big.best.solutions()         # "tree" and "independent"; its size, and the cliques found
+g.induced(big.best.best.vertices).is_clique()   # check: also is_path, is_cycle, is_tree, is_independent
 
 print(r.summary())
 r.solutions()                                         # the distinct vertex sets found
@@ -80,9 +81,12 @@ In Jupyter, graphs and results display as summaries with small charts.
   `path=True` (an induced path), or a total weight in a `WeightedGraph`. `fixed=` names vertices the subgraph must contain,
   `connected=True` requires a connected subgraph, and `max_conflict` in
   `r.solutions(max_conflict=2)` also returns near misses.
-- **The largest:** `ss.largest(g, "path" | "cycle" | "tree" | "clique")` searches size after size
+- **The largest:** `ss.largest(g, "path" | "cycle" | "tree" | "clique" | "independent")` searches size after size
   and returns every search, by size: `.size`, `.best` (the search at that size) and `.next` (the
   closest failure above it, with its near misses).
+- **Checking shapes:** `g.is_path()`, `is_cycle()`, `is_tree()`, `is_clique()`, `is_independent()`
+  and `is_connected()` say whether a graph is one; for a subgraph a search found, ask the graph it
+  induces, `g.induced(vertices).is_path()`.
 - **Graphs:** `ss.Graph(n, edges)`, `ss.read(path)`, `g.write(path)`, `g.complement()`,
   `g.induced(vs)`, `g.switch(vs)`, `g.common_neighborhood(vs)`, `g.adjacency_matrix()`,
   `g.laplacian()`, `g.layout()`, and from an incidence structure, `ss.Graph.point_graph(blocks)`
@@ -370,14 +374,14 @@ Some reformulations make a search easier:
   values of $`m`$: the switch from always found to never found is abrupt (in a 100-vertex graph of
   density 0.6, for example, 30 vertices spanning 345 edges are easy to find and 350 are out of
   reach), and near-misses (`--max-conflict`) show how close a failed target came.
-- **Let `largest` find the size.** For the largest induced path, cycle or tree, or clique,
-  `ss.largest` (`subgraphsearch largest --shape ...`) does the searching: it doubles the size while
-  searches succeed, then bisects between the last success and the first failure. Some sizes can be
-  impossible below the largest (between two hypercube vertices that differ in an odd number of
-  bits, every path has an even number of vertices), so a size counts as reachable if a search
-  succeeds at it or at one of the next `lookahead` sizes, 2 by default. With `endpoints`, it starts
-  at the shortest path between them. The size it finds is a lower bound, like any heuristic's; more
-  experiments or moves can raise it.
+- **Let `largest` find the size.** For the largest induced path, cycle or tree, clique or
+  independent set, `ss.largest` (`subgraphsearch largest --shape ...`) does the searching: it
+  doubles the size while searches succeed, then bisects between the last success and the first
+  failure. Some sizes can be impossible below the largest (between two hypercube vertices that
+  differ in an odd number of bits, every path has an even number of vertices), so a size counts as
+  reachable if a search succeeds at it or at one of the next `lookahead` sizes, 2 by default. With
+  `endpoints`, it starts at the shortest path between them. The size it finds is a lower bound,
+  like any heuristic's; more experiments or moves can raise it.
 
 ### Settings
 

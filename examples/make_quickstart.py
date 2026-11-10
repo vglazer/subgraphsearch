@@ -96,12 +96,14 @@ viz.plot_graph(g, cliques.best.vertices, title="an 11-clique");
 An [independent set]({W}Independent_set_(graph_theory)) is the opposite: vertices with no edges among them,
 so the target is 0. It is also a clique of the complement, `g.complement()`, and the two searches find the
 same sets. This graph is dense, so its independent sets are smaller than its cliques: the search finds 7
-vertices every time and 8 never.
+vertices every time and 8 never. `is_independent()` checks a set (and `is_clique()` a clique), on the subgraph
+it induces.
 """),
     code("""
 independent = ss.search(g, 7, 0)
 print(independent.successes, "of 40 experiments found a 7-vertex independent set")
 print("the same as 7-cliques of the complement:", independent.solutions() == ss.search(g.complement(), 7, 21).solutions())
+print("each induces no edges:", all(g.induced(vs).is_independent() for vs in independent.solutions()))
 """),
     md("""
 ## A harder target
@@ -307,13 +309,14 @@ viz.show(ss.search(sparse, 20, degree=2, connected=True, seed=1))
     md(f"""
 `connected=True` works with edge-count searches too, and there it finds induced
 [trees]({W}Tree_(graph_theory)): a connected graph on $k$ vertices with $k - 1$ edges is a tree. The edge count
-alone is not enough, since $k - 1$ edges can also form a forest that contains a cycle. Raising $k$ as for cycles
-finds large induced trees, a classic hard problem; in this graph they grow larger than its induced cycles.
+alone is not enough, since $k - 1$ edges can also form a forest that contains a cycle, as `is_tree()` on the
+induced subgraph shows. Raising $k$ as for cycles finds large induced trees, a classic hard problem; in this
+graph they grow larger than its induced cycles.
 """),
     code("""
 for k in (10, 20):
     plain = ss.search(sparse, k, k - 1, experiments=200, seed=1)
-    trees = sum(sparse.induced(e.vertices).components()[1] == 1 for e in plain.experiments if e.success)
+    trees = sum(sparse.induced(e.vertices).is_tree() for e in plain.experiments if e.success)
     print(f"{k} vertices spanning {k - 1} edges: {trees} of 200 experiments ended on a tree")
 induced_trees = {k: ss.search(sparse, k, k - 1, connected=True, experiments=200, seed=1).successes for k in (10, 20, 30, 35, 40)}
 print("with connected=True, experiments that found a k-vertex tree, by k:", induced_trees)
@@ -335,14 +338,14 @@ an induced path. In this graph it finds paths of 29 vertices, longer than its lo
 """),
     code("""
 trees = ss.search(sparse, 12, 11, connected=True, experiments=200, seed=1).solutions()
-print("12-vertex trees that are paths:", sum(int(sparse.induced(vs).degrees().max()) <= 2 for vs in trees), "of", len(trees))
+print("12-vertex trees that are paths:", sum(sparse.induced(vs).is_path() for vs in trees), "of", len(trees))
 paths = {k: ss.search(sparse, k, path=True, experiments=200, seed=1).successes for k in (12, 20, 25, 29, 31)}
 print("path=True, experiments that found a k-vertex path, by k:", paths)
 """),
     md("""
 Trying sizes by hand, as above, is how to find the longest path the search can reach, and `ss.largest` does it
-for you. Given a shape, `"path"`, `"cycle"`, `"tree"` or `"clique"`, it doubles the size while searches
-succeed, then bisects between the last success and the first failure, and keeps every search it made:
+for you. Given a shape, `"path"`, `"cycle"`, `"tree"`, `"clique"` or `"independent"`, it doubles the size while
+searches succeed, then bisects between the last success and the first failure, and keeps every search it made:
 `.size` is the largest size found, `.best` the search at that size, and `.next` the closest failure above it,
 with its near misses. Here it finds a path of 30 vertices, a size the loop above skipped.
 """),
