@@ -48,6 +48,30 @@ use crate::search::{Components, Experiment, SearchParams, SearchResult};
 /// positions in 16-bit integers.
 pub const MAX_VERTICES: usize = i16::MAX as usize;
 
+/// The most vertices for which a search keeps neighbor positions in a `v * v` table, as the C
+/// programs do: 8 MB per thread at most. Larger graphs keep one per edge end, which is slower to
+/// look up but takes memory in proportion to the number of edges.
+const DENSE_POSITIONS: usize = 2048;
+
+/// A `v * v` position table's entry for a pair of vertices that is not an edge.
+const NOT_AN_EDGE: u16 = u16::MAX;
+
+#[cfg(test)]
+thread_local! {
+    /// Makes searches on this thread keep positions per edge end whatever the graph's size, so
+    /// that tests can check both ways give the same experiments.
+    static PER_EDGE_POSITIONS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether a search on `v` vertices keeps neighbor positions in a `v * v` table.
+fn dense_positions(v: usize) -> bool {
+    #[cfg(test)]
+    if PER_EDGE_POSITIONS.with(|f| f.get()) {
+        return false;
+    }
+    v <= DENSE_POSITIONS
+}
+
 /// For a path search with [`SearchParams::endpoints`] `[s, t]`: the graph with two new vertices,
 /// adjacent to `s` and to `t` alone, and parameters for a path two vertices longer that fix both
 /// new vertices as well as `s` and `t`. A vertex with one neighbor can only be an end of an
@@ -250,8 +274,16 @@ struct Workspace {
     /// Sum of all degrees, the edge-count objective's starting bound (`ereg_search`).
     e: i64,
     degs: Vec<usize>,
-    /// Position of `j` in `adj_list[i]` at `i * v + j`, or -1 if `{i, j}` is not an edge.
-    adj: Vec<i16>,
+    /// The graph's neighbor lists, ascending and concatenated: vertex `i`'s are
+    /// `nbrs[offsets[i]..offsets[i + 1]]`.
+    offsets: Vec<usize>,
+    nbrs: Vec<u32>,
+    /// Positions of neighbors in `adj_list`: see [`Workspace::slot`]. With up to
+    /// [`DENSE_POSITIONS`] vertices, a `v * v` table as in the C programs, `NOT_AN_EDGE` for
+    /// non-edges; with more, one entry per edge end, in the order of `nbrs`. Every thread has its
+    /// own, so a `v * v` table for a large graph would take more memory than the graph itself.
+    pos: Vec<u16>,
+    dense: bool,
     /// Neighbor lists, partitioned: subgraph neighbors first.
     adj_list: Vec<Vec<u32>>,
     sub_degs: Vec<i64>,
@@ -282,7 +314,17 @@ impl Workspace {
             v_sq: (v * v) as i64,
             e: 2 * graph.num_edges() as i64,
             degs: graph.degrees(),
-            adj: vec![-1; v * v],
+            offsets: std::iter::once(0)
+                .chain((0..v).scan(0, |end, i| {
+                    *end += graph.neighbors(i).len();
+                    Some(*end)
+                }))
+                .collect(),
+            nbrs: (0..v)
+                .flat_map(|i| graph.neighbors(i).iter().copied())
+                .collect(),
+            pos: Vec::new(),
+            dense: dense_positions(v),
             adj_list: vec![Vec::new(); v],
             sub_degs: vec![0; v],
             diffs: vec![0; v],
@@ -298,20 +340,27 @@ impl Workspace {
             rand_perm: Vec::with_capacity(v - v_fix),
             components: (params.connected || params.path).then(|| Components::new(v)),
         };
+        ws.pos = if ws.dense {
+            let mut table = vec![NOT_AN_EDGE; v * v];
+            for (i, j) in graph.edges() {
+                table[i * v + j] = 0;
+                table[j * v + i] = 0;
+            }
+            table
+        } else {
+            vec![0; ws.nbrs.len()]
+        };
         ws.reset(graph, params);
         ws
     }
 
-    /// The state the C programs start from: plain sorted neighbor lists, edges marked 0.
+    /// The state the C programs start from: plain sorted neighbor lists. (Positions are set by
+    /// [`Workspace::partition`], which every experiment starts with.)
     fn reset(&mut self, graph: &Graph, params: &SearchParams) {
         let v = self.v;
-        self.adj.fill(-1);
         for i in 0..v {
             self.adj_list[i].clear();
             self.adj_list[i].extend_from_slice(graph.neighbors(i));
-            for &j in graph.neighbors(i) {
-                self.adj[i * v + j as usize] = 0;
-            }
         }
         self.sub_ch.fill(0);
         self.opt_ch.fill(0);
@@ -323,9 +372,31 @@ impl Workspace {
             .extend((0..v).filter(|&i| self.sub_ch[i] == 0));
     }
 
+    /// Where `pos` keeps the position of `j` in `adj_list[i]`, if `{i, j}` is an edge.
     #[inline]
-    fn adjacent(&self, a: usize, b: usize) -> bool {
-        self.adj[a * self.v + b] >= 0
+    fn slot(&self, i: usize, j: usize) -> Option<usize> {
+        if self.dense {
+            let s = i * self.v + j;
+            return (self.pos[s] != NOT_AN_EDGE).then_some(s);
+        }
+        let (start, end) = (self.offsets[i], self.offsets[i + 1]);
+        self.nbrs[start..end]
+            .binary_search(&(j as u32))
+            .ok()
+            .map(|k| start + k)
+    }
+
+    /// The position of `j` in `adj_list[i]`, or -1 if `{i, j}` is not an edge.
+    #[inline]
+    fn position(&self, i: usize, j: usize) -> i64 {
+        self.slot(i, j).map_or(-1, |s| i64::from(self.pos[s]))
+    }
+
+    /// Records that `j`, a neighbor of `i`, is now at `position` in `adj_list[i]`.
+    #[inline]
+    fn set_position(&mut self, i: usize, j: usize, position: usize) {
+        let s = self.slot(i, j).expect("a neighbor");
+        self.pos[s] = position as u16;
     }
 
     fn run<R: SearchRng>(
@@ -368,21 +439,19 @@ impl Workspace {
     }
 
     /// Rebuilds every neighbor list with subgraph neighbors first (each part ascending) and
-    /// stores positions in `adj`; returns nothing, but leaves `sub_degs` set when `set_degrees`.
+    /// stores positions in `pos`; returns nothing, but leaves `sub_degs` set when `set_degrees`.
     fn partition(&mut self, set_degrees: bool) {
-        let v = self.v;
         let mut others = Vec::new();
-        for j in 0..v {
+        for j in 0..self.v {
+            let (start, end) = (self.offsets[j], self.offsets[j + 1]);
             let list = &mut self.adj_list[j];
             list.clear();
             others.clear();
-            for k in 0..v {
-                if self.adj[j * v + k] >= 0 {
-                    if self.sub_ch[k] != 0 {
-                        list.push(k as u32);
-                    } else {
-                        others.push(k as u32);
-                    }
+            for &k in &self.nbrs[start..end] {
+                if self.sub_ch[k as usize] != 0 {
+                    list.push(k);
+                } else {
+                    others.push(k);
                 }
             }
             if set_degrees {
@@ -390,10 +459,9 @@ impl Workspace {
                 self.u_ch[j] = 0;
             }
             list.extend_from_slice(&others);
-        }
-        for j in 0..v {
-            for (k, &x) in self.adj_list[j].iter().enumerate() {
-                self.adj[j * v + x as usize] = k as i16;
+            for k in 0..end - start {
+                let x = self.adj_list[j][k] as usize;
+                self.set_position(j, x, k);
             }
         }
     }
@@ -401,41 +469,40 @@ impl Workspace {
     /// Moves `sub_vert` (just left) and `rest_vert` (just joined) to the right side of every
     /// neighbor's partitioned list. Mirrors "update partitioning of adjacency list".
     fn update_partition(&mut self, sub_vert: usize, rest_vert: usize) {
-        let v = self.v;
         for k in 0..self.degs[sub_vert] {
             let vert = self.adj_list[sub_vert][k] as usize;
-            let index = self.adj[vert * v + sub_vert];
-            let temp = self.adj[vert * v + rest_vert];
+            let index = self.position(vert, sub_vert) as usize;
+            let temp = self.position(vert, rest_vert);
             if temp >= 0 {
-                self.adj_list[vert][index as usize] = rest_vert as u32;
-                self.adj_list[vert][temp as usize] = sub_vert as u32;
-                self.adj[vert * v + sub_vert] = temp;
-                self.adj[vert * v + rest_vert] = index;
+                let temp = temp as usize;
+                self.adj_list[vert][index] = rest_vert as u32;
+                self.adj_list[vert][temp] = sub_vert as u32;
+                self.set_position(vert, sub_vert, temp);
+                self.set_position(vert, rest_vert, index);
             } else {
                 let degree = self.sub_degs[vert] as usize;
-                if index as usize != degree {
+                if index != degree {
                     let moved = self.adj_list[vert][degree] as usize;
-                    self.adj_list[vert][index as usize] = moved as u32;
+                    self.adj_list[vert][index] = moved as u32;
                     self.adj_list[vert][degree] = sub_vert as u32;
-                    self.adj[vert * v + moved] = index;
-                    self.adj[vert * v + sub_vert] = degree as i16;
+                    self.set_position(vert, moved, index);
+                    self.set_position(vert, sub_vert, degree);
                 }
             }
         }
         for k in 0..self.degs[rest_vert] {
             let vert = self.adj_list[rest_vert][k] as usize;
-            let index = self.adj[vert * v + sub_vert];
-            let temp = self.adj[vert * v + rest_vert];
-            if index >= 0 {
+            if self.position(vert, sub_vert) >= 0 {
                 continue;
             }
+            let temp = self.position(vert, rest_vert) as usize;
             let degree = (self.sub_degs[vert] - 1) as usize;
-            if temp as usize != degree {
+            if temp != degree {
                 let moved = self.adj_list[vert][degree] as usize;
-                self.adj_list[vert][temp as usize] = moved as u32;
+                self.adj_list[vert][temp] = moved as u32;
                 self.adj_list[vert][degree] = rest_vert as u32;
-                self.adj[vert * v + moved] = temp;
-                self.adj[vert * v + rest_vert] = degree as i16;
+                self.set_position(vert, moved, temp);
+                self.set_position(vert, rest_vert, degree);
             }
         }
     }
@@ -699,7 +766,7 @@ impl Workspace {
                     // at one edge fewer than vertices
                     let val = if params.path {
                         let after = edges - self.sub_degs[sv] + self.sub_degs[rv]
-                            - i64::from(self.adjacent(sv, rv));
+                            - i64::from(graph.has_edge(sv, rv));
                         abs(val - 2) + abs(after - target_edges)
                     } else {
                         val
@@ -768,7 +835,7 @@ impl Workspace {
             let (sub_vert, rest_vert) = self.select(diversify, opt_mov, rng);
             let sub_row = self.vert_inds[sub_vert];
             let rest_col = self.vert_inds[rest_vert];
-            let swapped_adjacent = self.adjacent(sub_vert, rest_vert);
+            let swapped_adjacent = graph.has_edge(sub_vert, rest_vert);
 
             if !sol_found {
                 new_min_val += self.sub_degs[rest_vert]
@@ -886,9 +953,9 @@ impl Workspace {
                     let degree = new_min_val - self.sub_degs[vert];
                     for l in 0..w_cols {
                         let temp = self.u_list[l];
-                        let val = abs(
-                            degree + self.sub_degs[temp] - i64::from(self.adjacent(vert, temp))
-                        );
+                        let val =
+                            abs(degree + self.sub_degs[temp]
+                                - i64::from(graph.has_edge(vert, temp)));
                         self.store(val, &mut opt_val, &mut opt_mov, vert, temp);
                     }
                 }
@@ -910,7 +977,7 @@ impl Workspace {
                     candidates.clear();
                     for l in 0..self.v_rest {
                         let vert = self.rest_verts[l];
-                        let adjacent = self.adjacent(sv, vert);
+                        let adjacent = graph.has_edge(sv, vert);
                         if (adjacent && self.sub_degs[vert] == self.sub_degs[sv] + 1)
                             || (!adjacent && self.sub_degs[vert] == self.sub_degs[sv])
                         {
@@ -936,6 +1003,7 @@ impl Workspace {
 
 #[cfg(test)]
 mod tests {
+    use super::{PER_EDGE_POSITIONS, search_sequential};
     use crate::graph::Graph;
     use crate::rng::RngKind;
     use crate::search::{Regular, SearchParams, search};
@@ -1163,6 +1231,60 @@ mod tests {
         assert!(bad(&|p| p.endpoints = Some([5, 5])));
         assert!(bad(&|p| p.endpoints = Some([0, 64])));
         assert!(bad(&|p| p.size = 2));
+    }
+
+    #[test]
+    fn positions_per_edge_give_the_same_experiments() {
+        // the C programs' v * v position table and the per-edge one must give identical searches
+        let n = 7;
+        let cube = Graph::from_edges(
+            1 << n,
+            (0..1usize << n)
+                .flat_map(|u| (0..n).map(move |b| (u, u ^ (1 << b))))
+                .filter(|&(u, w)| u < w),
+        )
+        .unwrap();
+        let mut two_phase = SearchParams::new(20, 0);
+        two_phase.regular = Some(Regular {
+            degree: 8,
+            two_phase: true,
+        });
+        let mut regular = SearchParams::new(12, 0);
+        regular.regular = Some(Regular {
+            degree: 6,
+            two_phase: false,
+        });
+        let mut coil = SearchParams::new(40, 0);
+        coil.regular = Some(Regular {
+            degree: 2,
+            two_phase: false,
+        });
+        coil.connected = true;
+        let mut path = SearchParams::new(41, 0);
+        path.path = true;
+        path.endpoints = Some([0, 127]);
+        path.fixed = vec![5];
+        let cases = [
+            (paley(61), two_phase),
+            (paley(37), regular),
+            (cube.clone(), coil),
+            (cube, path),
+        ];
+        for (g, mut p) in cases {
+            for rng in [RngKind::Xoshiro, RngKind::Legacy] {
+                p.rng = rng;
+                p.experiments = 10;
+                p.max_moves = 1000;
+                let run = |per_edge: bool| {
+                    PER_EDGE_POSITIONS.with(|f| f.set(per_edge));
+                    let mut out = Vec::new();
+                    search_sequential(&g, &p, |e| out.push(e.clone())).unwrap();
+                    PER_EDGE_POSITIONS.with(|f| f.set(false));
+                    out
+                };
+                assert_eq!(run(false), run(true));
+            }
+        }
     }
 
     #[test]

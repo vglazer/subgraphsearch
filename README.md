@@ -421,6 +421,13 @@ time grows in proportion to the total number of moves: 160 experiments take four
 A graph on 10,000 vertices with 25 million edges takes about 330 MB of memory. Generating it takes
 0.24 s, writing it as graph6 0.05 s, and reading it back 0.28 s.
 
+Regular, cycle and path searches keep, in every thread, where each vertex's neighbors are in its
+neighbor list. On graphs of up to 2,048 vertices they use a table with an entry for every pair of
+vertices, as the original programs do; on larger ones, an entry for every edge, so their memory
+grows with the number of edges rather than with the square of the number of vertices. A path
+search on all 16 cores in a random graph on 32,000 vertices with 3 edges per vertex peaks at
+0.24 GB. These searches support graphs of up to 32,767 vertices.
+
 ## Graph formats
 
 | Format | Name | Extensions | Read | Write | Use |
