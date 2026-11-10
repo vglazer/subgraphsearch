@@ -634,6 +634,71 @@ viz.plot_sign_matrix(board(independent), axs[0], title="largest independent set:
 viz.plot_sign_matrix(board(clique), axs[1], title="largest clique: a whole column (or row)");
 """),
     md(f"""
+## Edges and eigenvalues
+
+The bounds above are the extreme cases of a statement about every vertex set. In a $d$-regular graph on $n$
+vertices with adjacency eigenvalues $d = \\theta_1 \\ge \\theta_2 \\ge \\dots \\ge \\theta_n$, a set $S$ of $k$ vertices spans
+$e(S)$ edges with
+
+$$\\frac{{d k^2}}{{2n}} + \\theta_n \\frac{{k (n - k)}}{{2n}} \\;\\le\\; e(S) \\;\\le\\; \\frac{{d k^2}}{{2n}} + \\theta_2 \\frac{{k (n - k)}}{{2n}}.$$
+
+The first term is what a random set of $k$ vertices spans on average. The upper bound limits how few edges can
+leave a set, since each of its vertices has $d$ edges in all: the graph's [expansion]({W}Expander_graph), governed
+by the gap between $d$ and $\\theta_2$. At $e(S) = 0$ the lower bound is the Hoffman bound. Bounding the
+deviation from random on both sides at once, by the larger of $\\theta_2$ and $\\lvert \\theta_n \\rvert$, is the expander
+mixing lemma.
+
+Finding the most or fewest edges $k$ vertices can span is exactly what the search does: ask for $k$ vertices
+with $m$ edges, starting at a bound and moving inward until a search succeeds (not every count in between is
+possible). Below, for each $k$, the deviation from random is divided by $k(n - k)/(2n)$, so the two bounds become
+horizontal lines at $\\theta_2$ and $\\theta_n$, and the points are the extremes the search finds.
+"""),
+    code("""
+def extreme_edges(graph, k, start, step):
+    # the first edge count the search finds, starting at a bound and moving inward
+    m = start
+    while ss.search(graph, k, m, experiments=32, max_moves=2000).successes == 0:
+        m += step
+    return m
+
+
+mixing = {
+    "rook's graph, 8 x 8": ss.Graph(64, [(a, b) for a, b in itertools.combinations(range(64), 2) if a // 8 == b // 8 or a % 8 == b % 8]),
+    "6-cube": ss.hypercube(6),
+    "T(12)": ss.Graph.block_graph(list(itertools.combinations(range(12), 2))),
+    "Paley graph, 61 vertices": paley(61),
+}
+fig, axs = plt.subplots(1, 4, figsize=(15, 3.6), layout="constrained", sharey=True)
+for ax, (name, graph) in zip(axs, mixing.items()):
+    n = graph.n
+    eigenvalues = np.linalg.eigvalsh(graph.adjacency_matrix(dtype=float))
+    d, second, smallest = eigenvalues[-1], eigenvalues[-2], eigenvalues[0]
+    sizes, fewest, most = range(4, n - 3, 4), [], []
+    for k in sizes:
+        random_set, scale = d * k * k / (2 * n), k * (n - k) / (2 * n)
+        high = extreme_edges(graph, k, int(np.floor(random_set + second * scale + 1e-9)), -1)
+        low = extreme_edges(graph, k, max(0, int(np.ceil(random_set + smallest * scale - 1e-9))), 1)
+        most.append((high - random_set) / scale)
+        fewest.append((low - random_set) / scale)
+    for line in (second, smallest):
+        ax.axhline(line, color="#d6336c", lw=1.2)
+    ax.axhline(0, color="#868e96", lw=0.8, ls=":")
+    ax.plot(sizes, most, "o", sizes, fewest, "o", color="#4c6ef5", ms=4)
+    ax.set_title(f"{name}\\nd = {d:.0f}, lines at θ₂ = {second:.2f} and θₙ = {smallest:.2f}", fontsize=10, loc="left")
+    ax.set_xlabel("vertices k")
+axs[0].set_ylabel("edges above a random set,\\nper k(n - k)/(2n)");
+"""),
+    md("""
+Where a point sits on a line, the search has found a set as uneven as the eigenvalues allow, so the bound is
+sharp there. In the rook's graph that happens at every multiple of 8, on both lines: whole rows span the most
+edges, and squares forming permutation patterns the fewest. In the 6-cube it happens at half the cube, 32
+vertices: a 5-dimensional subcube on the upper line, the words of even weight on the lower one. In $T(12)$ the
+lower line is reached and the upper one is not. The Paley graph's lines are close together, because its
+eigenvalues other than $d$ are small: every set of its vertices spans nearly the number of edges a random set
+would, which is what it means for a graph to be pseudo-random. The search's points lie close to both lines,
+so the eigenvalues' bound on how far from random a set can be is not far from the truth.
+"""),
+    md(f"""
 ## Vectors with prescribed inner products
 
 Many objects in linear algebra are sets of vectors with prescribed inner products, and so are cliques in a
