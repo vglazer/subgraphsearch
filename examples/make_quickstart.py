@@ -32,8 +32,8 @@ is a randomized [tabu search]({W}Tabu_search).
 The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
 vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles and trees,
 and induced paths, including paths between two given vertices. It combines regular subgraphs with switching
-and block designs to construct strongly regular graphs, and finds Hadamard matrices as cliques. It ends with
-weighted graphs, views of a graph's structure, and file formats.
+and block designs to construct strongly regular graphs, and finds Hadamard matrices and equiangular lines as
+cliques of vectors. It ends with weighted graphs, views of a graph's structure, and file formats.
 """),
     code("""
 import subgraphsearch as ss
@@ -553,16 +553,19 @@ viz.plot_switchings(
 );
 """),
     md(f"""
-## Hadamard matrices
+## Vectors with prescribed inner products
 
 Many objects in linear algebra are sets of vectors with prescribed inner products, and so are cliques in a
-graph on the candidate vectors. A [Hadamard matrix]({W}Hadamard_matrix) of order $n$ is an $n \\times n$
-matrix of $\\pm 1$ entries with pairwise orthogonal rows, $H H^T = n I$. Negating columns and then rows makes
-its first row and column all $+1$, and then its other $n - 1$ rows are $\\pm 1$ vectors that start with $+1$,
-sum to 0 (being orthogonal to the first row) and are pairwise orthogonal. So in the graph on all such vectors,
-joined when they are orthogonal, a Hadamard matrix of order $n$ is a clique on $n - 1$ vertices. For order 12
-the graph has 462 vertices, and the search finds a clique at once; `examples/hadamard.py` also does orders 8
-and 16.
+graph on the candidate vectors. `ss.Graph.from_vectors(vectors, inner_products)` builds that graph: one vertex
+per row, two joined when their inner product is one of `inner_products`. It computes the inner products in
+parallel straight into the adjacency matrix, so even graphs with hundreds of millions of edges take seconds.
+
+A [Hadamard matrix]({W}Hadamard_matrix) of order $n$ is an $n \\times n$ matrix of $\\pm 1$ entries with pairwise
+orthogonal rows, $H H^T = n I$. Negating columns and then rows makes its first row and column all $+1$, and
+then its other $n - 1$ rows are $\\pm 1$ vectors that start with $+1$, sum to 0 (being orthogonal to the first
+row) and are pairwise orthogonal. So in the graph on all such vectors, joined when orthogonal, a Hadamard
+matrix of order $n$ is a clique on $n - 1$ vertices. For order 12 the graph has 462 vertices, and the search
+finds a clique at once; `examples/hadamard.py` also does orders 8, 16 and 20.
 """),
     code("""
 import itertools
@@ -577,13 +580,29 @@ for plus in itertools.combinations(range(1, n), n // 2 - 1):   # where the other
     v[list(plus)] = 1
     rows.append(v)
 rows = np.array(rows)
-orthogonal = ss.Graph(len(rows), np.argwhere(np.triu(rows @ rows.T == 0, 1)))
+orthogonal = ss.Graph.from_vectors(rows, [0])
 
 found = ss.search(orthogonal, n - 1, (n - 1) * (n - 2) // 2, experiments=16, max_moves=1000)
 h = np.vstack([np.ones(n, dtype=int), rows[list(found.best.vertices)]])
 print(f"{orthogonal.n} vectors; {found.successes} of 16 experiments found a clique of {n - 1}")
 print("H H^T = 12 I:", (h @ h.T == n * np.eye(n, dtype=int)).all())
 print("\\n".join("".join("+" if x > 0 else "-" for x in row) for row in h))
+"""),
+    md(f"""
+[Equiangular lines]({W}Equiangular_lines) are lines through the origin with the same angle between every pair.
+Lines given by vectors of equal length are equiangular when all their inner products are $\\pm c$, so they too
+are cliques. Taking one $\\pm 1$ vector of length 6 per line (the 32 that start with $+1$) and asking for inner
+products $\\pm 2$, that is $\\lvert \\cos \\rvert = 1/3$, `ss.largest` finds 16 lines spanning all 6 dimensions:
+the most equiangular lines there can be in $\\mathbb{{R}}^6$.
+"""),
+    code("""
+d = 6
+lines = np.array([(1,) + s for s in itertools.product((1, -1), repeat=d - 1)])   # one vector per line
+equiangular = ss.largest(ss.Graph.from_vectors(lines, [-2, 2]), "clique", experiments=64, max_moves=3000)
+chosen = lines[list(equiangular.best.best.vertices)]
+gram = np.abs(chosen @ chosen.T)
+print(equiangular.size, "lines spanning", np.linalg.matrix_rank(chosen), "dimensions")
+print("every pair at |cos| = 2/6:", (gram[np.triu_indices(len(chosen), 1)] == 2).all())
 """),
     md("""
 ## Weighted graphs

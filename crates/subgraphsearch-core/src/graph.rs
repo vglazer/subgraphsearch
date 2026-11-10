@@ -127,6 +127,49 @@ impl GraphBuilder {
 }
 
 impl Graph {
+    /// The graph on integer vectors of length `dim`, held one after another in `vectors`, with two
+    /// joined when their inner product is one of `allowed`.
+    ///
+    /// Sets of vectors with prescribed inner products are then cliques: rows of a Hadamard matrix
+    /// are pairwise orthogonal (`allowed = [0]`), equiangular lines have inner products `±c`. The
+    /// inner products are computed in parallel straight into the adjacency matrix, so no edge list
+    /// is built, which matters when there are hundreds of millions of edges. Entries must be small
+    /// enough that inner products fit an `i64`.
+    pub fn from_vectors(vectors: &[i64], dim: usize, allowed: &[i64]) -> Result<Graph, Error> {
+        use rayon::prelude::*;
+
+        if dim == 0 || !vectors.len().is_multiple_of(dim) {
+            return Err(Error::Invalid(format!(
+                "{} entries are not a whole number of vectors of length {dim}",
+                vectors.len()
+            )));
+        }
+        let n = vectors.len() / dim;
+        let mut allowed = allowed.to_vec();
+        allowed.sort_unstable();
+        allowed.dedup();
+        let mut b = GraphBuilder::new(n);
+        let words_per_row = b.words_per_row;
+        if words_per_row > 0 {
+            b.bits
+                .par_chunks_mut(words_per_row)
+                .enumerate()
+                .for_each(|(u, row)| {
+                    let x = &vectors[u * dim..(u + 1) * dim];
+                    for (v, y) in vectors.chunks_exact(dim).enumerate() {
+                        if v == u {
+                            continue;
+                        }
+                        let dot: i64 = x.iter().zip(y).map(|(a, b)| a * b).sum();
+                        if allowed.binary_search(&dot).is_ok() {
+                            row[v / 64] |= 1 << (v % 64);
+                        }
+                    }
+                });
+        }
+        Ok(b.build())
+    }
+
     /// Builds a graph on `n` vertices from an edge list.
     pub fn from_edges<I>(n: usize, edges: I) -> Result<Graph, Error>
     where
@@ -399,6 +442,44 @@ impl WeightedGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn graphs_of_vectors_join_allowed_inner_products() {
+        // the 8 vectors of {+-1}^3: orthogonal pairs never occur (inner products are odd), and
+        // inner product -3 joins each vector to its negation
+        let cube: Vec<i64> = (0..8)
+            .flat_map(|i| (0..3).map(move |b| if i >> b & 1 == 1 { -1 } else { 1 }))
+            .collect();
+        assert_eq!(Graph::from_vectors(&cube, 3, &[0]).unwrap().num_edges(), 0);
+        let opposite = Graph::from_vectors(&cube, 3, &[-3]).unwrap();
+        assert_eq!(opposite.num_edges(), 4);
+        assert!(opposite.has_edge(0, 7) && opposite.has_edge(2, 5));
+        // inner products 1 and -1 join vectors differing in one or two places: 8 * (3 + 3) / 2 pairs
+        let near = Graph::from_vectors(&cube, 3, &[1, -1, 1]).unwrap();
+        assert_eq!(near.num_edges(), 24);
+        // the same as computing every pair by hand, on vectors with more than 64 rows
+        let many: Vec<i64> = (0..100i64)
+            .flat_map(|i| [i % 3 - 1, i % 5 - 2, i % 7 - 3])
+            .collect();
+        let g = Graph::from_vectors(&many, 3, &[0, 2]).unwrap();
+        let dot = |u: usize, v: usize| {
+            (0..3)
+                .map(|k| many[3 * u + k] * many[3 * v + k])
+                .sum::<i64>()
+        };
+        for u in 0..100 {
+            for v in 0..100 {
+                assert_eq!(
+                    g.has_edge(u, v),
+                    u != v && [0, 2].contains(&dot(u, v)),
+                    "{u} {v}"
+                );
+            }
+        }
+        assert!(Graph::from_vectors(&[1, 2, 3], 2, &[0]).is_err());
+        assert!(Graph::from_vectors(&[1, 2], 0, &[0]).is_err());
+        assert_eq!(Graph::from_vectors(&[], 4, &[0]).unwrap().num_vertices(), 0);
+    }
 
     #[test]
     fn builds_sorted_symmetric_neighbor_lists() {

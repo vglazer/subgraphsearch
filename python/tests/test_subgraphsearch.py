@@ -359,6 +359,26 @@ def test_shape_checks():
     assert all(grid.induced(vs).is_path() for vs in r.solutions())
 
 
+def test_graphs_of_vectors():
+    import itertools
+
+    # all +-1 vectors of length 4 starting with +1: orthogonal pairs, and the order-4 Hadamard matrix as a clique
+    v = np.array([(1,) + s for s in itertools.product((1, -1), repeat=3)])
+    g = ss.Graph.from_vectors(v, [0])
+    dots = v @ v.T
+    assert sorted(g.edge_list()) == [(i, j) for i in range(8) for j in range(i + 1, 8) if dots[i, j] == 0]
+    r = ss.search(g, 4, 6, experiments=10)
+    h = v[list(r.best.vertices)]
+    assert r.successes and (h @ h.T == 4 * np.eye(4)).all() and g.induced(r.best.vertices).is_clique()
+    # several inner products, and plain lists
+    assert ss.Graph.from_vectors([[1, 0], [0, 1], [1, 1]], [0, 1]).m == 3
+    assert ss.Graph.from_vectors(np.zeros((0, 3), dtype=int), [0]).n == 0
+    with pytest.raises(ValueError, match="2-D"):
+        ss.Graph.from_vectors(np.ones(4, dtype=int), [0])
+    with pytest.raises(ValueError, match="integer"):
+        ss.Graph.from_vectors(np.ones((2, 2)) / 2, [0])
+
+
 def test_standard_graphs_and_mean_degree():
     n = 6
     by_hand = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])

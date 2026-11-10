@@ -64,6 +64,32 @@ class Graph:
         return Graph(_core.Graph.parse(text, format))
 
     @staticmethod
+    def from_vectors(vectors, inner_products: Iterable[int]) -> Graph:
+        """The graph on the rows of ``vectors`` (an integer array, one vector per row), with two
+        joined when their inner product is in ``inner_products``.
+
+        Sets of vectors with prescribed inner products are then cliques: the rows of a Hadamard
+        matrix are pairwise orthogonal (``inner_products=[0]``), and equiangular lines given by
+        vectors of equal length have inner products ``±c`` (``[-c, c]``). The inner products are
+        computed in parallel in Rust, straight into the adjacency matrix, so graphs with hundreds of
+        millions of edges take seconds and no more memory than the graph itself.
+
+        >>> import numpy as np
+        >>> g = Graph.from_vectors(np.array([[1, 1], [1, -1], [-1, 1]]), [0])
+        >>> g.edge_list()
+        [(0, 1), (0, 2)]
+        """
+        a = np.asarray(vectors)
+        if a.ndim != 2:
+            raise ValueError(f"vectors must be a 2-D array, one vector per row; got shape {a.shape}")
+        if a.size and not np.issubdtype(a.dtype, np.integer):
+            raise ValueError("vectors must have integer entries")
+        if a.shape[1] == 0:
+            raise ValueError("vectors must have at least one entry each")
+        data = np.ascontiguousarray(a, dtype="<i8").tobytes()
+        return Graph(_core.Graph.from_vector_bytes(data, int(a.shape[1]), [int(c) for c in inner_products]))
+
+    @staticmethod
     def point_graph(blocks: Iterable[Iterable[int]], k: int = 1, *, points: int | None = None) -> Graph:
         """The graph on the points of an incidence structure (for example a block design), in which
         two points are adjacent when exactly ``k`` of the ``blocks`` contain both.

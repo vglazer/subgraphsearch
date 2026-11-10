@@ -67,6 +67,30 @@ impl PyGraph {
         Ok(Self::wrap(Graph::from_edges(n, edges).map_err(err)?))
     }
 
+    /// The graph on vectors packed as little-endian int64 rows of length `dim`, joined when their
+    /// inner product is in `allowed`; see `Graph::from_vectors`.
+    #[staticmethod]
+    fn from_vector_bytes(
+        py: Python<'_>,
+        data: &[u8],
+        dim: usize,
+        allowed: Vec<i64>,
+    ) -> PyResult<Self> {
+        if !data.len().is_multiple_of(8) {
+            return Err(PyValueError::new_err(
+                "vector data must be a whole number of int64 entries",
+            ));
+        }
+        let entries: Vec<i64> = data
+            .chunks_exact(8)
+            .map(|c| i64::from_le_bytes(c.try_into().expect("8 bytes")))
+            .collect();
+        let g = py
+            .detach(move || Graph::from_vectors(&entries, dim, &allowed))
+            .map_err(err)?;
+        Ok(Self::wrap(g))
+    }
+
     /// Reads a graph file; the format is inferred from the extension unless given.
     #[staticmethod]
     #[pyo3(signature = (path, format = None))]
