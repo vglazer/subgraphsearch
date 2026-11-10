@@ -207,7 +207,9 @@ viz.plot_sweep(sweep, parameter="div_dur");
 """),
     md("""
 Aspiration is worth comparing the same way. On the hard 346-edge target from earlier it raises the number of
-successes; on many targets it makes little difference.
+successes; on many targets it makes little difference. So is `kick_radius`, which replaces the random moves
+of each diversification cycle by rebuilding the part of the subgraph near a random vertex; it helps most when
+graph distance means something, as in the error-correcting codes below.
 """),
     code("""
 for aspiration in (False, True):
@@ -888,6 +890,21 @@ two = [received(w, 2) for w in code]
 noticed = sum(not (code @ r == n).any() for r in two)                   # not equal to any word of the code
 print(f"one bit flipped: {corrected} of 72 words decoded correctly")
 print(f"two bits flipped: {noticed} of 72 noticed as errors")
+"""),
+    md("""
+A code can be searched the other way round too: as an independent set in the graph of words that are *too
+close*, joined when they differ in fewer than $d$ places. That graph is sparse, and distances in it mean
+something: the words within distance 2 of a codeword are a cluster of nearby words. This is where a *region
+kick*, `kick_radius=2`, pays off. At the start of each diversification cycle, instead of making random moves,
+the search removes every codeword within distance 2 of a random one and refills the gap with the best words
+it can find, so it rebuilds one neighborhood of the code at a time, the kind of move searches for codes use.
+Here it makes reaching the largest code far more reliable and needs much less work per success:
+"""),
+    code("""
+too_close = ss.Graph.from_words(words, range(1, d))   # joined when at distance less than d
+for kick_radius in (0, 2):
+    res = ss.search(too_close, 72, 0, kick_radius=kick_radius, experiments=64, max_moves=5000, div_freq=300, div_dur=8)
+    print(f"kick_radius={kick_radius}: {res.successes}/64 found a code of 72 words, {res.true_cost:.0f} moves per success")
 """),
     md("""
 ## Weighted graphs
