@@ -108,7 +108,8 @@ In Jupyter, graphs and results display as summaries with small charts.
   [examples/hadamard.py](examples/hadamard.py) finds Hadamard matrices of orders 8, 12, 16 and 20
   as cliques of pairwise orthogonal ±1 vectors (order 20: 31,752 vectors and 169 million
   orthogonal pairs, built in under a second and searched in less), and the quickstart notebook
-  finds the 16 equiangular lines in 6 dimensions.
+  finds the 16 equiangular lines in 6 dimensions. `viz.plot_sign_matrix` draws a ±1 matrix such as
+  a Hadamard or Seidel matrix.
 
 ## Rust
 

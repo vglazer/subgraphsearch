@@ -378,6 +378,13 @@ def test_graphs_of_vectors():
     with pytest.raises(ValueError, match="integer"):
         ss.Graph.from_vectors(np.ones((2, 2)) / 2, [0])
 
+    # the matrix plot: the order-4 Hadamard matrix found above
+    ax = viz.plot_sign_matrix(h)
+    assert ax.images and "sign pattern" in ax.get_title(loc="left")
+    with pytest.raises(ValueError, match="2-D"):
+        viz.plot_sign_matrix(np.ones(3))
+    matplotlib.pyplot.close("all")
+
 
 def test_standard_graphs_and_mean_degree():
     n = 6

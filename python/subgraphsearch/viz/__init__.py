@@ -9,6 +9,8 @@
 - Graph structure: :func:`plot_degree_distribution`, :func:`plot_spectrum`,
   :func:`plot_adjacency`, :func:`plot_graph_summary`, plus :func:`laplacian_spectrum` and
   :func:`spectral_summary` for the numbers.
+- Matrices: :func:`plot_sign_matrix` draws a matrix of +1s, -1s and 0s, such as a Hadamard or
+  Seidel matrix.
 - Interactive: :func:`to_html`, :func:`save_html` and :func:`show` (Jupyter) produce a
   self-contained page for exploring a graph and the subgraphs a search found.
 
@@ -26,6 +28,7 @@ from .diagnostics import (
 )
 from .drawing import plot_fano_plane, plot_graph, plot_switchings
 from .interactive import save_html, show, to_html
+from .matrices import plot_sign_matrix
 from .spectral import (
     laplacian_spectrum,
     plot_adjacency,
@@ -45,6 +48,7 @@ __all__ = [
     "plot_graph_summary",
     "plot_run_time_distribution",
     "plot_search_summary",
+    "plot_sign_matrix",
     "plot_spectrum",
     "plot_success_times",
     "plot_sweep",

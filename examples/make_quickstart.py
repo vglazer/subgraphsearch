@@ -565,11 +565,14 @@ orthogonal rows, $H H^T = n I$. Negating columns and then rows makes its first r
 then its other $n - 1$ rows are $\\pm 1$ vectors that start with $+1$, sum to 0 (being orthogonal to the first
 row) and are pairwise orthogonal. So in the graph on all such vectors, joined when orthogonal, a Hadamard
 matrix of order $n$ is a clique on $n - 1$ vertices. For order 12 the graph has 462 vertices, and the search
-finds a clique at once; `examples/hadamard.py` also does orders 8, 16 and 20.
+finds a clique at once; `examples/hadamard.py` also does orders 8, 16 and 20. Choosing orthogonal rows one at a
+time, at random, also works at orders 12 and 16, but at order 20 it gets stuck after 10 of the 18 rows about a
+third of the time, while the search finds all 18 every time.
 """),
     code("""
 import itertools
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 n = 12
@@ -586,7 +589,59 @@ found = ss.search(orthogonal, n - 1, (n - 1) * (n - 2) // 2, experiments=16, max
 h = np.vstack([np.ones(n, dtype=int), rows[list(found.best.vertices)]])
 print(f"{orthogonal.n} vectors; {found.successes} of 16 experiments found a clique of {n - 1}")
 print("H H^T = 12 I:", (h @ h.T == n * np.eye(n, dtype=int)).all())
-print("\\n".join("".join("+" if x > 0 else "-" for x in row) for row in h))
+"""),
+    md(f"""
+The matrix the search found looks random, on the left below ($+1$ dark, $-1$ white). But reordering the rows
+and columns of a Hadamard matrix, or negating some of them, gives another one, and up to those changes there
+is only one Hadamard matrix of order 12: [Paley's]({W}Paley_construction), built from the squares modulo 11.
+Below its first row, Paley's matrix is $I + Q$ next to a column of $-1$s, where $Q_{{ij}}$ is $+1$ when $j - i$
+is a nonzero square mod 11, $-1$ when it is not a square, and 0 when $j = i$. $Q$ depends only on $j - i$, so
+each row is the one above shifted by one place: the diagonal stripes on the right.
+
+Finding the reordering and the signs that turn the search's matrix into Paley's is a graph isomorphism
+problem. Give each row and each column two vertices, one for each sign, join a row vertex to a column vertex
+when the entry with those signs is $+1$, and join each row's or column's two vertices to each other. Then two
+matrices are equivalent exactly when their graphs are isomorphic, and an isomorphism maps each row and column,
+with its sign, to its place in the other matrix.
+"""),
+    code("""
+# Paley's matrix of order 12, from the squares mod 11
+squares = {x * x % 11 for x in range(1, 11)}
+Q = np.array([[0 if i == j else 1 if (j - i) % 11 in squares else -1 for j in range(11)] for i in range(11)])
+paley = np.eye(n, dtype=int)
+paley[0, 1:] = 1
+paley[1:, 0] = -1
+paley[1:, 1:] += Q
+print("Paley's matrix is Hadamard:", (paley @ paley.T == n * np.eye(n, dtype=int)).all())
+
+
+def signed(m):
+    # two vertices per row and per column, one for each sign
+    g = nx.Graph()
+    for i in range(n):
+        g.add_edge(("row", i, 1), ("row", i, -1), kind="pair")
+        g.add_edge(("col", i, 1), ("col", i, -1), kind="pair")
+    for i, j in itertools.product(range(n), repeat=2):
+        for a, b in itertools.product((1, -1), repeat=2):
+            if a * b * m[i, j] == 1:
+                g.add_edge(("row", i, a), ("col", j, b))
+    nx.set_node_attributes(g, {v: v[0] for v in g}, "side")
+    return g
+
+
+same_side = lambda x, y: x["side"] == y["side"]   # rows go to rows, columns to columns
+match = next(nx.algorithms.isomorphism.GraphMatcher(signed(h), signed(paley), node_match=same_side).isomorphisms_iter())
+rows_to, cols_to = np.zeros((n, n), dtype=int), np.zeros((n, n), dtype=int)
+for i in range(n):
+    _, k, sign = match[("row", i, 1)]
+    rows_to[k, i] = sign           # row i of h becomes row k, times sign
+    _, k, sign = match[("col", i, 1)]
+    cols_to[i, k] = sign           # column i of h becomes column k, times sign
+print("reordered and negated, the search's matrix is Paley's:", (rows_to @ h @ cols_to == paley).all())
+
+fig, axs = plt.subplots(1, 2, figsize=(8.4, 4.2), layout="constrained")
+viz.plot_sign_matrix(h, axs[0], title="as found by the search")
+viz.plot_sign_matrix(rows_to @ h @ cols_to, axs[1], title="rows and columns reordered, some negated:\\nPaley's matrix, its 11 x 11 core circulant");
 """),
     md(f"""
 [Equiangular lines]({W}Equiangular_lines) are lines through the origin with the same angle between every pair.
@@ -594,6 +649,11 @@ Lines given by vectors of equal length are equiangular when all their inner prod
 are cliques. Taking one $\\pm 1$ vector of length 6 per line (the 32 that start with $+1$) and asking for inner
 products $\\pm 2$, that is $\\lvert \\cos \\rvert = 1/3$, `ss.largest` finds 16 lines spanning all 6 dimensions:
 the most equiangular lines there can be in $\\mathbb{{R}}^6$.
+
+Their *Seidel matrix* $S$ holds the signs of the inner products, with 0 on the diagonal, so the Gram matrix of
+the unit vectors is $I + S/3$. That matrix is positive semidefinite of rank 6, which means $S$ has smallest
+eigenvalue $-3$ with multiplicity $16 - 6 = 10$, as printed below. In general, $n$ lines at
+$\\lvert \\cos \\rvert = a$ span $n - m$ dimensions, where $m$ is the multiplicity of the eigenvalue $-1/a$.
 """),
     code("""
 d = 6
@@ -603,6 +663,44 @@ chosen = lines[list(equiangular.best.best.vertices)]
 gram = np.abs(chosen @ chosen.T)
 print(equiangular.size, "lines spanning", np.linalg.matrix_rank(chosen), "dimensions")
 print("every pair at |cos| = 2/6:", (gram[np.triu_indices(len(chosen), 1)] == 2).all())
+seidel = np.sign(chosen @ chosen.T) - np.eye(len(chosen), dtype=int)
+values, counts = np.unique(np.round(np.linalg.eigvalsh(seidel)).astype(int), return_counts=True)
+print("Seidel eigenvalues:", ", ".join(f"{v} ({c} times)" for v, c in zip(values, counts)))
+"""),
+    md("""
+A line has two direction vectors, $v$ and $-v$, and choosing the other one negates its row and column of $S$:
+that is Seidel switching, from the switching section above, and it does not change the lines. Choosing
+directions so that line 0 makes an acute angle with every other line turns the first row and column of $S$ all
+dark ($+1$), on the left below. The other 15 lines then have a structure of their own: joined when they make an
+acute angle, they form the line graph of $K_6$, a strongly regular graph. So each of them can be labeled by
+one of the 15 edges of $K_6$, as on the right, and two of the lines make an acute angle exactly when their edges
+share an endpoint; otherwise the angle is obtuse.
+"""),
+    code("""
+first = np.sign(chosen @ chosen[0])
+first[0] = 1
+switched = chosen * first[:, None]        # line 0 now at an acute angle to every other line
+seidel = np.sign(switched @ switched.T) - np.eye(16, dtype=int)
+
+# lines 1 to 15, joined when acute, are the line graph of K6: match each line to an edge of K6
+acute = nx.Graph([(i, j) for i in range(1, 16) for j in range(i + 1, 16) if seidel[i, j] == 1])
+edge_of = next(nx.algorithms.isomorphism.GraphMatcher(acute, nx.line_graph(nx.complete_graph(6))).isomorphisms_iter())
+print("acute exactly when the edges share an endpoint:",
+      all((seidel[i, j] == 1) == bool(set(edge_of[i]) & set(edge_of[j])) for i in range(1, 16) for j in range(i + 1, 16)))
+
+fig, axs = plt.subplots(1, 2, figsize=(9.8, 4.4), layout="constrained")
+viz.plot_sign_matrix(seidel, axs[0], title="Seidel matrix after switching:\\n+1 dark (acute), -1 white (obtuse)")
+corner = {p: (np.cos(np.pi / 2 + np.pi * p / 3), np.sin(np.pi / 2 + np.pi * p / 3)) for p in range(6)}
+for line, (a, b) in edge_of.items():
+    (x0, y0), (x1, y1) = corner[a], corner[b]
+    axs[1].plot([x0, x1], [y0, y1], color="#d6336c", lw=1.2, alpha=0.7)
+    t = 0.32 if abs(a - b) == 3 else 0.5   # keep the three diameters' labels apart
+    axs[1].annotate(str(line), ((1 - t) * x0 + t * x1, (1 - t) * y0 + t * y1), ha="center", va="center", fontsize=8,
+                    bbox={"boxstyle": "circle,pad=0.15", "fc": "white", "ec": "#d6336c", "lw": 0.6})
+axs[1].scatter(*zip(*corner.values()), s=70, color="#868e96", zorder=3)
+axs[1].set_aspect("equal")
+axs[1].axis("off")
+axs[1].set_title("lines 1 to 15 as the edges of K6:\\nacute exactly when the edges share an endpoint", fontsize=10, loc="left");
 """),
     md("""
 ## Weighted graphs
