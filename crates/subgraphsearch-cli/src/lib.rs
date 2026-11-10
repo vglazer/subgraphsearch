@@ -178,10 +178,11 @@ struct SearchArgs {
     /// Number of random moves per burst (0 disables diversification).
     #[arg(long, default_value_t = 4)]
     div_dur: usize,
-    /// Start each burst with a region kick instead of random moves: swap out every subgraph vertex
-    /// within this graph distance of a random one, each for the best replacement (0 = off).
+    /// Start each burst with a region kick instead of random moves: swap out this many subgraph
+    /// vertices nearest a random one, each for the best replacement (0 = off). The best size depends
+    /// on the problem; compare a few.
     #[arg(long, default_value_t = 0)]
-    kick_radius: usize,
+    kick_size: usize,
     /// Moves a vertex removed by a region kick stays out.
     #[arg(long, default_value_t = 20)]
     kick_ban: usize,
@@ -568,7 +569,7 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         max_moves: args.moves,
         div_freq: args.div_freq,
         div_dur: args.div_dur,
-        kick_radius: args.kick_radius,
+        kick_size: args.kick_size,
         kick_ban: args.kick_ban,
         seed: args.seed,
         rng: args.rng.into(),

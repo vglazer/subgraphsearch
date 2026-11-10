@@ -326,7 +326,7 @@ fn run_search<W: Write>(
         connected: false,
         path: false,
         endpoints: None,
-        kick_radius: 0,
+        kick_size: 0,
         kick_ban: 20,
         regular: match variant {
             Variant::Regular => Some(Regular {

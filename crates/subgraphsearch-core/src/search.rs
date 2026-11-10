@@ -149,14 +149,17 @@ pub struct SearchParams {
     pub div_freq: usize,
     /// Diversification duration: the number of random moves at the start of each cycle (0 = none).
     pub div_dur: usize,
-    /// With a positive radius, each diversification cycle starts with a *region kick* instead of
-    /// random moves: every free subgraph vertex within this graph distance of a random one is swapped
-    /// out, one per move, for the best vertex to swap in, and the vertices removed may not return for
-    /// `kick_ban` moves. It rebuilds one part of the subgraph at a time, as large-neighborhood moves in
-    /// searches for codes do; 0 (the default) keeps the random moves. Edge-count searches only.
+    /// With a positive size `k`, each diversification cycle starts with a *region kick* instead of
+    /// random moves: the `k` free subgraph vertices nearest a random one (in breadth-first order from
+    /// it, at whatever distance) are swapped out, one per move, each for the best vertex to swap in,
+    /// and the vertices removed may not return for `kick_ban` moves. It rebuilds one part of the
+    /// subgraph at a time, as large-neighborhood moves in searches for codes do. The best size
+    /// depends on the problem, small for some and a large part of the subgraph for others, so it is
+    /// a setting to compare, as with `div_dur`; 0 (the default) keeps the random moves. Edge-count
+    /// searches only.
     #[serde(default)]
-    pub kick_radius: usize,
-    /// How many moves a vertex removed by a region kick stays out (see `kick_radius`).
+    pub kick_size: usize,
+    /// How many moves a vertex removed by a region kick stays out (see `kick_size`).
     #[serde(default = "default_kick_ban")]
     pub kick_ban: usize,
     /// Random seed.
@@ -219,7 +222,7 @@ impl SearchParams {
             max_moves: 250,
             div_freq: 250,
             div_dur: 4,
-            kick_radius: 0,
+            kick_size: 0,
             kick_ban: default_kick_ban(),
             seed: 1,
             rng: RngKind::Xoshiro,
@@ -548,7 +551,7 @@ struct Workspace {
     rand_perm: Vec<usize>,
     /// With `params.connected`.
     components: Option<Components>,
-    /// With a region kick (`params.kick_radius`): the move until which each vertex may not return,
+    /// With a region kick (`params.kick_size`): the move until which each vertex may not return,
     /// whether each vertex is fixed, and the vertices still to be kicked out.
     banned_until: Vec<usize>,
     fixed: Vec<bool>,
@@ -589,7 +592,7 @@ impl Workspace {
             fixed: Vec::new(),
             kick_queue: Vec::new(),
         };
-        if params.kick_radius > 0 {
+        if params.kick_size > 0 {
             ws.banned_until = vec![0; v];
             ws.fixed = vec![false; v];
             for &f in &params.fixed {
@@ -600,31 +603,31 @@ impl Workspace {
         ws
     }
 
-    /// The free subgraph vertices within graph distance `radius` of a random free subgraph vertex,
-    /// for a region kick.
+    /// For a region kick: the `size` free subgraph vertices nearest a random free subgraph vertex,
+    /// itself included, found by breadth-first search from it (fewer if it reaches no more).
     fn region<G: SearchGraph, R: SearchRng>(
         &self,
         graph: &G,
-        radius: usize,
+        size: usize,
         rng: &mut R,
     ) -> Vec<usize> {
         let center = self.sub_verts[rng.below(self.v_sub as u32) as usize];
         let mut seen = std::collections::HashSet::from([center]);
-        let (mut frontier, mut out) = (vec![center], vec![center]);
-        for _ in 0..radius {
-            let mut next = Vec::new();
-            for &u in &frontier {
-                for &w in graph.neighbors(u) {
-                    let w = w as usize;
-                    if seen.insert(w) {
-                        next.push(w);
-                        if self.sub_ch[w] != 0 && !self.fixed[w] {
-                            out.push(w);
-                        }
+        let mut queue = std::collections::VecDeque::from([center]);
+        let mut out = vec![center];
+        while out.len() < size {
+            let Some(u) = queue.pop_front() else {
+                break;
+            };
+            for &w in graph.neighbors(u) {
+                let w = w as usize;
+                if seen.insert(w) {
+                    queue.push_back(w);
+                    if self.sub_ch[w] != 0 && !self.fixed[w] && out.len() < size {
+                        out.push(w);
                     }
                 }
             }
-            frontier = next;
         }
         out
     }
@@ -771,7 +774,7 @@ impl Workspace {
         let mut opt_mov = 0usize;
         let mut asp_mov = 0usize;
         let mut success = false;
-        let kick = params.kick_radius > 0;
+        let kick = params.kick_size > 0;
         if kick {
             self.banned_until.fill(0);
             self.kick_queue.clear();
@@ -780,7 +783,7 @@ impl Workspace {
         while j < params.max_moves {
             // a region kick starts each diversification cycle, with the kick on
             if kick && j > 0 && params.div_dur > 0 && j % params.div_freq == 0 {
-                self.kick_queue = self.region(graph, params.kick_radius, rng);
+                self.kick_queue = self.region(graph, params.kick_size, rng);
             }
             let mut kicked = None;
             while let Some(s) = self.kick_queue.pop() {
@@ -1073,7 +1076,7 @@ mod tests {
             p.max_moves = 2000;
             p.div_freq = 100;
             p.div_dur = 4;
-            p.kick_radius = 2;
+            p.kick_size = 6;
             let r = search(&cube, &p).unwrap();
             assert!(r.successes() > 0, "{size} {edges}");
             for e in r.experiments.iter().filter(|e| e.success) {
@@ -1098,7 +1101,7 @@ mod tests {
         p.max_moves = 1000;
         p.div_freq = 100;
         let plain = search(&cube, &p).unwrap();
-        p.kick_radius = 2;
+        p.kick_size = 6;
         assert_ne!(plain.experiments, search(&cube, &p).unwrap().experiments);
         // not for regular or path searches
         p.path = true;

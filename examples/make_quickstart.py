@@ -207,9 +207,10 @@ viz.plot_sweep(sweep, parameter="div_dur");
 """),
     md("""
 Aspiration is worth comparing the same way. On the hard 346-edge target from earlier it raises the number of
-successes; on many targets it makes little difference. So is `kick_radius`, which replaces the random moves
-of each diversification cycle by rebuilding the part of the subgraph near a random vertex; it helps most when
-graph distance means something, as in the error-correcting codes below.
+successes; on many targets it makes little difference. So is `kick_size`, which replaces the random moves
+of each diversification cycle by rebuilding the part of the subgraph nearest a random vertex. The best size
+depends on the problem, a few vertices for some and a large part of the subgraph for others, so it is worth
+comparing several; the error-correcting codes below show it at work.
 """),
     code("""
 for aspiration in (False, True):
@@ -894,17 +895,18 @@ print(f"two bits flipped: {noticed} of 72 noticed as errors")
     md("""
 A code can be searched the other way round too: as an independent set in the graph of words that are *too
 close*, joined when they differ in fewer than $d$ places. That graph is sparse, and distances in it mean
-something: the words within distance 2 of a codeword are a cluster of nearby words. This is where a *region
-kick*, `kick_radius=2`, pays off. At the start of each diversification cycle, instead of making random moves,
-the search removes every codeword within distance 2 of a random one and refills the gap with the best words
-it can find, so it rebuilds one neighborhood of the code at a time, the kind of move searches for codes use.
-Here it makes reaching the largest code far more reliable and needs much less work per success:
+something: the codewords nearest a codeword lie in one region of the space of words. This is where a *region
+kick* pays off. With `kick_size=32`, at the start of each diversification cycle the search removes the 32
+codewords nearest a random one, instead of making random moves, and refills the gap with the best words it can
+find, so it rebuilds one region of the code at a time, the kind of move searches for codes use. Here that
+makes reaching the largest code far more reliable, with much less work per success. For other codes much
+smaller kicks are best, so the size is worth comparing:
 """),
     code("""
 too_close = ss.Graph.from_words(words, range(1, d))   # joined when at distance less than d
-for kick_radius in (0, 2):
-    res = ss.search(too_close, 72, 0, kick_radius=kick_radius, experiments=64, max_moves=5000, div_freq=300, div_dur=8)
-    print(f"kick_radius={kick_radius}: {res.successes}/64 found a code of 72 words, {res.true_cost:.0f} moves per success")
+for kick_size in (0, 32):
+    res = ss.search(too_close, 72, 0, kick_size=kick_size, experiments=64, max_moves=5000, div_freq=300, div_dur=8)
+    print(f"kick_size={kick_size}: {res.successes}/64 found a code of 72 words, {res.true_cost:.0f} moves per success")
 """),
     md("""
 ## Weighted graphs

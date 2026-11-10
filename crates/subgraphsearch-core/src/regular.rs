@@ -251,7 +251,7 @@ fn validate(graph: &Graph, params: &SearchParams) -> Result<(), Error> {
             "aspiration is not available for regular or path searches".into(),
         ));
     }
-    if params.kick_radius > 0 {
+    if params.kick_size > 0 {
         return Err(Error::Invalid(
             "region kicks are available for edge-count searches only, not regular or path searches"
                 .into(),
