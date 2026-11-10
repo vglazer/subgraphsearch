@@ -163,10 +163,10 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
   subgraph the search finds can give a new one with the same parameters: the Shrikhande graph from
   the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.
 - **Spectral bounds.** Eigenvalues bound how large an independent set (Hoffman) or a clique
-  (Delsarte) can be, and more generally how many edges any $`k`$ vertices can span, which governs
-  expansion and the expander mixing lemma. The search finds sets that meet these bounds in the
-  rook's graph, the triangular graphs and the hypercubes, so the bounds are sharp there, and in
-  Paley graphs it shows how close to random every set must be.
+  (Delsarte) can be, and more generally how many edges any $`k`$ vertices can span: the expander
+  mixing lemma, and the easy half of Cheeger's inequality on expansion. The search finds sets
+  that meet these bounds in the rook's graph, the triangular graphs and the hypercubes, so the
+  bounds are sharp there, and in Paley graphs it shows how close to random every set must be.
 - **Hadamard matrices.** The rows of a Hadamard matrix are pairwise orthogonal ±1 vectors, so it
   is a clique in the graph of such vectors joined when orthogonal.
   [examples/hadamard.py](examples/hadamard.py) finds matrices of orders 8 to 20 this way, the order-20

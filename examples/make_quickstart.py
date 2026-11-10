@@ -643,10 +643,11 @@ $e(S)$ edges with
 $$\\frac{{d k^2}}{{2n}} + \\theta_n \\frac{{k (n - k)}}{{2n}} \\;\\le\\; e(S) \\;\\le\\; \\frac{{d k^2}}{{2n}} + \\theta_2 \\frac{{k (n - k)}}{{2n}}.$$
 
 The first term is what a random set of $k$ vertices spans on average. The upper bound limits how few edges can
-leave a set, since each of its vertices has $d$ edges in all: the graph's [expansion]({W}Expander_graph), governed
-by the gap between $d$ and $\\theta_2$. At $e(S) = 0$ the lower bound is the Hoffman bound. Bounding the
-deviation from random on both sides at once, by the larger of $\\theta_2$ and $\\lvert \\theta_n \\rvert$, is the expander
-mixing lemma.
+leave a set, since each of its vertices has $d$ edges in all: at least $(d - \\theta_2)\\,k(n - k)/n$ of them, the
+easy half of [Cheeger's inequality]({W}Cheeger_constant_(graph_theory)) on the graph's
+[expansion]({W}Expander_graph). At $e(S) = 0$ the lower bound is the Hoffman bound. Bounding the deviation from
+random on both sides at once, by the larger of $\\theta_2$ and $\\lvert \\theta_n \\rvert$, is the
+[expander mixing lemma]({W}Expander_mixing_lemma).
 
 Finding the most or fewest edges $k$ vertices can span is exactly what the search does: ask for $k$ vertices
 with $m$ edges, starting at a bound and moving inward until a search succeeds (not every count in between is
