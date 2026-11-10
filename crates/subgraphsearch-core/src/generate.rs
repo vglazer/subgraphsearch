@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::graph::{Graph, GraphBuilder, WeightedGraph};
-use crate::rng::SearchRng;
+use crate::rng::{SearchRng, Xoshiro};
 
 /// The resolution of random coordinates and probabilities, as in `ggen`.
 pub const SCALE: u32 = 10_000;
@@ -165,6 +165,90 @@ pub fn weighted<R: SearchRng>(n: usize, density: u32, rng: &mut R) -> Result<Wei
     Ok(WeightedGraph::from_matrix(n, weights))
 }
 
+/// The most dimensions [`hypercube`] builds: the 16-cube has 65,536 vertices, and a graph's
+/// adjacency matrix takes a bit per pair of vertices.
+pub const MAX_HYPERCUBE_DIMENSION: usize = 16;
+
+/// The `dimension`-dimensional hypercube: vertices `0..2^dimension`, joined when they differ in one
+/// bit.
+pub fn hypercube(dimension: usize) -> Result<Graph, Error> {
+    if dimension > MAX_HYPERCUBE_DIMENSION {
+        return Err(Error::Invalid(format!(
+            "hypercubes of up to {MAX_HYPERCUBE_DIMENSION} dimensions are supported, got {dimension}"
+        )));
+    }
+    let n = 1usize << dimension;
+    let mut b = GraphBuilder::new(n);
+    for u in 0..n {
+        for bit in 0..dimension {
+            b.set(u, u ^ (1 << bit), true);
+        }
+    }
+    Ok(b.build())
+}
+
+/// The `rows` by `cols` grid: vertex `r * cols + c` is joined to the vertices beside it in its row
+/// and column.
+pub fn grid(rows: usize, cols: usize) -> Graph {
+    let mut b = GraphBuilder::new(rows * cols);
+    for r in 0..rows {
+        for c in 0..cols {
+            let u = r * cols + c;
+            if c + 1 < cols {
+                b.set(u, u + 1, true);
+            }
+            if r + 1 < rows {
+                b.set(u, u + cols, true);
+            }
+        }
+    }
+    b.build()
+}
+
+/// An Erdős–Rényi random graph with each pair of vertices an edge independently with probability
+/// `mean_degree / (n - 1)`, so that vertices have `mean_degree` neighbors on average. Unlike
+/// [`exponential`], which draws a number for every pair, it skips from one edge to the next
+/// (Batagelj and Brandes, 2005), so it takes time in proportion to the number of edges and suits
+/// large sparse graphs.
+pub fn sparse_random(n: usize, mean_degree: f64, rng: &mut Xoshiro) -> Result<Graph, Error> {
+    let most = n.saturating_sub(1) as f64;
+    if !(0.0..=most).contains(&mean_degree) {
+        return Err(Error::Invalid(format!(
+            "mean degree must be between 0 and {most} (the number of vertices minus 1), got {mean_degree}"
+        )));
+    }
+    let mut b = GraphBuilder::new(n);
+    if n < 2 || mean_degree == 0.0 {
+        return Ok(b.build());
+    }
+    let p = mean_degree / most;
+    if p >= 1.0 {
+        for u in 0..n {
+            for v in u + 1..n {
+                b.set(u, v, true);
+            }
+        }
+        return Ok(b.build());
+    }
+    // walk through the pairs (v, w) with w < v in order, jumping a geometrically distributed
+    // number of pairs to the next edge
+    let log_q = (1.0 - p).ln();
+    let (mut v, mut w) = (1usize, -1i64);
+    while v < n {
+        // uniform in [0, 1), from the top 53 bits
+        let r = (rng.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
+        w += 1 + ((1.0 - r).ln() / log_q).floor() as i64;
+        while w >= v as i64 && v < n {
+            w -= v as i64;
+            v += 1;
+        }
+        if v < n {
+            b.set(v, w as usize, true);
+        }
+    }
+    Ok(b.build())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,5 +280,44 @@ mod tests {
         let l = (density as usize) * (n - 1) / (2000 - density as usize);
         let g = power(n, density, &mut Randu::new(7));
         assert_eq!(g.num_edges(), (n - l) * l);
+    }
+
+    #[test]
+    fn hypercubes_and_grids() {
+        let q = hypercube(5).unwrap();
+        assert_eq!((q.num_vertices(), q.num_edges()), (32, 80));
+        assert!(q.has_edge(0b10110, 0b10100) && !q.has_edge(0b10110, 0b10101));
+        assert!(q.degrees().iter().all(|&d| d == 5));
+        assert_eq!(hypercube(0).unwrap().num_vertices(), 1);
+        assert!(hypercube(MAX_HYPERCUBE_DIMENSION + 1).is_err());
+
+        let g = grid(3, 4);
+        assert_eq!((g.num_vertices(), g.num_edges()), (12, 3 * 3 + 2 * 4));
+        assert!(g.has_edge(5, 6) && g.has_edge(5, 9) && !g.has_edge(3, 4));
+    }
+
+    #[test]
+    fn sparse_random_graphs_have_the_requested_mean_degree() {
+        let n = 20_000;
+        let g = sparse_random(n, 3.0, &mut Xoshiro::new(1)).unwrap();
+        let mean = 2.0 * g.num_edges() as f64 / n as f64;
+        assert!((mean - 3.0).abs() < 0.05, "{mean}");
+        // and with the same seed, the same graph
+        let again = sparse_random(n, 3.0, &mut Xoshiro::new(1)).unwrap();
+        assert!(g.edges().eq(again.edges()));
+        assert_eq!(
+            sparse_random(30, 29.0, &mut Xoshiro::new(1))
+                .unwrap()
+                .num_edges(),
+            435
+        );
+        assert_eq!(
+            sparse_random(30, 0.0, &mut Xoshiro::new(1))
+                .unwrap()
+                .num_edges(),
+            0
+        );
+        assert!(sparse_random(30, 30.0, &mut Xoshiro::new(1)).is_err());
+        assert!(sparse_random(30, -1.0, &mut Xoshiro::new(1)).is_err());
     }
 }

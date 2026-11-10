@@ -379,6 +379,28 @@ fn generate_graph(model: &str, n: usize, density: u32, seed: i64, rng: &str) -> 
     Ok(PyGraph::wrap(g.map_err(err)?))
 }
 
+/// The `dimension`-dimensional hypercube.
+#[pyfunction]
+fn hypercube_graph(dimension: usize) -> PyResult<PyGraph> {
+    Ok(PyGraph::wrap(generate::hypercube(dimension).map_err(err)?))
+}
+
+/// The `rows` by `cols` grid.
+#[pyfunction]
+fn grid_graph(rows: usize, cols: usize) -> PyGraph {
+    PyGraph::wrap(generate::grid(rows, cols))
+}
+
+/// An Erdős–Rényi random graph with the given mean degree, generated in time proportional to its
+/// edges.
+#[pyfunction]
+fn sparse_random_graph(py: Python<'_>, n: usize, mean_degree: f64, seed: i64) -> PyResult<PyGraph> {
+    let g = py
+        .detach(move || generate::sparse_random(n, mean_degree, &mut Xoshiro::new(seed as u64)))
+        .map_err(err)?;
+    Ok(PyGraph::wrap(g))
+}
+
 /// The graph of an incidence structure: on its points (adjacent when exactly `k` blocks contain
 /// both) or, with `on_blocks`, on its blocks (adjacent when they share exactly `k` points).
 #[pyfunction]
@@ -627,9 +649,9 @@ mod _core {
     #[pymodule_export]
     use super::{
         PyGraph, PyWeightedGraph, cli_main, dumps_all, formats_list, generate_graph,
-        generate_weighted, incidence_graph, largest, legacy_asub_search, legacy_ereg_search,
-        legacy_ggen, legacy_reg_search, legacy_sub_search, legacy_wggen, legacy_wsub_search,
-        search,
+        generate_weighted, grid_graph, hypercube_graph, incidence_graph, largest,
+        legacy_asub_search, legacy_ereg_search, legacy_ggen, legacy_reg_search, legacy_sub_search,
+        legacy_wggen, legacy_wsub_search, search, sparse_random_graph,
     };
 
     #[pymodule_init]

@@ -87,8 +87,9 @@ In Jupyter, graphs and results display as summaries with small charts.
   `g.induced(vs)`, `g.switch(vs)`, `g.common_neighborhood(vs)`, `g.adjacency_matrix()`,
   `g.laplacian()`, `g.layout()`, and from an incidence structure, `ss.Graph.point_graph(blocks)`
   and `ss.Graph.block_graph(blocks)`.
-- **Random graphs:** `ss.generate("exponential" | "power" | "geometric", n, density)` and
-  `ss.generate_weighted(n, mean_weight)`.
+- **Random graphs:** `ss.generate("exponential" | "power" | "geometric", n, density)`,
+  `ss.generate("exponential", n, mean_degree=3)` for large sparse graphs, and
+  `ss.generate_weighted(n, mean_weight)`; standard graphs: `ss.hypercube(d)` and `ss.grid(r, c)`.
 - **Weighted graphs:** `ss.WeightedGraph(n, [(u, v, w), ...])`, `ss.WeightedGraph.read(path)`.
 - **Many graphs per file:** `ss.read_all(path)`, `ss.read(path, index=3)`,
   `ss.write_all(path, graphs)`.
@@ -131,6 +132,7 @@ subgraphsearch search sparse.g6 -k 20 --path                      # induced 20-v
 subgraphsearch search sparse.g6 -k 20 --path --endpoints 0,7      # the same, from vertex 0 to vertex 7
 subgraphsearch largest sparse.g6 --shape path                     # the longest induced path it finds
 subgraphsearch generate weighted -n 200 -d 0.65 -o w.mtx          # a weighted graph
+subgraphsearch generate hypercube --dimension 7 -o q7.g6           # the 7-cube; also grid --rows 6 --cols 6
 subgraphsearch search w.mtx --weighted -k 15 -m 140               # total weight 140
 subgraphsearch search many.g6 --all -k 10 -m 30 -q                # every graph in a file
 
@@ -295,7 +297,11 @@ Each experiment reports the best conflict it reached and the moves it needed:
 ### Random graphs and operations
 
 - **exponential**: [Erdős–Rényi](https://en.wikipedia.org/wiki/Erd%C5%91s%E2%80%93R%C3%A9nyi_model);
-  each pair of vertices is an edge independently with probability equal to the density.
+  each pair of vertices is an edge independently with probability equal to the density. With
+  `--mean-degree d` (`mean_degree=d`) instead of a density, the probability is $`d / (n - 1)`$ for
+  any $`d`$, and the graph is generated in time proportional to its edges rather than to the pairs
+  of vertices: 100,000 vertices with 3 neighbors each take 0.2 s. Densities, in steps of 0.001,
+  cannot make such sparse graphs.
 - **geometric**: a [random geometric graph](https://en.wikipedia.org/wiki/Random_geometric_graph):
   random points in the unit square, joined when within a distance chosen so that the disc around a
   point covers a fraction of the square equal to the density. There is no wrap-around, so vertices
@@ -306,6 +312,12 @@ Each experiment reports the best conflict it reached and the moves it needed:
   geometric graphs only make sense for densities below about 0.5.
 - **weighted**: random pairs of vertices have their weight increased by 1 until the mean weight
   per pair is reached, so weights above 1 are common once it approaches 1.
+- **hypercube** (`--dimension d`, `ss.hypercube(d)`): the
+  [hypercube](https://en.wikipedia.org/wiki/Hypercube_graph) on the $`2^d`$ bit strings of length
+  $`d`$, joined when they differ in one bit, up to 16 dimensions. Not random: the home of the
+  snake-in-the-box and coil-in-the-box problems.
+- **grid** (`--rows r --cols c`, `ss.grid(r, c)`): the $`r`$ by $`c`$ grid, vertex $`ic + j`$ in
+  row $`i`$ and column $`j`$.
 
 Graph operations help focus a search. Searching the
 [complement](https://en.wikipedia.org/wiki/Complement_graph) is equivalent, since $`k`$ vertices

@@ -271,7 +271,9 @@ def write_all(path: str | PathLike, graphs: Iterable[Graph], format: str | None 
         f.write(dumps_all(graphs, format))
 
 
-def generate(model: str, n: int, density: float, *, seed: int = 1, rng: str = "xoshiro") -> Graph:
+def generate(
+    model: str, n: int, density: float | None = None, *, mean_degree: float | None = None, seed: int = 1, rng: str = "xoshiro"
+) -> Graph:
     """A random graph.
 
     Parameters
@@ -284,6 +286,11 @@ def generate(model: str, n: int, density: float, *, seed: int = 1, rng: str = "x
         Number of vertices.
     density:
         Target edge density between 0 and 1, in steps of 0.001.
+    mean_degree:
+        Instead of ``density``, for ``"exponential"``: the mean number of neighbors, so each pair is
+        an edge with probability ``mean_degree / (n - 1)``. Any value from 0 to ``n - 1`` works, and
+        the graph is generated in time proportional to its edges rather than to the pairs of
+        vertices, which suits large sparse graphs. Needs ``rng="xoshiro"``.
     seed:
         Positive random seed.
     rng:
@@ -292,12 +299,30 @@ def generate(model: str, n: int, density: float, *, seed: int = 1, rng: str = "x
     """
     if model not in MODELS:
         raise ValueError(f"unknown model {model!r} (expected one of {', '.join(MODELS)})")
+    if seed <= 0:
+        raise ValueError(f"seed must be a positive integer, got {seed}")
+    if (density is None) == (mean_degree is None):
+        raise ValueError("give exactly one of density and mean_degree")
+    if mean_degree is not None:
+        if model != "exponential" or rng != "xoshiro":
+            raise ValueError('mean_degree needs model="exponential" and rng="xoshiro"')
+        return Graph(_core.sparse_random_graph(int(n), float(mean_degree), int(seed)))
     permille = round(density * 1000)
     if not 0 <= permille <= 1000 or not math.isclose(permille, density * 1000, abs_tol=1e-6):
         raise ValueError(f"density must be between 0 and 1 in steps of 0.001, got {density}")
-    if seed <= 0:
-        raise ValueError(f"seed must be a positive integer, got {seed}")
     return Graph(_core.generate_graph(model, int(n), permille, int(seed), rng))
+
+
+def hypercube(dimension: int) -> Graph:
+    """The ``dimension``-dimensional hypercube: vertices ``0`` to ``2**dimension - 1``, joined when
+    they differ in one bit. Up to 16 dimensions."""
+    return Graph(_core.hypercube_graph(int(dimension)))
+
+
+def grid(rows: int, cols: int) -> Graph:
+    """The ``rows`` by ``cols`` grid: vertex ``r * cols + c`` is joined to the vertices beside it in
+    its row and column."""
+    return Graph(_core.grid_graph(int(rows), int(cols)))
 
 
 class WeightedGraph:

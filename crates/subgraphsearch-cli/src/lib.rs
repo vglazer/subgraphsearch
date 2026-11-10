@@ -286,16 +286,31 @@ struct LargestArgs {
 
 #[derive(Args)]
 struct GenerateArgs {
-    /// Random graph model: exponential, power, geometric, or weighted (the original wggen).
+    /// Random graph model: exponential, power, geometric, or weighted (the original wggen); or a
+    /// standard graph: hypercube (with --dimension) or grid (with --rows and --cols).
     #[arg(value_parser = parse_gen_model)]
     model: GenModel,
-    /// Number of vertices.
+    /// Number of vertices (random graphs).
     #[arg(short = 'n', long)]
-    vertices: usize,
+    vertices: Option<usize>,
     /// Edge density between 0 and 1, in steps of 0.001 (e.g. 0.6). For weighted graphs: the mean
     /// weight per vertex pair, in steps of 0.01, which may exceed 1.
-    #[arg(short, long)]
-    density: f64,
+    #[arg(short, long, conflicts_with = "mean_degree")]
+    density: Option<f64>,
+    /// Instead of --density, for exponential graphs: the mean number of neighbors (any value up to
+    /// n - 1). The graph is generated in time proportional to its edges, which suits large sparse
+    /// graphs; needs the default --rng.
+    #[arg(long)]
+    mean_degree: Option<f64>,
+    /// Hypercube: the number of dimensions (2^dimension vertices, up to 16 dimensions).
+    #[arg(long)]
+    dimension: Option<usize>,
+    /// Grid: the number of rows.
+    #[arg(long)]
+    rows: Option<usize>,
+    /// Grid: the number of columns.
+    #[arg(long)]
+    cols: Option<usize>,
     /// Random seed (positive).
     #[arg(short, long, default_value_t = 1)]
     seed: i64,
@@ -344,15 +359,20 @@ enum IncidenceOn {
 enum GenModel {
     Unweighted(Model),
     Weighted,
+    Hypercube,
+    Grid,
 }
 
 fn parse_gen_model(s: &str) -> Result<GenModel, String> {
-    if s.eq_ignore_ascii_case("weighted") {
-        return Ok(GenModel::Weighted);
+    match s.to_ascii_lowercase().as_str() {
+        "weighted" => return Ok(GenModel::Weighted),
+        "hypercube" => return Ok(GenModel::Hypercube),
+        "grid" => return Ok(GenModel::Grid),
+        _ => {}
     }
     s.parse()
         .map(GenModel::Unweighted)
-        .map_err(|e| format!("{e}, or weighted"))
+        .map_err(|e| format!("{e}, weighted, hypercube or grid"))
 }
 
 #[derive(Args)]
@@ -780,28 +800,61 @@ fn run_generate(args: GenerateArgs) -> Result<()> {
     if args.seed <= 0 {
         bail!("--seed must be a positive integer, got {}", args.seed);
     }
-    let model = match args.model {
-        GenModel::Unweighted(m) => m,
-        GenModel::Weighted => return generate_weighted(&args),
-    };
-    let permille = (args.density * 1000.0).round();
-    if !(0.0..=1000.0).contains(&permille) || (permille - args.density * 1000.0).abs() > 1e-6 {
-        bail!(
-            "--density must be between 0 and 1 in steps of 0.001, got {}",
-            args.density
-        );
+    let random = matches!(args.model, GenModel::Unweighted(_) | GenModel::Weighted);
+    if random && args.vertices.is_none() {
+        bail!("random graphs need -n, the number of vertices");
     }
-    let density = permille as u32;
-    let graph = match RngKind::from(args.rng) {
-        RngKind::Legacy => {
-            generate::generate(model, args.vertices, density, &mut Randu::new(args.seed))?
+    if random && (args.dimension.is_some() || args.rows.is_some() || args.cols.is_some()) {
+        bail!("--dimension, --rows and --cols are for hypercube and grid");
+    }
+    if !random && (args.vertices.is_some() || args.density.is_some() || args.mean_degree.is_some())
+    {
+        bail!("hypercube and grid take --dimension, or --rows and --cols, not -n or a density");
+    }
+    let graph = match args.model {
+        GenModel::Weighted => return generate_weighted(&args),
+        GenModel::Hypercube => {
+            let Some(d) = args.dimension else {
+                bail!("hypercube needs --dimension");
+            };
+            generate::hypercube(d)?
         }
-        RngKind::Xoshiro => generate::generate(
-            model,
-            args.vertices,
-            density,
-            &mut Xoshiro::new(args.seed as u64),
-        )?,
+        GenModel::Grid => {
+            let (Some(rows), Some(cols)) = (args.rows, args.cols) else {
+                bail!("grid needs --rows and --cols");
+            };
+            generate::grid(rows, cols)
+        }
+        GenModel::Unweighted(model) => {
+            let n = args.vertices.unwrap_or_default();
+            match (args.density, args.mean_degree) {
+                (None, Some(mean_degree)) => {
+                    if model != Model::Exponential || matches!(args.rng, RngArg::Legacy) {
+                        bail!("--mean-degree needs the exponential model and the default --rng");
+                    }
+                    generate::sparse_random(n, mean_degree, &mut Xoshiro::new(args.seed as u64))?
+                }
+                (Some(d), None) => {
+                    let permille = (d * 1000.0).round();
+                    if !(0.0..=1000.0).contains(&permille) || (permille - d * 1000.0).abs() > 1e-6 {
+                        bail!("--density must be between 0 and 1 in steps of 0.001, got {d}");
+                    }
+                    let density = permille as u32;
+                    match RngKind::from(args.rng) {
+                        RngKind::Legacy => {
+                            generate::generate(model, n, density, &mut Randu::new(args.seed))?
+                        }
+                        RngKind::Xoshiro => generate::generate(
+                            model,
+                            n,
+                            density,
+                            &mut Xoshiro::new(args.seed as u64),
+                        )?,
+                    }
+                }
+                _ => bail!("give --density or --mean-degree"),
+            }
+        }
     };
     write_graph(
         &graph,
@@ -812,22 +865,21 @@ fn run_generate(args: GenerateArgs) -> Result<()> {
 }
 
 fn generate_weighted(args: &GenerateArgs) -> Result<()> {
-    let percent = (args.density * 100.0).round();
-    if percent < 0.0 || (percent - args.density * 100.0).abs() > 1e-6 {
+    let n = args.vertices.unwrap_or_default();
+    let Some(density) = args.density else {
+        bail!("weighted graphs need --density, the mean weight per vertex pair");
+    };
+    let percent = (density * 100.0).round();
+    if percent < 0.0 || (percent - density * 100.0).abs() > 1e-6 {
         bail!(
-            "--density for weighted graphs is the mean weight per vertex pair, a non-negative multiple of 0.01; got {}",
-            args.density
+            "--density for weighted graphs is the mean weight per vertex pair, a non-negative multiple of 0.01; got {density}"
         );
     }
     let graph = match RngKind::from(args.rng) {
-        RngKind::Legacy => {
-            generate::weighted(args.vertices, percent as u32, &mut Randu::new(args.seed))?
+        RngKind::Legacy => generate::weighted(n, percent as u32, &mut Randu::new(args.seed))?,
+        RngKind::Xoshiro => {
+            generate::weighted(n, percent as u32, &mut Xoshiro::new(args.seed as u64))?
         }
-        RngKind::Xoshiro => generate::weighted(
-            args.vertices,
-            percent as u32,
-            &mut Xoshiro::new(args.seed as u64),
-        )?,
     };
     write_weighted(
         &graph,

@@ -334,6 +334,29 @@ def test_weighted_graph_basics():
         ss.WeightedGraph(3, [(0, 1, 0)])
 
 
+def test_standard_graphs_and_mean_degree():
+    n = 6
+    by_hand = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])
+    assert ss.hypercube(6) == by_hand
+    grid = ss.Graph(36, [(i, i + 1) for i in range(36) if i % 6 < 5] + [(i, i + 6) for i in range(30)])
+    assert ss.grid(6, 6) == grid
+    with pytest.raises(ValueError, match="16 dimensions"):
+        ss.hypercube(17)
+
+    g = ss.generate("exponential", 50_000, mean_degree=3, seed=2)
+    assert g.n == 50_000 and abs(2 * g.m / g.n - 3) < 0.05
+    assert ss.generate("exponential", 50_000, mean_degree=3, seed=2) == g
+    assert ss.generate("exponential", 20, mean_degree=19).m == 190
+    with pytest.raises(ValueError, match="exactly one"):
+        ss.generate("exponential", 20, 0.5, mean_degree=3)
+    with pytest.raises(ValueError, match="exactly one"):
+        ss.generate("exponential", 20)
+    with pytest.raises(ValueError, match="xoshiro"):
+        ss.generate("power", 20, mean_degree=3)
+    with pytest.raises(ValueError, match="mean degree"):
+        ss.generate("exponential", 20, mean_degree=25)
+
+
 def test_generate_weighted_matches_wggen(w200):
     assert w200 == ss.WeightedGraph.read(FIXTURES / "graphs" / "w200_65_1.txt", "wlists")
     assert w200.total_weight == 12935

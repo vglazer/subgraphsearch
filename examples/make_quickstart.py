@@ -366,8 +366,7 @@ record, though only some 8-cube snakes work as the half. The script
 in under a minute.
 """),
     code("""
-n = 7
-cube = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])
+cube = ss.hypercube(7)   # vertices 0 to 127, joined when they differ in one bit
 snakes = ss.search(cube, 51, path=True, experiments=400, max_moves=2000, div_freq=300, div_dur=8)
 print(snakes.summary())
 """),

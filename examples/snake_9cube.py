@@ -19,11 +19,6 @@ import time
 import subgraphsearch as ss
 
 
-def cube(n: int) -> ss.Graph:
-    """The n-dimensional hypercube: vertices 0 to 2^n - 1, joined when they differ in one bit."""
-    return ss.Graph(2**n, [(u, u ^ (1 << b)) for u in range(2**n) for b in range(n) if u < u ^ (1 << b)])
-
-
 def is_snake(n: int, vertices: list[int]) -> bool:
     """Checks, without the library, that the vertices induce a path in the n-cube."""
     vs = set(vertices)
@@ -43,12 +38,12 @@ def is_snake(n: int, vertices: list[int]) -> bool:
 settings = {"path": True, "max_moves": 200_000, "div_freq": 300, "div_dur": 8}
 
 t0 = time.perf_counter()
-half = ss.search(cube(8), 95, experiments=16, seed=26, **settings)
+half = ss.search(ss.hypercube(8), 95, experiments=16, seed=26, **settings)
 lower = sorted(int(v) for v in half.best.vertices)
 print(f"8-cube: a {len(lower)}-vertex snake in {time.perf_counter() - t0:.1f} s")
 
 t0 = time.perf_counter()
-r = ss.search(cube(9), 189, fixed=lower, experiments=64, seed=284, **settings)
+r = ss.search(ss.hypercube(9), 189, fixed=lower, experiments=64, seed=284, **settings)
 moves = sum(e.moves for e in r.experiments)
 print(f"9-cube: {r.successes} of 64 experiments found a 189-vertex snake, {moves:,} moves in "
       f"{time.perf_counter() - t0:.0f} s")
