@@ -162,6 +162,10 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
 - **Strongly regular graphs.** Switching a strongly regular graph with respect to a regular
   subgraph the search finds can give a new one with the same parameters: the Shrikhande graph from
   the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.
+- **Spectral bounds.** Eigenvalues bound how large an independent set (Hoffman) or a clique
+  (Delsarte) can be. In the Petersen graph, the triangular graph, the rook's graph and the
+  hypercube, the search finds sets that meet the bounds, so they are as large as possible; in the
+  Paley graphs it falls far short of them, as everyone does.
 - **Hadamard matrices.** The rows of a Hadamard matrix are pairwise orthogonal ±1 vectors, so it
   is a clique in the graph of such vectors joined when orthogonal.
   [examples/hadamard.py](examples/hadamard.py) finds matrices of orders 8 to 20 this way, the order-20

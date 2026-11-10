@@ -554,6 +554,86 @@ viz.plot_switchings(
 );
 """),
     md(f"""
+## Spectral bounds
+
+A graph's eigenvalues limit the subgraphs it can contain. In a $k$-regular graph on $n$ vertices whose
+adjacency matrix has smallest eigenvalue $\\lambda$, an independent set has at most $n(-\\lambda)/(k - \\lambda)$
+vertices: the [Hoffman bound]({W}Hoffman%27s_ratio_bound). In a strongly regular graph, and more generally in a
+distance-regular one such as a hypercube, a clique has at most $1 - k/\\lambda$ vertices: the Delsarte bound. A search can only show what a graph contains, never what it
+lacks, but the bounds supply the other half: when the search finds a set as large as a bound allows, it has
+found the largest there is.
+
+Here are the largest independent sets and cliques `ss.largest` finds in a few strongly regular graphs and the
+5-cube, against the two bounds. The Clebsch graph is the 4-cube with each vertex also joined to the one
+opposite it.
+"""),
+    code("""
+import itertools
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+def paley(q):
+    squares = {x * x % q for x in range(1, q)}
+    return ss.Graph(q, [(u, v) for u in range(q) for v in range(u + 1, q) if (v - u) % q in squares])
+
+
+def bounds(g):
+    eigenvalues = np.linalg.eigvalsh(g.adjacency_matrix(dtype=float))
+    k, low = eigenvalues[-1], eigenvalues[0]
+    return g.n * -low / (k - low), 1 - k / low       # Hoffman (independent sets), Delsarte (cliques)
+
+
+five = list(itertools.combinations(range(5), 2))
+spectral = {
+    "Petersen": ss.Graph(10, [(i, j) for i, j in itertools.combinations(range(10), 2) if not set(five[i]) & set(five[j])]),
+    "T(8)": t8,
+    "rook's 6 x 6": ss.Graph(36, [(a, b) for a, b in itertools.combinations(range(36), 2) if a // 6 == b // 6 or a % 6 == b % 6]),
+    "5-cube": ss.hypercube(5),
+    "Clebsch": ss.Graph(16, ss.hypercube(4).edge_list() + [(u, u ^ 15) for u in range(8)]),
+    "Paley 61": paley(61),
+    "Paley 197": paley(197),
+}
+largest = {}
+for name, graph in spectral.items():
+    hoffman, delsarte = bounds(graph)
+    largest[name] = (ss.largest(graph, "independent", experiments=64, max_moves=2000),
+                     ss.largest(graph, "clique", experiments=64, max_moves=2000))
+    independent, clique = (r.size for r in largest[name])
+    print(f"{name:13} independent set {independent:2} (Hoffman: at most {hoffman:5.2f})   clique {clique:2} (Delsarte: at most {delsarte:5.2f})")
+"""),
+    md("""
+In the first four graphs every set found is as large as its bound allows, rounded down to a whole number, so it
+is as large as possible, and the sets are familiar ones. In the Petersen graph, whose vertices are the pairs
+from 5 points joined when disjoint, the 4 pairs through a point, and 2 disjoint pairs, since 5 points have no
+3 disjoint pairs. In $T(8)$, whose vertices are the pairs from 8 points joined when they meet, 4 disjoint
+pairs and the 7 pairs through a point. In the rook's graph, 6 squares no two in a row or column, the pattern
+of a permutation, and a whole row or column. In the 5-cube, the 16 words of even weight.
+
+Meeting the Hoffman bound has a consequence one can check: every vertex outside such an independent set $S$
+has exactly $k\\lvert S \\rvert / (n - \\lvert S \\rvert)$ neighbors in it, the same number for all. The Clebsch graph's
+independent sets fall one short of its bound, and there the counts differ. The Paley graphs, the standard
+"random-looking" strongly regular graphs, fall far short of both bounds; how large their cliques really are is
+a well-known open problem.
+"""),
+    code("""
+def neighbors_inside(g, vertices):
+    inside = set(vertices)
+    return sorted({sum(int(w) in inside for w in g.neighbors(v)) for v in range(g.n) if v not in inside})
+
+
+for name in ("Petersen", "T(8)", "rook's 6 x 6", "5-cube", "Clebsch"):
+    print(f"{name:13} vertices outside the independent set have", neighbors_inside(spectral[name], largest[name][0].best.best.vertices),
+          "neighbors in it")
+
+board = lambda vertices: np.isin(np.arange(36), vertices).reshape(6, 6).astype(int)
+independent, clique = (r.best.best.vertices for r in largest["rook's 6 x 6"])
+fig, axs = plt.subplots(1, 2, figsize=(7, 3.6), layout="constrained")
+viz.plot_sign_matrix(board(independent), axs[0], title="largest independent set: a permutation")
+viz.plot_sign_matrix(board(clique), axs[1], title="largest clique: a whole column (or row)");
+"""),
+    md(f"""
 ## Vectors with prescribed inner products
 
 Many objects in linear algebra are sets of vectors with prescribed inner products, and so are cliques in a
@@ -571,11 +651,6 @@ time, at random, also works at orders 12 and 16, but at order 20 it gets stuck a
 third of the time, while the search finds all 18 every time.
 """),
     code("""
-import itertools
-
-import matplotlib.pyplot as plt
-import numpy as np
-
 n = 12
 # +1 followed by the 11-entry +-1 vectors with six -1s: all candidates for the rows after the first
 rest = ss.vectors.signs(ss.vectors.binary_words(n - 1, weight=n // 2))
