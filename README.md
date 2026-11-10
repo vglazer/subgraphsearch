@@ -102,6 +102,10 @@ In Jupyter, graphs and results display as summaries with small charts.
 - **Spectra:** `viz.laplacian_spectrum` and `viz.spectral_summary`.
 - **Designs and switching:** `ss.designs.FANO_PLANE`, `viz.plot_fano_plane()`, and
   `viz.plot_switchings(g, sets)` to draw a graph switched with respect to each of several vertex sets.
+- **Linear algebra:** sets of vectors with prescribed inner products are cliques in a graph on the
+  candidate vectors. [examples/hadamard.py](examples/hadamard.py) finds Hadamard matrices of orders
+  8, 12 and 16 this way, as cliques of pairwise orthogonal ±1 vectors, in a fraction of a
+  second each.
 
 ## Rust
 

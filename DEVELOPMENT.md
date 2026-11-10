@@ -37,6 +37,7 @@ for how they are made and what they test.
 uv run python examples/make_quickstart.py         # rebuild the quickstart notebooks
 uv run python examples/make_figures.py            # redraw the README figures
 uv run python examples/snake_9cube.py             # reproduce the README's 189-vertex 9-cube snake
+uv run python examples/hadamard.py                # Hadamard matrices of orders 8, 12 and 16 as cliques
 ```
 
 - **The quickstart notebook** is generated from `examples/make_quickstart.py`, in two copies: the

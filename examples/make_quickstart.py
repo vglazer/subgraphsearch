@@ -31,8 +31,9 @@ is a randomized [tabu search]({W}Tabu_search).
 
 The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
 vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles and trees,
-and induced paths, including paths between two given vertices, and combines regular subgraphs with switching and block designs to construct strongly regular graphs.
-It ends with weighted graphs, views of a graph's structure, and file formats.
+and induced paths, including paths between two given vertices. It combines regular subgraphs with switching
+and block designs to construct strongly regular graphs, and finds Hadamard matrices as cliques. It ends with
+weighted graphs, views of a graph's structure, and file formats.
 """),
     code("""
 import subgraphsearch as ss
@@ -550,6 +551,39 @@ viz.plot_switchings(
     above=[ss.Graph(8, pairs)] + [ss.Graph(8, [pairs[v] for v in vertices]) for _, vertices, _ in chang],
     above_titles=["all 28 pairs of 8 points"] + [f"switch with respect to {how}" for how, _, _ in chang],
 );
+"""),
+    md(f"""
+## Hadamard matrices
+
+Many objects in linear algebra are sets of vectors with prescribed inner products, and so are cliques in a
+graph on the candidate vectors. A [Hadamard matrix]({W}Hadamard_matrix) of order $n$ is an $n \\times n$
+matrix of $\\pm 1$ entries with pairwise orthogonal rows, $H H^T = n I$. Negating columns and then rows makes
+its first row and column all $+1$, and then its other $n - 1$ rows are $\\pm 1$ vectors that start with $+1$,
+sum to 0 (being orthogonal to the first row) and are pairwise orthogonal. So in the graph on all such vectors,
+joined when they are orthogonal, a Hadamard matrix of order $n$ is a clique on $n - 1$ vertices. For order 12
+the graph has 462 vertices, and the search finds a clique at once; `examples/hadamard.py` also does orders 8
+and 16.
+"""),
+    code("""
+import itertools
+
+import numpy as np
+
+n = 12
+rows = []
+for plus in itertools.combinations(range(1, n), n // 2 - 1):   # where the other +1s go
+    v = -np.ones(n, dtype=int)
+    v[0] = 1
+    v[list(plus)] = 1
+    rows.append(v)
+rows = np.array(rows)
+orthogonal = ss.Graph(len(rows), np.argwhere(np.triu(rows @ rows.T == 0, 1)))
+
+found = ss.search(orthogonal, n - 1, (n - 1) * (n - 2) // 2, experiments=16, max_moves=1000)
+h = np.vstack([np.ones(n, dtype=int), rows[list(found.best.vertices)]])
+print(f"{orthogonal.n} vectors; {found.successes} of 16 experiments found a clique of {n - 1}")
+print("H H^T = 12 I:", (h @ h.T == n * np.eye(n, dtype=int)).all())
+print("\\n".join("".join("+" if x > 0 else "-" for x in row) for row in h))
 """),
     md("""
 ## Weighted graphs
