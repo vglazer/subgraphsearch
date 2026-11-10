@@ -462,6 +462,62 @@ fn search(
         .collect())
 }
 
+/// One size searched by `largest`: (size, edge target, experiments as `search` returns them).
+type SizeTuple = (usize, i64, Vec<ExperimentTuple>);
+
+/// Searches for the largest induced path, cycle, tree or clique; returns (the largest size found,
+/// one `SizeTuple` per size searched, in increasing order).
+#[pyfunction]
+#[pyo3(signature = (graph, shape, start, lookahead, fixed, endpoints, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration))]
+#[allow(clippy::too_many_arguments)]
+fn largest(
+    py: Python<'_>,
+    graph: PyRef<'_, PyGraph>,
+    shape: &str,
+    start: Option<usize>,
+    lookahead: usize,
+    fixed: Vec<usize>,
+    endpoints: Option<[usize; 2]>,
+    experiments: usize,
+    max_moves: usize,
+    div_freq: usize,
+    div_dur: usize,
+    seed: i64,
+    rng: &str,
+    trace: bool,
+    aspiration: bool,
+) -> PyResult<(Option<usize>, Vec<SizeTuple>)> {
+    let shape: subgraphsearch_core::Shape = shape.parse().map_err(err)?;
+    let mut base = SearchParams::new(2, 0);
+    base.fixed = fixed;
+    base.endpoints = endpoints;
+    base.experiments = experiments;
+    base.max_moves = max_moves;
+    base.div_freq = div_freq;
+    base.div_dur = div_dur;
+    base.seed = seed;
+    base.rng = parse(rng)?;
+    base.record_trace = trace;
+    base.aspiration = aspiration;
+    let g = Arc::clone(&graph.inner);
+    let found = py
+        .detach(move || subgraphsearch_core::largest(&g, shape, &base, start, lookahead))
+        .map_err(err)?;
+    let sizes = found
+        .results
+        .into_iter()
+        .map(|r| {
+            let experiments = r
+                .experiments
+                .into_iter()
+                .map(|e| (e.best_conflict, e.moves, e.success, e.vertices, e.trace))
+                .collect();
+            (r.params.size, r.params.edges, experiments)
+        })
+        .collect();
+    Ok((found.size, sizes))
+}
+
 fn run_search<G: SearchGraph + Send + 'static>(
     py: Python<'_>,
     graph: Arc<G>,
@@ -571,8 +627,9 @@ mod _core {
     #[pymodule_export]
     use super::{
         PyGraph, PyWeightedGraph, cli_main, dumps_all, formats_list, generate_graph,
-        generate_weighted, incidence_graph, legacy_asub_search, legacy_ereg_search, legacy_ggen,
-        legacy_reg_search, legacy_sub_search, legacy_wggen, legacy_wsub_search, search,
+        generate_weighted, incidence_graph, largest, legacy_asub_search, legacy_ereg_search,
+        legacy_ggen, legacy_reg_search, legacy_sub_search, legacy_wggen, legacy_wsub_search,
+        search,
     };
 
     #[pymodule_init]

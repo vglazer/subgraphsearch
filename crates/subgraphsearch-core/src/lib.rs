@@ -17,6 +17,7 @@
 //! Modules:
 //! - [`graph`]: the [`Graph`] type.
 //! - [`search`](mod@search): the search itself, and [`regular`]: its regular-subgraph variant.
+//! - [`largest`](mod@largest): the largest induced path, cycle, tree or clique a search finds.
 //! - [`generate`] and [`ops`]: random graphs, complements, induced subgraphs, switching,
 //!   incidence structures.
 //! - [`formats`]: graph6, sparse6, Matrix Market, edge lists, `sub_search` adjacency lists, DOT, GraphML.
@@ -27,6 +28,7 @@
 pub mod formats;
 pub mod generate;
 pub mod graph;
+pub mod largest;
 pub mod layout;
 pub mod legacy;
 pub mod ops;
@@ -37,6 +39,7 @@ pub mod search;
 pub use formats::Format;
 pub use generate::Model;
 pub use graph::{Graph, GraphBuilder, WeightedGraph};
+pub use largest::{Largest, Shape, largest};
 pub use rng::RngKind;
 pub use search::{
     Experiment, Regular, SearchGraph, SearchParams, SearchResult, search, search_sequential,

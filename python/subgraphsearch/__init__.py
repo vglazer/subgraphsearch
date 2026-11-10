@@ -25,7 +25,15 @@ from ._graph import (
     read_all,
     write_all,
 )
-from ._search import Experiment, SearchParams, SearchResult, search, sweep
+from ._search import (
+    Experiment,
+    LargestResult,
+    SearchParams,
+    SearchResult,
+    largest,
+    search,
+    sweep,
+)
 
 
 def formats() -> dict[str, bool]:
@@ -38,6 +46,7 @@ __all__ = [
     "MODELS",
     "Experiment",
     "Graph",
+    "LargestResult",
     "SearchParams",
     "SearchResult",
     "WeightedGraph",
@@ -48,6 +57,7 @@ __all__ = [
     "formats",
     "generate",
     "generate_weighted",
+    "largest",
     "legacy",
     "parse_all",
     "read",

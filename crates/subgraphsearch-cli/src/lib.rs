@@ -24,6 +24,8 @@ struct Cli {
 enum Command {
     /// Search a graph for induced subgraphs with a given number of vertices and edges.
     Search(SearchArgs),
+    /// Find the largest induced path, cycle or tree, or clique, a search can find.
+    Largest(LargestArgs),
     /// Generate a random graph.
     Generate(GenerateArgs),
     /// Convert a graph between formats.
@@ -212,6 +214,74 @@ struct SearchArgs {
     /// edge list's third column, Matrix Market values, or weighted lists (--from wlists).
     #[arg(long, conflicts_with = "all")]
     weighted: bool,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum ShapeArg {
+    Path,
+    Cycle,
+    Tree,
+    Clique,
+}
+
+impl From<ShapeArg> for subgraphsearch_core::Shape {
+    fn from(s: ShapeArg) -> Self {
+        use subgraphsearch_core::Shape;
+        match s {
+            ShapeArg::Path => Shape::Path,
+            ShapeArg::Cycle => Shape::Cycle,
+            ShapeArg::Tree => Shape::Tree,
+            ShapeArg::Clique => Shape::Clique,
+        }
+    }
+}
+
+#[derive(Args)]
+struct LargestArgs {
+    #[command(flatten)]
+    input: GraphInput,
+    /// What to grow.
+    #[arg(long, value_enum)]
+    shape: ShapeArg,
+    /// With --shape path: the two vertices the path must run between, e.g. 0,127.
+    #[arg(long, value_delimiter = ',', num_args = 1)]
+    endpoints: Vec<usize>,
+    /// Vertices the subgraph must contain, e.g. 3,17,42.
+    #[arg(long, value_delimiter = ',')]
+    fixed: Vec<usize>,
+    /// The size to start from (default: the fewest vertices the shape allows).
+    #[arg(long)]
+    start: Option<usize>,
+    /// Count a size as reachable if a search succeeds at it or at one of this many sizes above.
+    #[arg(long, default_value_t = 2)]
+    lookahead: usize,
+    /// Number of independent experiments (restarts) at each size.
+    #[arg(short = 'n', long, default_value_t = 40)]
+    experiments: usize,
+    /// Maximum moves per experiment.
+    #[arg(long, default_value_t = 250)]
+    moves: usize,
+    /// Start a burst of random moves every this many moves.
+    #[arg(long, default_value_t = 250)]
+    div_freq: usize,
+    /// Number of random moves per burst (0 disables diversification).
+    #[arg(long, default_value_t = 4)]
+    div_dur: usize,
+    /// Random seed.
+    #[arg(short, long, default_value_t = 1)]
+    seed: i64,
+    /// Random number generator.
+    #[arg(long, value_enum, default_value_t = RngArg::Xoshiro)]
+    rng: RngArg,
+    /// Write every search made (parameters and experiments, by size) as JSON to this file.
+    #[arg(long)]
+    json: Option<PathBuf>,
+    /// Number of threads (default: all cores).
+    #[arg(long)]
+    threads: Option<usize>,
+    /// Print only the largest subgraph found, not every size tried.
+    #[arg(short, long)]
+    quiet: bool,
 }
 
 #[derive(Args)]
@@ -505,6 +575,81 @@ fn run_search(args: SearchArgs) -> Result<u8> {
     }
     write_json(&args, &results)?;
     Ok(if graphs_with_success > 0 { 0 } else { 2 })
+}
+
+fn run_largest(args: LargestArgs) -> Result<u8> {
+    let graph = args.input.load()?;
+    if let Some(t) = args.threads {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(t)
+            .build_global()
+            .ok();
+    }
+    let mut base = SearchParams::new(2, 0);
+    base.fixed = args.fixed.clone();
+    base.endpoints = match args.endpoints[..] {
+        [] => None,
+        [s, t] => Some([s, t]),
+        _ => bail!("--endpoints takes two vertices, e.g. --endpoints 0,127"),
+    };
+    base.experiments = args.experiments;
+    base.max_moves = args.moves;
+    base.div_freq = args.div_freq;
+    base.div_dur = args.div_dur;
+    base.seed = args.seed;
+    base.rng = args.rng.into();
+    let shape = subgraphsearch_core::Shape::from(args.shape);
+    let start = std::time::Instant::now();
+    let found = subgraphsearch_core::largest(&graph, shape, &base, args.start, args.lookahead)?;
+    let mut out = io::stdout().lock();
+    if !args.quiet {
+        for r in &found.results {
+            writeln!(
+                out,
+                "{} vertices: {}/{} experiments succeeded, best conflict {}",
+                r.params.size,
+                r.successes(),
+                r.experiments.len(),
+                r.experiments
+                    .iter()
+                    .map(|e| e.best_conflict)
+                    .min()
+                    .unwrap_or(0)
+            )?;
+        }
+    }
+    let noun = match shape {
+        subgraphsearch_core::Shape::Clique => "clique".to_string(),
+        s => format!("induced {}", s.name()),
+    };
+    match found.size {
+        Some(size) => {
+            let best = found
+                .results
+                .iter()
+                .find(|r| r.params.size == size)
+                .and_then(|r| r.experiments.iter().find(|e| e.success))
+                .expect("a successful search at the largest size");
+            let list: Vec<String> = best.vertices.iter().map(usize::to_string).collect();
+            writeln!(
+                out,
+                "largest {noun} found: {size} vertices ({:.2}s): {}",
+                start.elapsed().as_secs_f64(),
+                list.join(" ")
+            )?;
+        }
+        None => writeln!(
+            out,
+            "no {noun} found ({:.2}s)",
+            start.elapsed().as_secs_f64()
+        )?,
+    }
+    if let Some(path) = &args.json {
+        let file =
+            std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
+        serde_json::to_writer(io::BufWriter::new(file), &found)?;
+    }
+    Ok(if found.size.is_some() { 0 } else { 2 })
 }
 
 /// One search: in parallel with xoshiro, sequentially (as the C programs) with the legacy rng.
@@ -1032,6 +1177,7 @@ where
     };
     let result = match cli.command {
         Command::Search(a) => run_search(a),
+        Command::Largest(a) => run_largest(a),
         Command::Generate(a) => run_generate(a).map(|()| 0),
         Command::Convert(a) => run_convert(a).map(|()| 0),
         Command::Info(a) => run_info(a).map(|()| 0),

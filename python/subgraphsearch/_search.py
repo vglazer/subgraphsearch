@@ -301,3 +301,108 @@ def sweep(graph: Graph | WeightedGraph, size: int, edges: int | None, parameter:
     arguments fixed, and returns ``{value: SearchResult}``; plot it with
     :func:`subgraphsearch.viz.plot_sweep`."""
     return {v: search(graph, size, edges, **{**kwargs, parameter: v}) for v in values}
+
+
+SHAPES = ("path", "cycle", "tree", "clique")
+
+
+@dataclass
+class LargestResult:
+    """The outcome of :func:`largest`: every search it made, by size."""
+
+    graph: Graph
+    #: ``"path"``, ``"cycle"``, ``"tree"`` or ``"clique"``.
+    shape: str
+    #: Every search made, by size, in increasing order of size.
+    results: dict[int, SearchResult]
+
+    @property
+    def size(self) -> int | None:
+        """The largest size at which a search succeeded, or ``None`` if none did."""
+        return max((k for k, r in self.results.items() if r.successes), default=None)
+
+    @property
+    def best(self) -> SearchResult | None:
+        """The search at :attr:`size`, whose solutions are the largest subgraphs found."""
+        return None if self.size is None else self.results[self.size]
+
+    @property
+    def next(self) -> SearchResult | None:
+        """The search at the smallest size tried above :attr:`size`, which failed: its near misses
+        (``next.solutions(max_conflict=...)``) are the closest the search came to anything larger."""
+        above = [k for k in self.results if self.size is None or k > self.size]
+        return self.results[min(above)] if above else None
+
+    def summary(self) -> str:
+        noun = {"path": "induced path", "cycle": "induced cycle", "tree": "induced tree", "clique": "clique"}[self.shape]
+        tried = ", ".join(f"{k} ({r.successes}/{len(r.experiments)})" for k, r in self.results.items())
+        head = (f"no {noun} found" if self.size is None
+                else f"largest {noun} found: {self.size} vertices, in {self.best.successes} of {len(self.best.experiments)} experiments")
+        lines = [head, f"sizes tried (successes): {tried}"]
+        if self.next is not None and self.next.best is not None:
+            lines.append(f"closest above: {self.next.params.size} vertices, best conflict {self.next.best.best_conflict}")
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        return f"LargestResult({self.shape}, size={self.size}, {len(self.results)} sizes tried)"
+
+
+def largest(
+    graph: Graph,
+    shape: str,
+    *,
+    start: int | None = None,
+    lookahead: int = 2,
+    fixed: Iterable[int] = (),
+    endpoints: tuple[int, int] | None = None,
+    experiments: int = 40,
+    max_moves: int = 250,
+    div_freq: int = 250,
+    div_dur: int = 4,
+    seed: int = 1,
+    rng: str = "xoshiro",
+    trace: bool = False,
+    aspiration: bool = False,
+) -> LargestResult:
+    """Searches ``graph`` for the largest induced ``shape`` it can find: ``"path"``, ``"cycle"``,
+    ``"tree"`` or ``"clique"``.
+
+    Starting at ``start`` vertices (by default the fewest the shape and the fixed vertices allow),
+    it runs :func:`search` for the shape at size after size: first doubling its steps while searches
+    succeed, then bisecting between the last size that succeeded and the first that did not. A
+    size counts as reachable if a search succeeds at it or at one of the next ``lookahead`` sizes,
+    since some sizes can be impossible below the largest: between two hypercube vertices that differ
+    in an odd number of bits, for example, every path has an even number of vertices. The other
+    arguments are passed to every search; ``endpoints`` needs ``shape="path"``.
+
+    The result keeps every search, so :attr:`LargestResult.best` holds the largest subgraphs found
+    and :attr:`LargestResult.next` the near misses one size up. A heuristic search can miss
+    subgraphs that exist, so the size found is a lower bound; more experiments or moves can raise it.
+    """
+    if shape not in SHAPES:
+        raise ValueError(f"unknown shape {shape!r}: choose path, cycle, tree or clique")
+    if not isinstance(graph, Graph):
+        raise TypeError("largest needs an unweighted Graph")
+    fixed = tuple(int(v) for v in fixed)
+    if endpoints is not None:
+        endpoints = tuple(int(v) for v in endpoints)
+        if len(endpoints) != 2:
+            raise ValueError("endpoints takes two vertices, the ends of the path")
+    _, sizes = _core.largest(
+        graph._g, shape, None if start is None else int(start), int(lookahead), list(fixed),
+        None if endpoints is None else list(endpoints), int(experiments), int(max_moves), int(div_freq),
+        int(div_dur), int(seed), rng, bool(trace), bool(aspiration),
+    )
+    results = {}
+    for size, edges, raw in sizes:
+        params = SearchParams(
+            size, edges, fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng,
+            bool(trace), bool(aspiration), 2 if shape == "cycle" else None, False, shape in ("cycle", "tree"),
+            shape == "path", endpoints if shape == "path" else None,
+        )
+        exps = [
+            Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))
+            for i, (c, m, s, v, t) in enumerate(raw)
+        ]
+        results[size] = SearchResult(graph, params, exps)
+    return LargestResult(graph, shape, results)

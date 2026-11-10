@@ -504,6 +504,51 @@ def test_path_search_between_endpoints(tmp_path):
     assert [e.vertices for e in ss.SearchResult.load(out, grid).experiments] == [e.vertices for e in r.experiments]
 
 
+def test_largest(tmp_path):
+    import subprocess
+    import sys
+
+    n = 6
+    cube = ss.Graph(2 ** n, [(u, u ^ (1 << b)) for u in range(2 ** n) for b in range(n) if u < u ^ (1 << b)])
+    settings = {"experiments": 50, "max_moves": 2000, "div_freq": 300, "div_dur": 8}
+    # the 6-cube's longest snake has 27 vertices and its longest coil 26; it has no triangles
+    for shape, size in [("path", 27), ("cycle", 26), ("clique", 2)]:
+        r = ss.largest(cube, shape, **settings)
+        assert r.size == size and r.best.params.size == size and r.best.successes > 0, shape
+        assert list(r.results) == sorted(r.results) and all(x.successes == 0 for k, x in r.results.items() if k > size)
+        assert r.next.params.size > size and r.next.successes == 0
+        assert f"{size} vertices" in r.summary() and f"size={size}" in repr(r)
+    cycles = ss.largest(cube, "cycle", **settings)
+    assert cycles.best.target == "forming a cycle"
+    assert all(is_induced_path(cube, vs) for vs in ss.largest(cube, "path", **settings).best.solutions())
+    trees = ss.largest(cube, "tree", **settings)
+    assert trees.size >= 27 and trees.best.target == "forming a tree"
+
+    # between opposite corners it starts at the shortest path, 7 vertices, and every path has an odd number
+    corner = ss.largest(cube, "path", endpoints=(0, 63), **settings)
+    assert min(corner.results) == 7 and corner.size % 2 == 1 and corner.size >= 21
+    assert all({0, 63} <= set(vs) for vs in corner.best.solutions())
+    assert corner.best.params.endpoints == (0, 63)
+    with pytest.raises(ValueError, match="path search"):
+        ss.largest(cube, "cycle", endpoints=(0, 63))
+    with pytest.raises(ValueError, match="unknown shape"):
+        ss.largest(cube, "star")
+    with pytest.raises(TypeError, match="unweighted"):
+        ss.largest(ss.WeightedGraph.from_graph(cube), "path")
+
+    # the command line finds the same
+    graph_path = tmp_path / "cube.g6"
+    cube.write(graph_path)
+    run = subprocess.run(
+        [sys.executable, "-m", "subgraphsearch._cli", "largest", str(graph_path), "--shape", "cycle", "-n", "50",
+         "--moves", "2000", "--div-freq", "300", "--div-dur", "8", "-q", "--json", str(tmp_path / "l.json")],
+        check=False, capture_output=True, text=True, encoding="utf-8",
+    )
+    assert run.returncode == 0 and "largest induced cycle found: 26 vertices" in run.stdout
+    saved = json.loads((tmp_path / "l.json").read_text(encoding="utf-8"))
+    assert saved["shape"] == "cycle" and saved["size"] == 26
+
+
 def test_legacy_regular_programs():
     strip = lambda s: re.sub(r"T> .*", "T>", s)
     for program in ("reg_search", "ereg_search"):

@@ -339,6 +339,19 @@ print("12-vertex trees that are paths:", sum(int(sparse.induced(vs).degrees().ma
 paths = {k: ss.search(sparse, k, path=True, experiments=200, seed=1).successes for k in (12, 20, 25, 29, 31)}
 print("path=True, experiments that found a k-vertex path, by k:", paths)
 """),
+    md("""
+Trying sizes by hand, as above, is how to find the longest path the search can reach, and `ss.largest` does it
+for you. Given a shape, `"path"`, `"cycle"`, `"tree"` or `"clique"`, it doubles the size while searches
+succeed, then bisects between the last success and the first failure, and keeps every search it made:
+`.size` is the largest size found, `.best` the search at that size, and `.next` the closest failure above it,
+with its near misses. Here it finds a path of 30 vertices, a size the loop above skipped.
+"""),
+    code("""
+longest = ss.largest(sparse, "path", experiments=200, seed=1)
+print(longest.summary())
+print("largest cycle and tree:", ss.largest(sparse, "cycle", experiments=200, seed=1).size,
+      ss.largest(sparse, "tree", experiments=200, seed=1).size)
+"""),
     md(f"""
 In the $n$-dimensional [hypercube]({W}Hypercube_graph), whose vertices are the $n$-bit strings and whose edges
 join strings that differ in one bit, the longest induced paths are the [snake-in-the-box]({W}Snake-in-the-box)
