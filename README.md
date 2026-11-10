@@ -113,29 +113,28 @@ toolchain, `cargo install subgraphsearch` builds the same command from
 [crates.io](https://crates.io/crates/subgraphsearch).
 
 ```sh
-subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6    # a random graph
+# make a graph
+subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6    # random: 100 vertices, density 0.6
+subgraphsearch generate hypercube --dimension 7 -o q7.g6           # or a standard one: the 7-cube
+
+# search it
 subgraphsearch search g.g6 -k 11 -m 55                            # 11-cliques
-subgraphsearch search g.g6 -k 30 -m 340 --max-conflict 2          # also report near misses
+subgraphsearch search g.g6 -k 30 -m 340 --max-conflict 2          # 30 vertices, 340 edges; near misses too
 subgraphsearch search g.g6 -k 10 --degree 4                       # 4-regular subgraphs
-subgraphsearch search sparse.g6 -k 12 --degree 2 --connected      # induced 12-cycles
-subgraphsearch search sparse.g6 -k 20 --path                      # induced 20-vertex paths
-subgraphsearch search sparse.g6 -k 20 --path --endpoints 0,7      # the same, from vertex 0 to vertex 7
-subgraphsearch largest sparse.g6 --shape path                     # the longest induced path it finds
-subgraphsearch generate weighted -n 200 -d 0.65 -o w.mtx          # a weighted graph
-subgraphsearch generate hypercube --dimension 7 -o q7.g6           # the 7-cube; also grid --rows 6 --cols 6
-subgraphsearch generate grid --rows 1 --cols 8 -o path8.g6         # a path on 8 vertices
-subgraphsearch op strong path8.g6 --with path8.g6 king.g6         # the 8 x 8 king's graph
-subgraphsearch search w.mtx --weighted -k 15 -m 140               # total weight 140
-subgraphsearch search many.g6 --all -k 10 -m 30 -q                # every graph in a file
+subgraphsearch search q7.g6 -k 36 --degree 2 --connected          # induced 36-cycles
+subgraphsearch search q7.g6 -k 40 --path --endpoints 0,127        # induced 40-vertex paths from 0 to 127
+subgraphsearch largest q7.g6 --shape path                         # the longest induced path: 51, the record
 
-subgraphsearch info g.g6                                          # statistics
-subgraphsearch convert g.g6 g.dot --highlight 3,17,42             # draw a subgraph with Graphviz
-subgraphsearch op complement g.g6 gc.g6                           # complements, induced subgraphs, ...
-subgraphsearch incidence blocks.txt --on blocks -o b.g6           # a graph from a block design
-
-subgraphsearch search g.g6 -k 11 -m 55 --json result.json         # save the full results
+# look at the results
+subgraphsearch search g.g6 -k 11 -m 55 --json result.json         # save them
 python -m subgraphsearch explore g.g6 --result result.json        # explore them in an interactive page
+subgraphsearch convert g.g6 g.dot --highlight 3,17,42             # draw a subgraph with Graphviz
 ```
+
+Other subcommands print statistics (`info`), apply operations such as complements, induced
+subgraphs, switching and products (`op`), and build graphs from block designs (`incidence`);
+`search --weighted` searches for a total weight, and `search --all` every graph in a file.
+`subgraphsearch --help` lists everything.
 
 `subgraphsearch search` exits with status 2 when nothing is found.
 
