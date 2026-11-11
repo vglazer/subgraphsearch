@@ -1,5 +1,7 @@
 # Development
 
+*Part of the [subgraphsearch documentation](README.md#documentation).*
+
 ## Setup
 
 You need [Rust](https://rustup.rs) and [uv](https://docs.astral.sh/uv/getting-started/installation/).

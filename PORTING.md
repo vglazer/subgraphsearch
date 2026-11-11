@@ -1,14 +1,16 @@
-# Porting notes
+# Porting
 
-`subgraphsearch` reimplements `sub_search`,
+*Part of the [subgraphsearch documentation](README.md#documentation).*
+
+subgraphsearch reimplements `sub_search`,
 [a set of C programs written in 2002](https://github.com/vglazer/USRA/tree/master/subgraph_finding)
 together with their graph generators; the original reports are there too. These notes cover how the
-programs map onto `subgraphsearch`, how to reproduce their runs exactly, and how the port is tested
+programs map onto subgraphsearch, how to reproduce their runs exactly, and how the port is tested
 against them.
 
 ## The original programs
 
-| Program | What it does | In `subgraphsearch` |
+| Program | What it does | In subgraphsearch |
 | --- | --- | --- |
 | `sub_search` | induced subgraphs with a given number of vertices and edges | `search -k K -m M`, `ss.search(g, k, m)` |
 | `asub_search` | `sub_search` with a limited aspiration criterion | `--aspiration`, `aspiration=True` |
@@ -21,7 +23,7 @@ against them.
 `ggen`'s parameters correspond as follows:
 
 - **Graph types** 2, 3 and 4 are the `exponential`, `power` and `geometric` models. `ggen`'s
-  density is per mille (0 to 1000); `subgraphsearch` takes it as a fraction (0 to 1).
+  density is per mille (0 to 1000); subgraphsearch takes it as a fraction (0 to 1).
 - **Fixed types** 1, -1, 2, -2 and 3 are `op induce`, `op remove`, `op common-neighbors`,
   `op common-non-neighbors` and `op switch` (`g.induced`, `g.common_neighborhood`, `g.switch`, ...).
   The complementation flag is `op complement` (`g.complement()`).
@@ -72,7 +74,7 @@ The intended differences are input checks the C programs lacked: unchecked verte
 self-loops and similar problems now produce an error instead of undefined behavior. On systems
 other than Unix, the final timing line reports elapsed time and the `COMPUTERNAME` host name.
 
-## Performance
+## Speed
 
 By default experiments run in parallel, which makes a search roughly 10 times faster than the C
 programs on a multi-core machine.
@@ -80,7 +82,7 @@ programs on a multi-core machine.
 Legacy mode is single-threaded. There, `sub_search`, `asub_search` and `wsub_search` run about 1.5
 to 2 times slower than the C programs compiled with `-O2`, while `reg_search` and `ereg_search` run
 faster. Most of the time goes to the loop that scans candidate swaps; the C programs read a byte
-adjacency matrix with 32-bit indices, where `subgraphsearch` reads a bitset with 64-bit indices.
+adjacency matrix with 32-bit indices, where subgraphsearch reads a bitset with 64-bit indices.
 
 ## Tests against the original programs
 
@@ -100,6 +102,6 @@ graphs and finds the same subgraphs through `ss.search`.
 
 ## Naming and spelling
 
-The original programs used Canadian spelling (`neighbourhood`, `minimised`). `subgraphsearch`
+The original programs used Canadian spelling (`neighbourhood`, `minimised`). subgraphsearch
 uses American spelling in its own code and documentation, but legacy mode prints the programs'
 messages exactly as they did.
