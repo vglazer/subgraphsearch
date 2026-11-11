@@ -76,6 +76,12 @@ CP-SAT comes within 0.4% to 9.4% of the best known values, and the mixed-integer
 to 38%, where they find a solution at all. None of them can show that any value is optimal: CP-SAT's
 proved upper bounds, for example, lie 17% to 60% above the best known values.
 
+subgraphsearch does not need the best known values to find them. `ss.densest`, which aims at no
+particular total and keeps the heaviest selection it reaches, finds the best known value of every
+SOM-b instance above, in 52 to 60 of 60 experiments per instance (each of up to 50,000 moves, with
+`kick_size=16`). Nor did it find anything better: no experiment exceeded a best known value, on
+these instances or on the real-valued ones below, consistent with the values being optimal.
+
 The result does not depend on SOM-b's small integer distances. MDPLIB's GKD-c instances hold
 Euclidean distances between random points and its MDG-a instances random real distances from 0 to
 10. subgraphsearch's weights are integers, so for it and CP-SAT the distances were scaled (by 10
