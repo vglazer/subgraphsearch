@@ -312,6 +312,34 @@ cliques, a solver made for them is the better tool; what this search offers is o
 target, most of which have no such solver.
 """),
     md(f"""
+### Exact edge counts
+
+The search's own problem, $k$ vertices spanning exactly $m$ edges, has no specialist to compare with, so here it
+is set beside a strong general solver: [CP-SAT](https://developers.google.com/optimization/cp/cp_solver) from Google's OR-Tools, given one
+yes-or-no variable per vertex and the edge count as half the sum of the chosen vertices' degrees inside the set
+(for a clique, the usual form, which forbids each pair of non-adjacent vertices, is far better). These results
+were recorded separately, so that this notebook does not need OR-Tools: CP-SAT 9.15 on 16 cores, stopped after 10
+seconds, and the search with 60 experiments of up to 2,000 moves, on random graphs of density 0.6 unless noted.
+
+| Graph | Target | This search: found / 60 | CP-SAT |
+| --- | --- | --- | --- |
+| 50 vertices, density 0.5 | 10 vertices, 22 edges | 60/60 in 0.5 ms | found in 8 ms |
+| 100 vertices | an 11-clique | 60/60 in 0.7 ms | found in 13 ms (as a clique) |
+| 100 vertices | 30 vertices, 340 edges | 60/60 in 1.0 ms | nothing in 10 s |
+| 100 vertices | 30 vertices, 346 edges | 25/60 in 13 ms | nothing in 10 s |
+| 30 vertices | 9 vertices, 33 edges | 60/60 in 0.2 ms | found in 0.18 s |
+| 50 vertices | 15 vertices, 91 edges | 60/60 in 1.1 ms | found in 8.8 s |
+| 70 vertices | 21 vertices, 176 edges | 59/60 in 3.4 ms | nothing in 10 s |
+| 30 vertices | 9 vertices, 34 edges | none (none can exist) | proved impossible in 0.9 s |
+
+The last four rows look for the most edges the search finds among 30% of the vertices. CP-SAT's time grows
+steeply with the graph, from a fifth of a second at 30 vertices to more than 10 seconds at 70, while the search
+stays at a few milliseconds: exact edge counts in graphs past a few dozen vertices are this search's niche. What
+CP-SAT can do and the search cannot is prove a target impossible, as in the last row, which also shows that the
+33 edges the search found there are the most possible. The two work well together: the search finds solutions
+fast, and on small graphs a solver can confirm that nothing better exists.
+"""),
+    md(f"""
 ## Regular subgraphs
 
 `degree=` asks for subgraphs in which every vertex has exactly that many neighbors within the subgraph. A

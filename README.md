@@ -489,11 +489,15 @@ search on all 16 cores in a random graph on 32,000 vertices with 3 edges per ver
 
 ### Compared with other methods
 
-On the DIMACS maximum-clique benchmarks the search finds a largest clique in milliseconds on most
-graphs, far faster than igraph's general exact search, but well behind DLS-MC, a local search
-made for maximum cliques, which also solves the deceptive graphs the search cannot. The
+The search's niche is its own problem: $`k`$ vertices spanning exactly $`m`$ edges, which no
+specialized solver addresses. There it finds solutions in milliseconds where a strong general
+solver, OR-Tools' CP-SAT, needs seconds at 50 vertices and finds nothing within 10 seconds at 70,
+though CP-SAT can also prove that a target is impossible. For maximum cliques, which do have
+specialists, the search finds the largest clique in milliseconds on most of the DIMACS benchmarks,
+far faster than igraph's general exact search but well behind DLS-MC, a local search made for
+maximum cliques. The
 [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
-has the comparison.
+has both comparisons.
 
 ## Graph formats
 
