@@ -163,8 +163,10 @@ allowed. Experiments are independent, so the time divides almost evenly among co
 Regular, cycle and path searches also keep, in every thread, where each vertex's neighbors are in
 its neighbor list. On graphs of up to 2,048 vertices they use a table with an entry for every pair
 of vertices, as the original programs do; on larger ones, an entry for every edge, so their memory
-grows with the number of edges rather than with the square of the number of vertices. Positions
-are 32-bit integers. The original programs stored them in 16 bits, which limited these searches to
-32,767 vertices; subgraphsearch has no such limit, so a path search runs in the 16-cube, with
-65,536 vertices, as in smaller ones. No search has a fixed limit on the number of vertices: memory
-is the limit.
+grows with the number of edges rather than with the square of the number of vertices. Positions are
+32-bit integers, 4 bytes per edge end in every thread, which adds up in dense graphs: a graph on
+10,000 vertices with 25 million edges needs about 200 MB per thread, and a search can use fewer
+threads (`--threads`) when memory is short. The original programs stored positions in 16 bits,
+which limited these searches to 32,767 vertices; subgraphsearch has no such limit, so a path search
+runs in the 16-cube, with 65,536 vertices, as in smaller ones. No search has a fixed limit on the
+number of vertices: memory is the limit.
