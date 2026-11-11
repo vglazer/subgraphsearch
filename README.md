@@ -158,6 +158,12 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 
 Many combinatorial objects are induced subgraphs of the right graph, so one search finds them all.
 
+- **Choosing diverse items.** Picking $`k`$ of $`n`$ items so that the total distance between the
+  chosen ones is as large as possible, the maximum diversity problem, is a weighted search: the
+  items are vertices and the distances edge weights. On the MDPLIB benchmark, subgraphsearch
+  reaches the best known values, found by two-hour runs of a scatter search made for the problem,
+  in under a second with up to 300 items and in about 5 seconds with 400. OR-Tools' CP-SAT, given
+  10 seconds, falls up to 8% short.
 - **Error-correcting codes.** A binary code of minimum distance $`d`$ is a clique in the graph of
   words joined when they differ in at least $`d`$ places.
   [examples/codes.py](examples/codes.py) finds codes of the largest possible size for lengths 9 to
@@ -492,12 +498,15 @@ search on all 16 cores in a random graph on 32,000 vertices with 3 edges per ver
 subgraphsearch's niche is its own problem: $`k`$ vertices spanning exactly $`m`$ edges, which no
 specialized solver addresses. There it finds solutions in milliseconds where a strong general
 solver, OR-Tools' CP-SAT, needs seconds at 50 vertices and finds nothing within 10 seconds at 70,
-though CP-SAT can also prove that a target is impossible. For maximum cliques, which do have
-specialists, subgraphsearch finds the largest clique in milliseconds on most of the DIMACS benchmarks,
-far faster than igraph's general exact search but well behind DLS-MC, a local search made for
-maximum cliques. The
+though CP-SAT can also prove that a target is impossible. Weighted targets show the same gap: on
+the maximum diversity problem, choosing $`k`$ items with the largest total distance between them,
+subgraphsearch reaches in under a second the best known values that heuristics made for the
+problem found in two-hour runs, while CP-SAT, in 10 seconds, falls short. For maximum cliques,
+which have specialists too, subgraphsearch finds the largest clique in milliseconds on most of the
+DIMACS benchmarks, far faster than igraph's general exact search but well behind DLS-MC, a local
+search made for maximum cliques. The
 [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
-has both comparisons.
+has these comparisons.
 
 ## Graph formats
 
