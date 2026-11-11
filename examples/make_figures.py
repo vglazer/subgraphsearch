@@ -154,6 +154,82 @@ def comparison(out: Path) -> None:
     mdp.legend(frameon=False, fontsize=9, loc="upper right")
     fig.savefig(out / "comparison.png", dpi=100, facecolor="white")
     print(out / "comparison.png")
+    benchmarks(out)
+
+
+# Recorded for BENCHMARKS.md: the general solvers, each stopped after 10 s (None: nothing found; "not run").
+SOLVER_COLORS = {"CP-SAT": "#4c6ef5", "SCIP": "#12b886", "HiGHS": "#f59f00", "CBC": "#868e96"}
+# Exact edge counts on the six graphs of BENCHMARKS.md's table: vertices -> seconds per solver.
+EDGE_SOLVERS = {20: {"CP-SAT": 0.025, "SCIP": 0.10, "HiGHS": 0.35, "CBC": 0.51},
+                29: {"CP-SAT": 0.41, "SCIP": 0.78, "HiGHS": 3.0, "CBC": 2.6},
+                38: {"CP-SAT": 4.5, "SCIP": None, "HiGHS": None, "CBC": None},
+                44: {"CP-SAT": None, "SCIP": None, "HiGHS": None, "CBC": None},
+                50: {"CP-SAT": 8.8, "SCIP": None, "HiGHS": None, "CBC": None},
+                59: {"CP-SAT": None, "SCIP": None, "HiGHS": None, "CBC": None}}
+# Maximum diversity: the best total each solver found in 10 s, by instance as in DIVERSITY.
+DIVERSITY_SOLVERS = {"SCIP": [206, 847, 2101, 3665, 3830, 8350, 3635, "not run"],
+                     "HiGHS": [209, 915, 1911, 3881, 3582, None, None, "not run"],
+                     "CBC": [221, 853, 1940, 3534, 3426, None, None, "not run"]}
+
+
+def benchmarks(out: Path) -> None:
+    """BENCHMARKS.md's figures: the general solvers beside each other and beside subgraphsearch."""
+    # exact edge counts: the general solvers in seconds, subgraphsearch in milliseconds
+    sizes = list(EDGE_SOLVERS)
+    fig, (gen, mine) = plt.subplots(1, 2, figsize=(13, 4.2), layout="constrained",
+                                    gridspec_kw={"width_ratios": [1.5, 1]})
+    offsets = dict(zip(SOLVER_COLORS, (-1.2, -0.4, 0.4, 1.2)))
+    for name, color in SOLVER_COLORS.items():
+        xs = [n + offsets[name] for n in sizes]
+        times = [EDGE_SOLVERS[n][name] for n in sizes]
+        gen.plot([x for x, t in zip(xs, times) if t is not None], [t for t in times if t is not None], "o",
+                 color=color, label=name, markersize=7)
+        gen.plot([x for x, t in zip(xs, times) if t is None], [10] * sum(t is None for t in times), "^",
+                 color=color, markerfacecolor="white", markersize=7)
+    gen.plot([], [], "^", color="#495057", markerfacecolor="white", label="nothing in 10 s")
+    gen.axhline(10, color="#adb5bd", lw=0.8, ls="--")
+    gen.set_ylim(0, 11)
+    gen.set_xticks(sizes)
+    gen.set_ylabel("seconds")
+    gen.set_xlabel("vertices in the graph")
+    gen.set_title("general solvers: CP-SAT, and the MIP solvers SCIP, HiGHS and CBC", fontsize=11, loc="left")
+    gen.legend(frameon=False, fontsize=9, loc="center left", bbox_to_anchor=(0, 0.55))
+    mine.plot(sizes, [ms for n, ms, _ in EDGE_SCALING if n in EDGE_SOLVERS], "o", color="#d6336c", markersize=7)
+    mine.set_ylim(0, 11)
+    mine.set_xticks(sizes)
+    mine.set_ylabel("milliseconds")
+    mine.set_xlabel("vertices in the graph")
+    mine.set_title("subgraphsearch: every target found", fontsize=11, loc="left")
+    fig.savefig(out / "benchmarks_edges.png", dpi=100, facecolor="white")
+    print(out / "benchmarks_edges.png")
+
+    # maximum diversity: % below the best known value, by solver
+    labels = [f"{n} items, {k} chosen" for n, k, _, _ in DIVERSITY]
+    found = {"CP-SAT": [cp for *_, cp in DIVERSITY], **DIVERSITY_SOLVERS}
+    fig, ax = plt.subplots(figsize=(11, 6.2), layout="constrained")
+    height = 0.18
+    cap = 45   # the x-axis limit, in %
+    for j, (name, color) in enumerate(SOLVER_COLORS.items()):
+        for i, ((_, _, best, _), value) in enumerate(zip(DIVERSITY, found[name])):
+            y = i + (j - 1.5) * height
+            if isinstance(value, int):
+                short = 100 * (best - value) / best
+                ax.barh(y, short, height=height, color=color, label=name if i == 0 else None)
+                text = "matched" if short == 0 else f"{short:.1f}%" if short < 1 else f"{short:.0f}%"
+                ax.annotate(text, (short, y), xytext=(3, 0), textcoords="offset points", va="center", fontsize=7)
+            else:
+                ax.annotate(f"{name}: " + ("no solution" if value is None else "not run"), (0, y), xytext=(10, 0),
+                            textcoords="offset points", va="center", fontsize=7, color=color, fontweight="bold")
+    ax.plot([0] * len(DIVERSITY), range(len(DIVERSITY)), "D", color="#d6336c", markersize=7,
+            label="subgraphsearch: matched every one", zorder=3)
+    ax.set_yticks(range(len(DIVERSITY)), labels)
+    ax.invert_yaxis()
+    ax.set_xlim(-1, cap)
+    ax.set_xlabel("% below the best known value after 10 s")
+    ax.set_title("maximum diversity (MDPLIB): how far each method falls short", fontsize=11, loc="left")
+    fig.legend(frameon=False, fontsize=9, loc="outside lower center", ncol=5)
+    fig.savefig(out / "benchmarks_diversity.png", dpi=100, facecolor="white")
+    print(out / "benchmarks_diversity.png")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ and induced paths, cycles, trees and cliques with the same method. Below it is s
 methods one would otherwise use, on problems with public benchmarks or known records. Times are wall-clock on an Apple M3 Max
 laptop with 16 cores; subgraphsearch's are for all its experiments together.
 
-![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
+![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](assets/comparison.png)
 
 ## Exact edge counts
 
@@ -24,6 +24,8 @@ general solvers, each stopped after 10 seconds:
 
 The graphs are random, with density 0.6; the target is the most edges subgraphsearch finds among
 30% of the vertices, the hardest kind of target.
+
+![Left: the times of CP-SAT, SCIP, HiGHS and CBC on graphs of 20 to 59 vertices. All four find solutions at 20 vertices in under a second; at 29 vertices the MIP solvers take 0.8 to 3 seconds; from 38 vertices on only CP-SAT finds anything within 10 seconds, at 38 and 50 vertices. Right: subgraphsearch finds every target in under a millisecond](assets/benchmarks_edges.png)
 
 | Graph | Target | subgraphsearch | CP-SAT | SCIP | HiGHS | CBC |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -50,6 +52,8 @@ the specialist heuristics that lead on it, such as iterated tabu search, reach t
 subgraphsearch aims at each best known value with 60 experiments of up to 20,000 moves and
 `kick_size=16`. The general solvers maximize the total distance for 10 seconds, with the same
 formulations as above, and the table gives the best total each found.
+
+![For each of eight MDPLIB instances, how far each method's best total after 10 seconds falls below the best known value: subgraphsearch matches every one; CP-SAT falls 0 to 8% short; SCIP, HiGHS and CBC fall 6% to 38% short where they find a solution, and HiGHS and CBC find none on the 300- and 400-item instances](assets/benchmarks_diversity.png)
 
 | Items | Chosen | Best known | subgraphsearch | CP-SAT | SCIP | HiGHS | CBC |
 | --- | --- | --- | --- | --- | --- | --- | --- |

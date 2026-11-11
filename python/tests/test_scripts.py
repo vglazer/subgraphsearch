@@ -33,3 +33,5 @@ def test_make_figures_draws_the_readme_figures(tmp_path):
     load(ROOT / "examples" / "make_figures.py").main(tmp_path)
     assert (tmp_path / "overview.png").stat().st_size > 0
     assert (tmp_path / "comparison.png").stat().st_size > 0
+    assert (tmp_path / "benchmarks_edges.png").stat().st_size > 0
+    assert (tmp_path / "benchmarks_diversity.png").stat().st_size > 0
