@@ -253,22 +253,30 @@ except OSError as error:
 
 names = ["C125.9", "C250.9", "p_hat300-3", "MANN_a27", "hamming8-4", "keller4", "brock200_2", "brock400_2"]
 clique_number = [34, 44, 36, 126, 16, 11, 12, 29]
-dls_mc_ms = [0.1, 0.9, 0.7, 47.6, 0.1, 0.1, 24.2, 477.4]   # published; under 0.1 ms shown as 0.1
+dls_mc_ms = [0.1, 0.9, 0.7, 47.6, None, None, 24.2, 477.4]   # published; None: under 0.1 ms
 igraph_ms = [None, None, None, None, 18100, 1800, 300, None]   # None: not finished in 90 s
 
-search_ms, found = [], []
+search_ms, found, successes = [], [], []
 for bench, k in zip(dimacs, clique_number):   # not g: later sections use g
     start = time.perf_counter()
     res = ss.search(bench, k, k * (k - 1) // 2, experiments=32, max_moves=20000, div_freq=300, div_dur=8)
     search_ms.append(1000 * (time.perf_counter() - start))
+    successes.append(res.successes)
     found.append(k if res.successes else ss.largest(bench, "clique", start=k - 8, lookahead=1, experiments=32,
                                                      max_moves=20000, div_freq=300, div_dur=8).size)
 
 if dimacs:
-    print(f"{'graph':11} {'clique':>6}   {'this search':>22}   {'DLS-MC':>8}   {'igraph (exact)':>14}")
-    for name, k, ms, f, dls, ig in zip(names, clique_number, search_ms, found, dls_mc_ms, igraph_ms):
-        mine = f"{ms:.1f} ms" if f == k else f"not found ({f}), {ms:.0f} ms"
-        print(f"{name:11} {k:6}   {mine:>22}   {dls:>5.1f} ms   {'over 90 s' if ig is None else f'{ig / 1000:.1f} s':>14}")
+    from IPython.display import Markdown, display
+
+    lines = ["| Graph | Vertices | Edges | Largest clique | This search: found / 32 | DLS-MC | igraph (exact) |",
+             "| --- | --- | --- | --- | --- | --- | --- |"]
+    for bench, name, k, ms, f, hits, dls, ig in zip(dimacs, names, clique_number, search_ms, found, successes,
+                                                     dls_mc_ms, igraph_ms):
+        mine = f"{hits}/32 in {ms:.1f} ms" if f == k else f"0/32 (best {f}), {ms:.0f} ms"
+        theirs = "under 0.1 ms" if dls is None else f"{dls:.1f} ms"
+        exact = "over 90 s" if ig is None else f"{ig / 1000:.1f} s"
+        lines.append(f"| {name} | {bench.n} | {bench.m:,} | {k} | {mine} | {theirs} | {exact} |")
+    display(Markdown("\\n".join(lines)))
 """),
     code("""
 if dimacs:
@@ -279,7 +287,7 @@ if dimacs:
                             gridspec_kw={"width_ratios": [3, 3, 2.2]})
     for ax, (title, rows) in zip(axs, groups):
         for y, i in enumerate(rows):
-            times = [search_ms[i], dls_mc_ms[i], igraph_ms[i] or 90000]
+            times = [search_ms[i], dls_mc_ms[i] or 0.1, igraph_ms[i] or 90000]   # under 0.1 ms drawn at 0.1
             capped = [found[i] != clique_number[i], False, igraph_ms[i] is None]
             for j, ((label, color), t, cap) in enumerate(zip(methods, times, capped)):
                 ax.barh(4 * y + j, t, color=color, hatch="//" if cap else None, edgecolor="white",
