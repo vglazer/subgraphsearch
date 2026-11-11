@@ -220,18 +220,18 @@ for aspiration in (False, True):
     md("""
 ## Compared with other methods
 
-Two comparisons follow: first on the search's own problem, exact edge counts, against a strong general solver,
+Two comparisons follow: first on subgraphsearch's own problem, exact edge counts, against a strong general solver,
 and then on maximum cliques, which have a standard benchmark and methods made for them.
 
 ### Exact edge counts
 
-Finding $k$ vertices that span exactly $m$ edges has no specialist to compare with, so here the search is set
+Finding $k$ vertices that span exactly $m$ edges has no specialist to compare with, so here subgraphsearch is set
 beside a strong general solver: [CP-SAT](https://developers.google.com/optimization/cp/cp_solver) from
 Google's OR-Tools, given one yes-or-no variable per vertex and the edge count as half the sum of the chosen
 vertices' degrees inside the set (for a clique, the usual form, which forbids each pair of non-adjacent vertices,
 is far better). These results were recorded separately, so that this notebook does not need OR-Tools: CP-SAT 9.15
-on 16 cores, stopped after 10 seconds, and the search with 60 experiments of up to 2,000 moves, on random graphs
-of density 0.6 unless noted. The first four rows ask for the most edges the search finds among 30% of the
+on 16 cores, stopped after 10 seconds, and subgraphsearch with 60 experiments of up to 2,000 moves, on random graphs
+of density 0.6 unless noted. The first four rows ask for the most edges subgraphsearch finds among 30% of the
 vertices, in graphs of growing size.
 """),
     code("""
@@ -254,7 +254,7 @@ edge_runs = [
 def duration(ms):
     return f"{ms:g} ms" if ms < 100 else f"{ms / 1000:g} s"
 
-lines = ["| Graph | Target | This search: found / 60 | CP-SAT |", "| --- | --- | --- | --- |"]
+lines = ["| Graph | Target | subgraphsearch: found / 60 | CP-SAT |", "| --- | --- | --- | --- |"]
 for graph, target, hits, mine, theirs in edge_runs:
     if hits is None:
         lines.append(f"| {graph} | {target} | none (none can exist) | proved impossible in {duration(theirs)} |")
@@ -265,7 +265,7 @@ display(Markdown("\\n".join(lines)))
 """),
     code("""
 groups = [("Graphs of growing size: the most edges on 30% of the vertices", [0, 1, 2, 3]), ("Other targets", [4, 5, 6])]
-methods = [("this search", "#d6336c"), ("CP-SAT", "#4c6ef5")]
+methods = [("subgraphsearch", "#d6336c"), ("CP-SAT", "#4c6ef5")]
 fig, axs = plt.subplots(1, 2, figsize=(13, 3.8), layout="constrained", sharex=True,
                         gridspec_kw={"width_ratios": [4, 3]})
 for ax, (title, rows) in zip(axs, groups):
@@ -289,10 +289,10 @@ fig.legend(loc="outside lower center", ncol=2, frameon=False, fontsize=9);
 """),
     md("""
 CP-SAT's time grows steeply with the graph, from a fifth of a second at 30 vertices to more than 10 seconds at 70,
-while the search stays at a few milliseconds: exact edge counts in graphs past a few dozen vertices are this
-search's niche. What CP-SAT can do and the search cannot is prove a target impossible, as in the last row, which
-also shows that the 33 edges the search found in the first row are the most possible. The two work well together:
-the search finds solutions fast, and on small graphs a solver can confirm that nothing better exists.
+while subgraphsearch stays at a few milliseconds: exact edge counts in graphs past a few dozen vertices are its
+niche. What CP-SAT can do and subgraphsearch cannot is prove a target impossible, as in the last row, which
+also shows that the 33 edges subgraphsearch found in the first row are the most possible. The two work well together:
+subgraphsearch finds solutions fast, and on small graphs a solver can confirm that nothing better exists.
 
 ### Maximum cliques
 
@@ -303,12 +303,12 @@ and coding theory (MANN_a27, hamming8-4, keller4), and two *brock* graphs, which
 among many large cliques that are not quite as large, to defeat local search. The cell reads them from a
 clone of the repository or else downloads them from GitHub.
 
-The search below aims at each graph's clique number with 32 experiments. It is set beside two other methods:
+Below, subgraphsearch aims at each graph's clique number with 32 experiments. It is set beside two other methods:
 igraph's exact clique number, which also proves the answer (measured separately and stopped after 90
 seconds), and DLS-MC, a local search made for maximum cliques, from its published results (W. Pullan and
 H. H. Hoos, *Journal of Artificial Intelligence Research* 25, 2006, Table 1: mean time per run over 100 runs).
-Those come from one core of a 2006 processor several times slower than today's, while the search here uses
-every core, so the comparison flatters the search.
+Those come from one core of a 2006 processor several times slower than today's, while subgraphsearch here uses
+every core, so the comparison flatters subgraphsearch.
 """),
     code("""
 import time
@@ -339,7 +339,7 @@ for bench, k in zip(dimacs, clique_number):   # not g: later sections use g
                                                      max_moves=20000, div_freq=300, div_dur=8).size)
 
 if dimacs:
-    lines = ["| Graph | Vertices | Edges | Largest clique | This search: found / 32 | DLS-MC | igraph (exact) |",
+    lines = ["| Graph | Vertices | Edges | Largest clique | subgraphsearch: found / 32 | DLS-MC | igraph (exact) |",
              "| --- | --- | --- | --- | --- | --- | --- |"]
     for bench, name, k, ms, f, hits, dls, ig in zip(dimacs, names, clique_number, search_ms, found, successes,
                                                      dls_mc_ms, igraph_ms):
@@ -352,8 +352,8 @@ if dimacs:
     code("""
 if dimacs:
     groups = [("Random dense graphs", [0, 1, 2]), ("Structured graphs", [3, 4, 5]),
-              ("Deceptive graphs: the search fails", [6, 7])]
-    methods = [("this search", "#d6336c"), ("DLS-MC (2006 machine)", "#4c6ef5"), ("igraph, exact", "#868e96")]
+              ("Deceptive graphs: subgraphsearch fails", [6, 7])]
+    methods = [("subgraphsearch", "#d6336c"), ("DLS-MC (2006 machine)", "#4c6ef5"), ("igraph, exact", "#868e96")]
     fig, axs = plt.subplots(1, 3, figsize=(13, 3.6), layout="constrained", sharex=True,
                             gridspec_kw={"width_ratios": [3, 3, 2.2]})
     for ax, (title, rows) in zip(axs, groups):
@@ -375,11 +375,11 @@ if dimacs:
     fig.legend(loc="outside lower center", ncol=3, frameon=False, fontsize=9)
 """),
     md("""
-On most of these graphs the search finds a largest clique in milliseconds, where igraph's general exact
+On most of these graphs subgraphsearch finds a largest clique in milliseconds, where igraph's general exact
 search takes seconds or more than a minute and a half (dedicated exact clique solvers are not compared here).
-DLS-MC is faster than the search by one to two orders of magnitude on the plot, and more on equal hardware, and
-it solves the brock graphs, where the search ends in one of the decoy cliques however it is tuned. For maximum
-cliques, a solver made for them is the better tool; what this search offers is one method for many kinds of
+DLS-MC is faster than subgraphsearch by one to two orders of magnitude on the plot, and more on equal hardware, and
+it solves the brock graphs, where subgraphsearch ends in one of the decoy cliques however it is tuned. For maximum
+cliques, a solver made for them is the better tool; what subgraphsearch offers is one method for many kinds of
 target, most of which have no such solver.
 """),
     md(f"""
