@@ -5,14 +5,22 @@
 [![crates.io: subgraphsearch](https://img.shields.io/crates/v/subgraphsearch?label=crates.io%3A%20subgraphsearch)](https://crates.io/crates/subgraphsearch)
 [![crates.io: subgraphsearch-core](https://img.shields.io/crates/v/subgraphsearch-core?label=crates.io%3A%20subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
-Find **induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
-[paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
-and [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory))** in a graph, or any
-[induced subgraph](https://en.wikipedia.org/wiki/Induced_subgraph) with a given number of vertices and
-edges. Searches are [fast](#performance), reproducible from a seed and come with diagnostics for
-tuning them. Many [graph formats](#graph-formats) are supported.
+Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a prescribed number of
+vertices and edges** in a graph, or with a given total weight in a weighted graph. Searches are
+[fast](#performance), reproducible from a seed and come with diagnostics for tuning them. Many
+[graph formats](#graph-formats) are supported.
 
-A search can be required to fix particular vertices. It can also find regular subgraphs with a prescribed degree and subgraphs with a given total weight in weighted graphs. Graphs can be built from block designs and other incidence structures, as well as switched with respect to the subgraphs a search finds. Near misses are reported in addition to exact solutions, enabling use as an approximation algorithm.
+Near misses are reported in addition to exact solutions, enabling use as an approximation algorithm.
+For exact edge counts, solutions take milliseconds where a general solver such as CP-SAT gives out
+at a few dozen vertices. On the [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), choosing items as different from
+each other as possible, the search reaches published best values in under a second (see
+[Compared with other methods](#compared-with-other-methods)).
+
+A search can also find induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
+[paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
+and [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)), as well as regular subgraphs with a
+given degree, and can be required to fix particular vertices. Graphs can be built from block designs
+and other incidence structures, as well as switched with respect to the subgraphs a search finds.
 
 See the
 [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
@@ -159,7 +167,7 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 Many combinatorial objects are induced subgraphs of the right graph, so one search finds them all.
 
 - **Choosing diverse items.** Picking $`k`$ of $`n`$ items so that the total distance between the
-  chosen ones is as large as possible, the maximum diversity problem, is a weighted search: the
+  chosen ones is as large as possible, the [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), is a weighted search: the
   items are vertices and the distances edge weights. On the MDPLIB benchmark, subgraphsearch
   reaches the best known values, found by two-hour runs of a scatter search made for the problem,
   in under a second with up to 300 items and in about 5 seconds with 400. OR-Tools' CP-SAT, given

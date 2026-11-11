@@ -266,7 +266,8 @@ ss.search(w, 15, 140, experiments=40, max_moves=3000, div_freq=300, div_dur=10)
 
 Many practical choices come down to picking $k$ items out of $n$ so that the chosen ones are as different from
 each other as possible: a diverse portfolio, sites for facilities that should be far apart, a varied set of
-compounds to test, a jury. Given a distance between every two items, this is the *maximum diversity problem*:
+compounds to test, a jury. Given a distance between every two items, this is the
+[maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html):
 maximize the sum of the distances between the chosen items. With the items as vertices and the distances as
 edge weights, that sum is the total weight of an induced subgraph on $k$ vertices, which is what a weighted
 search aims at.
@@ -342,8 +343,10 @@ subgraphsearch reaches every best known value, in under a second for 60 runs, wh
 long, reaches one of them and falls further short as the instances grow; the upper bounds it proves are far
 above the best values, so it cannot show that any of them is optimal. On larger SOM-b instances, measured
 separately, the pattern continues: with 400 items subgraphsearch still reaches the best known values, within
-about 5 seconds when given 100,000 moves per run, while CP-SAT falls 6% to 8% short. Choosing $k$ items for a
-target total of pairwise scores is the kind of problem subgraphsearch is for: a practical one, which solvers are
+about 5 seconds when given 100,000 moves per run, while CP-SAT falls 6% to 8% short. The strongest methods
+for this problem include iterated tabu search (Palubeckis, 2007), which alternates a tabu search with
+perturbations. subgraphsearch, a port of programs written in 2002, combines tabu moves with diversification in
+much the same way, for any target. Choosing $k$ items for a target total of pairwise scores is the kind of problem subgraphsearch is for: a practical one, which solvers are
 used for, where its search is fast and needs no tuning for each instance.
 """),
     md("""
