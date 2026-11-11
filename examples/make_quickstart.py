@@ -130,9 +130,9 @@ edge count is from the target. This turns the search into an approximation algor
 
 - **When a target is out of reach,** the near misses are the closest subgraphs found. No experiment finds 30
   vertices spanning 350 edges, but several find 349.
-- **To find the densest $k$ vertices,** aim at a target the graph cannot reach, such as all $k(k-1)/2$ edges,
-  and take the best near miss: its edge count is the most the search found. Aiming at 0 edges finds the
-  sparsest $k$ vertices the same way.
+- **To find the densest $k$ vertices,** with no target in mind, use `ss.densest(g, k)`. It aims at a target
+  no $k$ vertices can exceed, all $k(k-1)/2$ edges, so the best near miss has the most edges the search found;
+  `ss.sparsest(g, k)` aims at 0 edges. In a weighted graph they find the heaviest and lightest $k$ vertices.
 
 The search cannot show that nothing closer exists, so the best near miss is a lower bound on the true
 optimum, not a proof of it.
@@ -141,8 +141,8 @@ optimum, not a proof of it.
 near = ss.search(g, 30, 350, **settings).solutions(max_conflict=1)
 print("within one edge of 350:", [g.induced_edge_count(vs) for vs in near])
 
-densest = ss.search(g, 30, 30 * 29 // 2, **settings).best   # aim at a 30-clique
-print("aiming at a 30-clique, the densest 30 vertices found span", g.induced_edge_count(densest.vertices), "edges")
+dense = ss.densest(g, 30, **settings)
+print(dense.summary())
 """),
     md("""
 ## Weighted graphs
@@ -240,7 +240,8 @@ if mdp_rows:
     md("""
 Without kicks, subgraphsearch reaches every best known value up to 300 items but finds the larger instances
 harder, and on the 400-item ones a run rarely gets there, if ever. With large kicks, most runs reach the best
-known value on every instance, in about a second or less for 60 runs. Choosing $k$ items for a target total
+known value on every instance, in about a second or less for 60 runs. Without a published value to aim at,
+`ss.densest(items, k)` finds the most diverse selection the search can reach. Choosing $k$ items for a target total
 of pairwise scores is the kind of problem subgraphsearch is for: a practical one, where its search is fast and
 needs little tuning.
 """),

@@ -441,3 +441,70 @@ def largest(
         ]
         results[size] = SearchResult(graph, params, exps)
     return LargestResult(graph, shape, results)
+
+
+@dataclass(frozen=True)
+class ExtremeResult:
+    """The outcome of :func:`densest` or :func:`sparsest`: the search, and the extreme subgraphs it found."""
+
+    graph: Graph | WeightedGraph
+    #: ``"densest"`` or ``"sparsest"``.
+    kind: str
+    #: The search, aimed at the most (or fewest) edges, or total weight, that any ``size`` vertices could span.
+    result: SearchResult
+
+    def _value(self, vertices) -> int:
+        g = self.graph
+        return g.induced_weight(vertices) if isinstance(g, WeightedGraph) else g.induced_edge_count(vertices)
+
+    @property
+    def vertices(self) -> tuple[int, ...]:
+        """The vertices of the densest (or sparsest) subgraph found."""
+        return self.result.best.vertices
+
+    @property
+    def value(self) -> int:
+        """Its number of edges, or total weight in a weighted graph."""
+        return self._value(self.vertices)
+
+    def solutions(self) -> list[tuple[int, ...]]:
+        """Every distinct vertex set found with :attr:`value`, each listed once."""
+        return [vs for vs in self.result.solutions(max_conflict=self.result.best.best_conflict)
+                if self._value(vs) == self.value]
+
+    def summary(self) -> str:
+        what = "total weight" if isinstance(self.graph, WeightedGraph) else "edges"
+        best = self.result.best
+        reached = sum(e.best_conflict == best.best_conflict for e in self.result.experiments)
+        return (f"{self.kind} {self.result.params.size} vertices found: {self.value} {what}, reached by {reached} of "
+                f"{len(self.result.experiments)} experiments ({len(self.solutions())} distinct)")
+
+    def __repr__(self) -> str:
+        what = "weight" if isinstance(self.graph, WeightedGraph) else "edges"
+        return f"ExtremeResult({self.kind}, size={self.result.params.size}, {what}={self.value})"
+
+
+def densest(graph: Graph | WeightedGraph, size: int, **kwargs) -> ExtremeResult:
+    """Searches for the ``size`` vertices spanning the most edges, or in a :class:`WeightedGraph` the most total
+    weight, without a target to aim at: the k most diverse items, the densest community.
+
+    It runs :func:`search` aimed at the most any ``size`` vertices could span, all ``size(size - 1)/2`` pairs (at the
+    largest weight, 255, in a weighted graph) or the whole graph if that is less; the conflict is then how far a
+    subgraph falls short of it, so minimizing it maximizes the edges or weight. The other arguments are passed to
+    :func:`search`, so ``fixed=`` and ``connected=True`` work, and so do the settings: hard instances want longer
+    runs and larger region kicks, as for any search. A heuristic search can miss denser subgraphs, so the value
+    found is a lower bound on the most possible.
+    """
+    k = int(size)
+    if isinstance(graph, WeightedGraph):
+        bound = min(255 * (k * (k - 1) // 2), graph.total_weight)
+    else:
+        bound = min(k * (k - 1) // 2, graph.m)
+    return ExtremeResult(graph, "densest", search(graph, k, bound, **kwargs))
+
+
+def sparsest(graph: Graph | WeightedGraph, size: int, **kwargs) -> ExtremeResult:
+    """Searches for the ``size`` vertices spanning the fewest edges, or the least total weight: aimed at none, so
+    the conflict is the edges or weight itself. The counterpart of :func:`densest`, with the same arguments; an
+    upper bound on the fewest possible."""
+    return ExtremeResult(graph, "sparsest", search(graph, int(size), 0, **kwargs))

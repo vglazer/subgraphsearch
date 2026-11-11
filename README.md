@@ -78,6 +78,7 @@ r = ss.search(g, size=11, edges=55)    # 11-cliques
 r = ss.search(g, size=30, edges=340)   # 30 vertices spanning exactly 340 edges
 r = ss.search(g, size=10, degree=4)    # 4-regular induced subgraphs
 big = ss.largest(g, "clique")          # the largest clique the search can find
+dense = ss.densest(g, 30)              # the 30 vertices spanning the most edges
 
 print(r.summary())
 r.solutions()                                  # the distinct vertex sets found

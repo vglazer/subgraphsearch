@@ -837,3 +837,27 @@ def test_targets_above_the_total_find_the_closest_subgraphs():
     best = ss.search(w, 8, target, max_moves=1000).best
     assert best.best_conflict == target - w.induced_weight(best.vertices)
     assert w.induced_weight(best.vertices) > 0
+
+
+def test_densest_and_sparsest_match_brute_force():
+    from itertools import combinations
+    g = ss.generate("exponential", 14, 0.5, seed=4)
+    w = ss.generate_weighted(14, 0.9, seed=4)
+    for graph, value in ((g, g.induced_edge_count), (w, w.induced_weight)):
+        for k in (4, 6):
+            totals = [value(c) for c in combinations(range(14), k)]
+            dense = ss.densest(graph, k, experiments=40, max_moves=1000)
+            sparse = ss.sparsest(graph, k, experiments=40, max_moves=1000)
+            assert dense.value == max(totals) and value(dense.vertices) == dense.value
+            assert sparse.value == min(totals)
+            assert dense.solutions() and all(value(vs) == dense.value for vs in dense.solutions())
+            assert dense.kind == "densest" and "densest" in dense.summary()
+    # a dense graph's densest set can be a clique of the whole bound, and targets cap at the graph's edges
+    complete = ss.Graph(6, [(u, v) for u in range(6) for v in range(u + 1, 6)])
+    assert ss.densest(complete, 4).value == 6
+    sparse_graph = ss.Graph(10, [(0, 1)])
+    assert ss.densest(sparse_graph, 5).value == 1
+    # other search arguments pass through
+    assert 0 in ss.densest(g, 5, fixed=[0]).vertices
+    with pytest.raises(ValueError):
+        ss.densest(g, 5, degree=2)

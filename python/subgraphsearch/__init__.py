@@ -31,11 +31,14 @@ from ._graph import (
 from ._search import (
     DEFAULT_KICK_SIZE,
     Experiment,
+    ExtremeResult,
     LargestResult,
     SearchParams,
     SearchResult,
+    densest,
     largest,
     search,
+    sparsest,
     sweep,
 )
 
@@ -50,6 +53,7 @@ __all__ = [
     "DEFAULT_KICK_SIZE",
     "MODELS",
     "Experiment",
+    "ExtremeResult",
     "Graph",
     "LargestResult",
     "SearchParams",
@@ -57,6 +61,7 @@ __all__ = [
     "WeightedGraph",
     "__version__",
     "convert",
+    "densest",
     "designs",
     "dumps_all",
     "formats",
@@ -71,6 +76,7 @@ __all__ = [
     "read",
     "read_all",
     "search",
+    "sparsest",
     "sweep",
     "vectors",
     "viz",

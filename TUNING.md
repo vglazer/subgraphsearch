@@ -12,7 +12,7 @@ are given by their Python names, with the command-line options in parentheses.
 | --- | --- |
 | $`k`$ vertices with exactly $`m`$ edges | `size=k, edges=m` (`-k k -m m`) |
 | a $`k`$-clique, a $`k`$-vertex independent set | `edges` set to $`k(k-1)/2`$, or to 0 |
-| the densest (or sparsest) $`k`$ vertices | raise (or lower) `edges` until successes stop; the threshold is sharp |
+| the densest (or sparsest) $`k`$ vertices, or the heaviest (lightest) in a weighted graph | `ss.densest(g, k)` (`ss.sparsest(g, k)`); on the command line, aim `-m` at $`k(k-1)/2`$ (or 0) and read the best near miss |
 | subgraphs close to a target | `r.solutions(max_conflict=n)` (`--max-conflict n`) |
 | subgraphs containing given vertices | `fixed=` (`--fixed`), or for cliques, search their common neighborhood (below) |
 | regular subgraphs of degree $`d`$ | `degree=d, two_phase=True` (`--degree d --two-phase`), or `degree=d` alone with fixed vertices |
@@ -31,9 +31,9 @@ Some reformulations make a search easier:
   vertex. Vertex `i` of the result is `nbrs[i]` of the original graph.
 - **Search the complement of a dense graph.** $`k`$ vertices with $`m`$ edges become $`k`$ vertices
   with $`k(k-1)/2 - m`$ in the complement, which is sparse when the graph is dense.
-- **Find the limit by bisection.** To find the most edges $`k`$ vertices can span, search a few
-  values of $`m`$: the switch from always found to never found is abrupt, and near misses show how
-  close a failed target came.
+- **Let `densest` find the most edges** $`k`$ vertices can span (`ss.densest(g, k)`). Aiming at
+  exact values just below that limit also works, since the switch from always found to never found
+  is abrupt, and finds more distinct subgraphs at a given value.
 - **Let `largest` find the size** of the largest path, cycle, tree, clique or independent set (see
   [ALGORITHM.md](ALGORITHM.md#finding-the-largest-size)). The size it finds is a lower bound;
   more experiments or moves can raise it, and `lookahead` matters where some sizes below the

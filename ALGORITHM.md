@@ -129,6 +129,16 @@ an odd number of bits, every path has an even number of vertices), so a size cou
 a search succeeds at it or at one of the next `lookahead` sizes, 2 by default. The size found is a
 lower bound, like any heuristic's.
 
+## Densest and sparsest
+
+`ss.densest` finds the $`k`$ vertices spanning the most edges, or the most total weight, without a
+target: it aims at a value no $`k`$ vertices can exceed, all $`k(k-1)/2`$ pairs (each at the largest
+weight, 255, in a weighted graph) or the whole graph's edges or weight if that is less. The conflict
+is then how far a subgraph falls short, so minimizing it maximizes the edges or weight, and the
+best subgraph found is the densest. `ss.sparsest` aims at 0 and so minimizes them. Like
+`ss.largest`, both report a heuristic's bound: the densest value found is a lower bound on the most
+possible.
+
 ## Reading the results
 
 Each experiment reports the best conflict it reached, the subgraph that reached it and the moves
@@ -141,8 +151,8 @@ it made. Over a search:
   **true cost** divides all moves made by the number of successes, so it also counts failures.
 - The **average conflict** is the mean best conflict, 0 when every experiment succeeds.
 - **Near misses**, the subgraphs within a few edges of the target, make the search an
-  approximation algorithm: aiming at an unreachable target, such as a clique of the size wanted,
-  finds the densest subgraphs the search can reach.
+  approximation algorithm: the closest subgraphs to a target it cannot reach, and the densest or
+  sparsest subgraphs of a given size (see above).
 
 ## Data structures and limits
 

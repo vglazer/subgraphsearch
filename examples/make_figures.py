@@ -102,6 +102,7 @@ def main(out: Path = OUT) -> None:
     fig.suptitle("one random graph (36 vertices, 156 edges), four searches", fontsize=12)
 
     fig.savefig(out / "overview.png", dpi=100, facecolor="white")
+    plt.close(fig)
     print(out / "overview.png")
     comparison(out)
 
@@ -153,6 +154,7 @@ def comparison(out: Path) -> None:
     mdp.set_title("maximum diversity (MDPLIB)", fontsize=11, loc="left")
     mdp.legend(frameon=False, fontsize=9, loc="upper right")
     fig.savefig(out / "comparison.png", dpi=100, facecolor="white")
+    plt.close(fig)
     print(out / "comparison.png")
     benchmarks(out)
 
@@ -211,6 +213,7 @@ def benchmarks(out: Path) -> None:
     mine.set_xlabel("vertices in the graph")
     mine.set_title("subgraphsearch: every target found", fontsize=11, loc="left")
     fig.savefig(out / "benchmarks_edges.png", dpi=100, facecolor="white")
+    plt.close(fig)
     print(out / "benchmarks_edges.png")
 
     # maximum diversity: % below the best known value, by solver
@@ -239,6 +242,7 @@ def benchmarks(out: Path) -> None:
     ax.set_title("maximum diversity (MDPLIB): how far each method falls short", fontsize=11, loc="left")
     fig.legend(frameon=False, fontsize=9, loc="outside lower center", ncol=5)
     fig.savefig(out / "benchmarks_diversity.png", dpi=100, facecolor="white")
+    plt.close(fig)
     print(out / "benchmarks_diversity.png")
 
 
