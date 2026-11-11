@@ -288,22 +288,30 @@ for ax, (title, rows) in zip(axs, groups):
 fig.legend(loc="outside lower center", ncol=2, frameon=False, fontsize=9);
 """),
     md("""
-Measured on smaller graphs, where CP-SAT always finishes, with the same density and target, its time grows
-steeply with the graph while subgraphsearch's stays flat, at a fraction of a millisecond:
+Measured at more sizes, with the same density and target, CP-SAT's time grows steeply with the graph, and on
+the two largest graphs below it finds nothing within its 10 seconds, while subgraphsearch's time stays flat, at
+a fraction of a millisecond:
 """),
     code("""
-# Recorded: vertices, target vertices and edges, subgraphsearch successes / 60 and ms, CP-SAT ms
+# Recorded: vertices, target vertices and edges, subgraphsearch successes / 60 and ms,
+# CP-SAT ms (None: nothing found in 10 s)
 scaling = [(20, 6, 15, 60, 0.20, 25), (23, 7, 20, 60, 0.17, 18), (26, 8, 28, 60, 0.23, 23),
            (29, 9, 34, 60, 0.22, 414), (32, 10, 43, 60, 0.14, 650), (35, 10, 42, 60, 0.29, 1125),
-           (38, 11, 52, 60, 0.15, 4490)]
+           (38, 11, 52, 60, 0.15, 4490), (55, 16, 102, 60, 0.69, None), (60, 18, 131, 60, 0.59, None)]
 sizes = [row[0] for row in scaling]
+done = [row for row in scaling if row[5]]
+timed_out = [row for row in scaling if not row[5]]
 fig, (cp, mine) = plt.subplots(1, 2, figsize=(13, 3.8), layout="constrained")
-cp.plot(sizes, [row[5] / 1000 for row in scaling], "o-", color="#4c6ef5")
-cp.set_ylim(0, 5)
+cp.plot([row[0] for row in done], [row[5] / 1000 for row in done], "o-", color="#4c6ef5", label="found")
+cp.plot([row[0] for row in timed_out], [10] * len(timed_out), "^", color="#4c6ef5", markerfacecolor="white",
+        label="nothing in 10 s")
+cp.axhline(10, color="#868e96", lw=0.8, ls="--")
+cp.set_ylim(0, 11)
 cp.set_ylabel("seconds to find a solution")
 cp.set_title("CP-SAT", fontsize=10, loc="left")
+cp.legend(frameon=False, fontsize=9, loc="upper left")
 mine.plot(sizes, [row[4] for row in scaling], "o-", color="#d6336c")
-mine.set_ylim(0, 5)
+mine.set_ylim(0, 11)
 mine.set_ylabel("milliseconds to find a solution")
 mine.set_title("subgraphsearch", fontsize=10, loc="left")
 for ax in (cp, mine):
