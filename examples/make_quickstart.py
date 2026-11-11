@@ -285,7 +285,7 @@ for ax, (title, rows) in zip(axs, groups):
     ax.set_xlim(0.05, 1e6)
     ax.set_title(title, fontsize=10, loc="left")
     ax.set_xlabel("ms to find a solution (log)")
-fig.legend(loc="outside lower center", ncol=2, frameon=False, fontsize=9)
+fig.legend(loc="outside lower center", ncol=2, frameon=False, fontsize=9);
 """),
     md("""
 CP-SAT's time grows steeply with the graph, from a fifth of a second at 30 vertices to more than 10 seconds at 70,
