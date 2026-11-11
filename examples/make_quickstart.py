@@ -631,12 +631,6 @@ def neighbors_inside(g, vertices):
 for name in ("Petersen", "T(8)", "rook's 6 x 6", "5-cube", "Clebsch"):
     print(f"{name:13} vertices outside the independent set have", neighbors_inside(spectral[name], largest[name][0].best.best.vertices),
           "neighbors in it")
-
-board = lambda vertices: np.isin(np.arange(36), vertices).reshape(6, 6).astype(int)
-independent, clique = (r.best.best.vertices for r in largest["rook's 6 x 6"])
-fig, axs = plt.subplots(1, 2, figsize=(7, 3.6), layout="constrained")
-viz.plot_sign_matrix(board(independent), axs[0], title="largest independent set: a permutation")
-viz.plot_sign_matrix(board(clique), axs[1], title="largest clique: a whole column (or row)");
 """),
     md(f"""
 ## Edges and eigenvalues
@@ -675,8 +669,10 @@ mixing = {
     "random 8-regular, 64 vertices": ss.random_regular(64, 8, seed=1),
     "Paley graph, 61 vertices": paley(61),
 }
-fig, axs = plt.subplots(1, 5, figsize=(18.5, 3.6), layout="constrained", sharey=True)
-for ax, (name, graph) in zip(axs, mixing.items()):
+# two structured graphs on top, then from a poor expander to good ones below; a key in the spare corner
+fig, grid = plt.subplots(2, 3, figsize=(13, 7.6), layout="constrained", sharey=True)
+panels = [grid[0, 0], grid[0, 1], grid[1, 0], grid[1, 1], grid[1, 2]]
+for ax, (name, graph) in zip(panels, mixing.items()):
     n = graph.n
     eigenvalues = np.linalg.eigvalsh(graph.adjacency_matrix(dtype=float))
     d, second, smallest = eigenvalues[-1], eigenvalues[-2], eigenvalues[0]
@@ -693,7 +689,15 @@ for ax, (name, graph) in zip(axs, mixing.items()):
     ax.plot(sizes, most, "o", sizes, fewest, "o", color="#4c6ef5", ms=4)
     ax.set_title(f"{name}\\nd = {d:.0f}, lines at θ₂ = {second:.2f} and θₙ = {smallest:.2f}", fontsize=10, loc="left")
     ax.set_xlabel("vertices k")
-axs[0].set_ylabel("edges above a random set,\\nper k(n - k)/(2n)");
+for ax in grid[:, 0]:
+    ax.set_ylabel("edges above a random set,\\nper k(n - k)/(2n)")
+grid[0, 2].axis("off")
+grid[0, 2].text(0.02, 0.92, "For each size k:\\n\\n"
+                "blue dots: the most and the fewest edges\\nthe search finds among k vertices\\n\\n"
+                "red lines: the eigenvalue bounds on them,\\nat θ₂ (most) and θₙ (fewest)\\n\\n"
+                "dotted line: a random set of k vertices\\n\\n"
+                "Top: structured graphs. Bottom: a poor\\nexpander, then two good ones.",
+                va="top", fontsize=10, transform=grid[0, 2].transAxes);
 """),
     md("""
 Where a point sits on a line, the search has found a set as uneven as the eigenvalues allow, so the bound is
@@ -701,7 +705,7 @@ sharp there. In the rook's graph that happens at every multiple of 8, on both li
 edges, and squares forming permutation patterns the fewest. In the 6-cube it happens at half the cube, 32
 vertices: a 5-dimensional subcube on the upper line, the words of even weight on the lower one.
 
-The last three panels have the same degree, or about it, and run from a poor expander to good ones. In the
+The bottom row has graphs of the same degree, or about it, and runs from a poor expander to good ones. In the
 circulant, each vertex joined to its 4 nearest neighbors on either side around a circle, $\\theta_2$ is almost $d$:
 the upper line is near the top, and the search finds sets of every size, arcs of the circle, with almost all
 their edges inside and only a few leaving. That is the other half of Cheeger's inequality at work: a small gap
