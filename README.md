@@ -487,28 +487,13 @@ grows with the number of edges rather than with the square of the number of vert
 search on all 16 cores in a random graph on 32,000 vertices with 3 edges per vertex peaks at
 0.24 GB. These searches support graphs of up to 32,767 vertices.
 
-### Compared with an exact search
+### Compared with other methods
 
-The [DIMACS](https://networkrepository.com/dimacs) graphs are the standard benchmark
-for maximum cliques, with known clique numbers. Here the search looks for a clique of that size
-(32 experiments of up to 20,000 moves), against igraph's exact clique number, which also proves
-the answer but was stopped after 90 seconds:
-
-| Graph | Vertices | Largest clique | Search | igraph (exact) |
-| --- | --- | --- | --- | --- |
-| C125.9 | 125 | 34 | found in 32 of 32 experiments, 0.0&nbsp;s | over 90&nbsp;s |
-| C250.9 | 250 | 44 | 31 of 32, 0.1&nbsp;s | over 90&nbsp;s |
-| p_hat300-3 | 300 | 36 | 29 of 32, 0.1&nbsp;s | over 90&nbsp;s |
-| MANN_a27 | 378 | 126 | 4 of 32, 0.2&nbsp;s | over 90&nbsp;s |
-| hamming8-4 | 256 | 16 | 32 of 32, 0.0&nbsp;s | 18&nbsp;s |
-| keller4 | 171 | 11 | 32 of 32, 0.0&nbsp;s | 1.8&nbsp;s |
-| brock200_2 | 200 | 12 | not found: 11 at best | 0.3&nbsp;s |
-| brock400_2 | 400 | 29 | not found: 25 at best | over 90&nbsp;s |
-
-On most of these graphs the search finds a largest clique in a fraction of a second, where the
-exact search takes seconds or more than a minute and a half. The brock graphs are built to defeat
-local search: they hide the largest clique among many large ones that are not quite as large,
-and the search ends in those; region kicks of any size do not change that.
+On the DIMACS maximum-clique benchmarks the search finds a largest clique in milliseconds on most
+graphs, far faster than igraph's general exact search, but well behind DLS-MC, a local search
+made for maximum cliques, which also solves the deceptive graphs the search cannot. The
+[quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+has the comparison.
 
 ## Graph formats
 
