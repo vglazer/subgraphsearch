@@ -604,7 +604,9 @@ impl Workspace {
     }
 
     /// For a region kick: the `size` free subgraph vertices nearest a random free subgraph vertex,
-    /// itself included, found by breadth-first search from it (fewer if it reaches no more).
+    /// itself included, found by breadth-first search from it (fewer if it reaches no more). Each
+    /// layer of the search is visited in random order, so that among vertices equally far from the
+    /// center none is favored: in a clique, for instance, all are at distance 1.
     fn region<G: SearchGraph, R: SearchRng>(
         &self,
         graph: &G,
@@ -613,21 +615,28 @@ impl Workspace {
     ) -> Vec<usize> {
         let center = self.sub_verts[rng.below(self.v_sub as u32) as usize];
         let mut seen = std::collections::HashSet::from([center]);
-        let mut queue = std::collections::VecDeque::from([center]);
-        let mut out = vec![center];
-        while out.len() < size {
-            let Some(u) = queue.pop_front() else {
-                break;
-            };
-            for &w in graph.neighbors(u) {
-                let w = w as usize;
-                if seen.insert(w) {
-                    queue.push_back(w);
-                    if self.sub_ch[w] != 0 && !self.fixed[w] && out.len() < size {
-                        out.push(w);
+        let (mut layer, mut out) = (vec![center], vec![center]);
+        while out.len() < size && !layer.is_empty() {
+            let mut next = Vec::new();
+            for &u in &layer {
+                for &w in graph.neighbors(u) {
+                    let w = w as usize;
+                    if seen.insert(w) {
+                        next.push(w);
                     }
                 }
             }
+            for i in (1..next.len()).rev() {
+                let j = rng.below(i as u32 + 1) as usize;
+                next.swap(i, j);
+            }
+            out.extend(
+                next.iter()
+                    .copied()
+                    .filter(|&w| self.sub_ch[w] != 0 && !self.fixed[w])
+                    .take(size - out.len()),
+            );
+            layer = next;
         }
         out
     }
@@ -1057,6 +1066,34 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn kicks_favor_no_vertex_among_equally_near_ones() {
+        // in a clique every member is at distance 1 from every other, so a kick of 5 should draw
+        // members from all over it, not the lowest-numbered ones
+        let n = 64;
+        let complete =
+            Graph::from_edges(n, (0..n).flat_map(|u| (u + 1..n).map(move |v| (u, v)))).unwrap();
+        let mut p = SearchParams::new(32, 0);
+        p.kick_size = 5;
+        let mut ws = Workspace::new(&complete, &p);
+        for (k, v) in (0..32).map(|v| v * 2).enumerate() {
+            ws.sub_ch[v] = 1;
+            ws.sub_verts[k] = v;
+        }
+        let mut rng = Xoshiro::new(1);
+        let mut drawn = vec![0; n];
+        for _ in 0..400 {
+            let region = ws.region(&complete, p.kick_size, &mut rng);
+            assert_eq!(region.len(), 5);
+            for v in region {
+                assert_eq!(v % 2, 0, "only members of the subgraph");
+                drawn[v] += 1;
+            }
+        }
+        // 2000 draws over 32 members: each about 62 times; all of them drawn many times
+        assert!((0..32).all(|k| drawn[2 * k] > 20), "{drawn:?}");
     }
 
     #[test]
