@@ -103,6 +103,57 @@ def main(out: Path = OUT) -> None:
 
     fig.savefig(out / "overview.png", dpi=100, facecolor="white")
     print(out / "overview.png")
+    comparison(out)
+
+
+# Recorded for the README's comparison (CP-SAT 9.15 on 16 cores, stopped after 10 s; subgraphsearch 3.0 with
+# 60 experiments of up to 2,000 moves). Random graphs of density 0.6 with seed n; the target is the most edges
+# subgraphsearch finds among 30% of the vertices: vertices, subgraphsearch ms, CP-SAT ms (None: nothing in 10 s).
+EDGE_SCALING = [(20, 0.13, 25), (23, 0.14, 18), (26, 0.13, 23), (29, 0.13, 414), (32, 0.11, 650), (35, 0.17, 1125),
+                (38, 0.15, 4490), (41, 0.12, 85), (44, 0.17, None), (47, 0.35, None), (50, 0.83, 8814),
+                (53, 1.28, None), (56, 0.63, None), (59, 0.31, None)]
+# MDPLIB SOM-b instances: items, chosen, best known value, CP-SAT's best after 10 s. subgraphsearch reaches every
+# best known value (with kick_size=16, 60 experiments of up to 20,000 moves).
+DIVERSITY = [(100, 10, 333, 329), (100, 20, 1195, 1171), (100, 30, 2457, 2457), (100, 40, 4142, 4127),
+             (200, 40, 4450, 4263), (300, 60, 9689, 9297), (400, 40, 4658, 4374), (400, 80, 16956, 15595)]
+
+
+def comparison(out: Path) -> None:
+    """The README's comparison with CP-SAT: exact edge counts as graphs grow, and the maximum diversity benchmark."""
+    fig, (cp, mine, mdp) = plt.subplots(1, 3, figsize=(15, 4.2), layout="constrained",
+                                        gridspec_kw={"width_ratios": [1, 1, 1.15]})
+    done = [(n, t) for n, _, t in EDGE_SCALING if t is not None]
+    out_of_time = [n for n, _, t in EDGE_SCALING if t is None]
+    cp.plot([n for n, _ in done], [t / 1000 for _, t in done], "o", color="#4c6ef5", label="found")
+    cp.plot(out_of_time, [10] * len(out_of_time), "^", color="#4c6ef5", markerfacecolor="white",
+            label="nothing in 10 s")
+    cp.axhline(10, color="#868e96", lw=0.8, ls="--")
+    cp.set_ylim(0, 11)
+    cp.set_ylabel("seconds")
+    cp.set_title("CP-SAT: exact edge counts", fontsize=11, loc="left")
+    cp.legend(frameon=False, fontsize=9, loc="upper left")
+    mine.plot([n for n, _, _ in EDGE_SCALING], [ms for _, ms, _ in EDGE_SCALING], "o", color="#d6336c")
+    mine.set_ylim(0, 11)
+    mine.set_ylabel("milliseconds")
+    mine.set_title("subgraphsearch: the same targets", fontsize=11, loc="left")
+    for ax in (cp, mine):
+        ax.set_xlabel("vertices in the graph")
+    labels = [f"{n} items, {k} chosen" for n, k, _, _ in DIVERSITY]
+    shortfall = [100 * (best - cp_best) / best for _, _, best, cp_best in DIVERSITY]
+    ys = range(len(DIVERSITY))
+    mdp.barh(list(ys), shortfall, color="#4c6ef5", label="CP-SAT after 10 s")
+    mdp.plot([0] * len(DIVERSITY), list(ys), "o", color="#d6336c", label="subgraphsearch")
+    for y, s in zip(ys, shortfall):
+        mdp.annotate("matched" if s == 0 else f"{s:.1f}%", (s, y), xytext=(6, 0), textcoords="offset points",
+                     va="center", fontsize=8)
+    mdp.set_yticks(list(ys), labels, fontsize=9)
+    mdp.invert_yaxis()
+    mdp.set_xlim(-0.3, 9.5)
+    mdp.set_xlabel("% below the best known value")
+    mdp.set_title("maximum diversity (MDPLIB)", fontsize=11, loc="left")
+    mdp.legend(frameon=False, fontsize=9, loc="upper right")
+    fig.savefig(out / "comparison.png", dpi=100, facecolor="white")
+    print(out / "comparison.png")
 
 
 if __name__ == "__main__":

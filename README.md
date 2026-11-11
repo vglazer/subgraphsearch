@@ -7,14 +7,14 @@
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a prescribed number of
 vertices and edges** in a graph, or with a given total weight in a weighted graph. Searches are
-[fast](#performance), reproducible from a seed and come with diagnostics for tuning them. Many
+[fast](#how-it-compares), reproducible from a seed and come with diagnostics for tuning them. Many
 [graph formats](#graph-formats) are supported.
 
 Near misses are reported in addition to exact solutions, enabling use as an approximation algorithm.
 For exact edge counts, solutions take milliseconds where a general solver such as CP-SAT gives out
 at a few dozen vertices. On the [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), choosing items as different from
 each other as possible, the search reaches published best values in about a second (see
-[Compared with other methods](#compared-with-other-methods)).
+[How it compares](#how-it-compares)).
 
 A search can also find induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
 [paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
@@ -192,158 +192,128 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
 - **Snakes and coils in hypercubes.** The longest induced paths and cycles in the $`n`$-cube are the
   snake-in-the-box and coil-in-the-box problems. The search reaches the known records up to the
   8-cube, and in the 9-cube finds snakes of 189 vertices, 3 short of the record
-  ([examples/snake_9cube.py](examples/snake_9cube.py); see [Paths](#variants)).
+  ([examples/snake_9cube.py](examples/snake_9cube.py); see [ALGORITHM.md](ALGORITHM.md#variants)).
 - **Equiangular lines.** Lines whose vectors have inner products ±c form a clique; the search
   finds the 16 equiangular lines in 6 dimensions, the most there can be.
 
 The quickstart notebook works through each of these.
 
+## How it compares
+
+subgraphsearch is one general search: it finds any number of vertices and edges, total weights,
+and the shapes above with the same method. Below it is set beside the methods one would otherwise
+use, on problems with public benchmarks or known records. Times are wall-clock on an Apple M3 Max
+laptop with 16 cores; subgraphsearch's are for all its experiments together.
+
+![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
+
+### Exact edge counts
+
+No specialized solver finds $`k`$ vertices spanning exactly $`m`$ edges, so the alternative is a
+general constraint solver. Here it is OR-Tools'
+[CP-SAT](https://developers.google.com/optimization/cp/cp_solver), with one yes-or-no variable per
+vertex and the edge count as half the sum of the chosen vertices' degrees inside the set, on 16
+cores and stopped after 10 seconds. The graphs are random, with density 0.6; the target is the most
+edges subgraphsearch finds among 30% of the vertices, the hardest kind of target.
+
+| Graph | Target | subgraphsearch | CP-SAT |
+| --- | --- | --- | --- |
+| 20 vertices | 6 vertices, 15 edges | 0.13&nbsp;ms | 25&nbsp;ms |
+| 29 vertices | 9 vertices, 34 edges | 0.13&nbsp;ms | 0.41&nbsp;s |
+| 38 vertices | 11 vertices, 52 edges | 0.15&nbsp;ms | 4.5&nbsp;s |
+| 44 vertices | 13 vertices, 70 edges | 0.17&nbsp;ms | nothing in 10&nbsp;s |
+| 50 vertices | 15 vertices, 91 edges | 0.83&nbsp;ms | 8.8&nbsp;s |
+| 59 vertices | 18 vertices, 129 edges | 0.31&nbsp;ms | nothing in 10&nbsp;s |
+
+subgraphsearch ran 60 experiments of up to 2,000 moves, and every one succeeded. What CP-SAT can do
+and subgraphsearch cannot is prove a target impossible: one edge more on the 30-vertex graph of the
+same kind, CP-SAT proves in 0.9 s that none exists.
+
+### Maximum diversity
+
+The [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html) picks $`k`$ of
+$`n`$ items so that the total distance between the chosen ones is as large as possible: a weighted
+search, with the items as vertices and the distances as edge weights. Its standard benchmark,
+MDPLIB, lists best known values found by two-hour runs of a scatter search made for the problem;
+the specialist heuristics that lead on it, such as iterated tabu search, reach them too. Here
+subgraphsearch aims at each best known value with 60 experiments of up to 20,000 moves and
+`kick_size=16`, and CP-SAT maximizes the total distance for 10 seconds.
+
+| Items | Chosen | Best known | subgraphsearch | CP-SAT after 10&nbsp;s |
+| --- | --- | --- | --- | --- |
+| 100 | 10 | 333 | 60 of 60 in 2&nbsp;ms | 329 |
+| 100 | 20 | 1,195 | 60 of 60 in 16&nbsp;ms | 1,171 |
+| 100 | 30 | 2,457 | 60 of 60 in 10&nbsp;ms | 2,457 |
+| 100 | 40 | 4,142 | 60 of 60 in 3&nbsp;ms | 4,127 |
+| 200 | 40 | 4,450 | 56 of 60 in 183&nbsp;ms | 4,263 |
+| 300 | 60 | 9,689 | 59 of 60 in 0.42&nbsp;s | 9,297 |
+| 400 | 40 | 4,658 | 39 of 60 in 0.70&nbsp;s | 4,374 |
+| 400 | 80 | 16,956 | 41 of 60 in 1.1&nbsp;s | 15,595 |
+
+CP-SAT's proved upper bounds lie 17% to 60% above the best known values, so it cannot show that any
+of them is optimal either.
+
+### Maximum cliques
+
+Maximum cliques have specialists. On eight graphs of the
+[DIMACS benchmark](https://networkrepository.com/dimacs.php), subgraphsearch aims at each known
+clique number with 32 experiments of up to 20,000 moves. Beside it are DLS-MC, a local search made
+for maximum cliques, from its published results (W. Pullan and H. H. Hoos, *Journal of Artificial
+Intelligence Research* 25, 2006: mean time per run on one core of a 2.2 GHz Pentium IV, several
+times slower than today's processors), and igraph's exact clique number, stopped after 90 seconds.
+
+| Graph | Vertices | Largest clique | subgraphsearch | DLS-MC | igraph (exact) |
+| --- | --- | --- | --- | --- | --- |
+| C125.9 | 125 | 34 | 32 of 32 in 3.5&nbsp;ms | 0.1&nbsp;ms | over 90&nbsp;s |
+| C250.9 | 250 | 44 | 32 of 32 in 64&nbsp;ms | 0.9&nbsp;ms | over 90&nbsp;s |
+| p_hat300-3 | 300 | 36 | 32 of 32 in 37&nbsp;ms | 0.7&nbsp;ms | over 90&nbsp;s |
+| MANN_a27 | 378 | 126 | 5 of 32 in 185&nbsp;ms | 48&nbsp;ms | over 90&nbsp;s |
+| hamming8-4 | 256 | 16 | 32 of 32 in 2.4&nbsp;ms | under 0.1&nbsp;ms | 18&nbsp;s |
+| keller4 | 171 | 11 | 32 of 32 in 1.0&nbsp;ms | under 0.1&nbsp;ms | 1.8&nbsp;s |
+| brock200_2 | 200 | 12 | 11 at most | 24&nbsp;ms | 0.3&nbsp;s |
+| brock400_2 | 400 | 29 | 25 at most | 0.48&nbsp;s | over 90&nbsp;s |
+
+subgraphsearch is far faster than a general exact search, but a solver made for cliques is faster
+still, and it solves the *brock* graphs, built to hide their largest clique from local search,
+where subgraphsearch ends on a smaller one.
+
+### Snake-in-the-box
+
+The longest induced paths in the $`n`$-dimensional hypercube, *snakes*, are a long-studied search
+problem, with records set by specialized searches.
+
+| Hypercube | Longest known snake | subgraphsearch |
+| --- | --- | --- |
+| 7-cube | 51 vertices, the longest possible | 51, in 313 of 400 experiments, 0.5&nbsp;s |
+| 8-cube | 99 vertices, the longest possible | 99, in 3 of 400 experiments, 21&nbsp;s |
+| 9-cube | 192 vertices (2026) | 185 in under 3 minutes; 189 through a fixed 95-vertex snake in one half, in 36&nbsp;s |
+
+It reaches the records up to the 8-cube with its general path search, and comes within 3 vertices
+of the 9-cube's.
+
+### In short
+
+subgraphsearch is the tool for subgraphs with a prescribed number of vertices and edges or a
+prescribed total weight: there it is fast where general solvers stall, and on maximum diversity it
+matches the best published values. For maximum cliques, a dedicated clique solver is the better
+choice. The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+runs several of these searches.
+
 ## How the search works
 
-The subgraph *[induced](https://en.wikipedia.org/wiki/Induced_subgraph)* by a set of vertices
-consists of those vertices and every edge of the graph between them, so choosing the vertices
-determines the edges. A *[clique](https://en.wikipedia.org/wiki/Clique_(graph_theory))* is a set of
-vertices that are all adjacent, an
-*[independent set](https://en.wikipedia.org/wiki/Independent_set_(graph_theory))* one with no edges
-at all, and a graph is *[$`d`$-regular](https://en.wikipedia.org/wiki/Regular_graph)* when every
-vertex has exactly $`d`$ neighbors.
+subgraphsearch is a randomized tabu search with perturbations. Each move swaps one subgraph vertex
+for one outside vertex, chosen among the swaps that bring the edge count (or total weight) closest
+to the target; recently swapped vertices are tabu, so the search does not cycle; and every few
+hundred moves a perturbation, random moves or a *region kick* that rebuilds the part of the subgraph
+nearest a random vertex, moves it out of local minima. Independent experiments run in parallel, and
+results depend only on the seed. [ALGORITHM.md](ALGORITHM.md) describes the method in full: its
+moves and perturbations, the variants for weights, regular subgraphs, connected subgraphs and paths,
+and its data structures and limits.
 
-Finding a $`k`$-vertex induced subgraph with exactly $`m`$ edges is NP-hard (it includes finding
-cliques), so `subgraphsearch` uses a randomized local search, specifically a *tabu search*: a
-local search that forbids undoing recent moves for a while, so that it keeps exploring instead of
-cycling. It cannot prove that no solution exists, but in practice it finds solutions quickly when
-they are not too rare.
+## Graphs
 
-### Moves
+Random graphs:
 
-Write $`S`$ for the current set of $`k`$ vertices, $`e`$ for the number of edges they induce, and
-$`d_S(v)`$ for the number of neighbors a vertex $`v`$ has in $`S`$. The search minimizes the
-*conflict* $`|e - m|`$; a conflict of 0 is a solution. Each move swaps one vertex $`u`$ of $`S`$
-for one outside vertex $`w`$. Keeping $`d_S(v)`$ up to date for every vertex makes each swap cheap
-to evaluate: the edge count becomes $`e - d_S(u) + d_S(w) - [u \sim w]`$, where $`[u \sim w]`$ is 1
-if $`u`$ and $`w`$ are adjacent and 0 otherwise. Removing $`u`$ loses its $`d_S(u)`$ edges and
-adding $`w`$ gains its $`d_S(w)`$, but an edge between them is counted in $`d_S(w)`$ and leaves
-with $`u`$. The search takes one of the best swaps at random.
-
-Two refinements make this fast and effective:
-
-- **Restricted neighborhood.** If the last move left the edge count unchanged, only swaps
-  involving a vertex adjacent to exactly one of the two vertices just swapped are examined. Every
-  other swap has the same value it had before the move, so the search concentrates on the swaps
-  the move changed. This improves results as well as speed, and on large dense graphs
-  it skips most of the work.
-- **Tabu moves.** The two vertices just swapped are *tabu* for the next move: the vertex just
-  added cannot be removed and the vertex just removed cannot be added back. Without this the
-  search would often cycle between the same two subgraphs. Moves stay tabu for a single step,
-  the shortest possible *tabu tenure*.
-
-### Diversification and restarts
-
-Local search gets stuck in local minima. To shake it loose, the first `--div-dur` moves of every
-`--div-freq` moves are made at random; these perturbations can improve the results considerably
-(`--div-dur 0` turns them off). Each *experiment* is an independent restart from random vertices.
-Experiments run in parallel on all cores, and results still depend only on the seed.
-
-A *region kick* (`--kick-size k`) shakes harder: instead of the random moves of each cycle after
-the first, it swaps out the $`k`$ subgraph vertices nearest a random one, each for the best
-replacement, and keeps them out for a while, rebuilding one part of the subgraph at a time. It
-helped on every kind of problem tried: hard edge-count targets in random graphs, the maximum
-diversity benchmark, where it turns occasional successes on the 400-item instances into most runs,
-the DIMACS clique graphs, and codes, where it finds the 72-word code of length 11 and distance 4
-in nearly every experiment instead of half. Kicks of 4 vertices never made results worse in these
-tests, so edge-count and weight searches use them by default; they take effect only in searches
-longer than `--div-freq` moves. Larger kicks often help much more but can rebuild too much at once
-and do worse than none, so compare a few sizes; `--kick-size 0` turns kicks off. Regular and path
-searches have no kicks, and `--rng legacy` has none by default, so that it still reproduces the
-original programs.
-
-### Reading the results
-
-Each experiment reports the best conflict it reached and the moves it needed:
-
-- **Success rate** and **moves to success** show how hard a target is; `viz.plot_search_summary`
-  plots both, and the next section explains how to use them to tune a search.
-- **Relative cost** is the mean number of moves per success, over successful experiments;
-  **true cost** divides all moves made by the number of successes, so it also counts failures.
-- **Average conflict** is the mean best conflict. Near misses are useful in their own right: with
-  `--max-conflict n` the search doubles as an approximation algorithm, returning subgraphs
-  within $`n`$ edges of the target.
-
-### Variants
-
-- **Weighted graphs** (`--weighted`): edges carry integer weights and the target is a total
-  weight. With all weights 1 it behaves like the plain search.
-- **Regular subgraphs** (`--degree d`): the conflict becomes the total deviation from regularity,
-  $`\sum_{v \in S} |d_S(v) - d|`$. Each vertex's neighbor list is kept partitioned, subgraph
-  neighbors first, so that swaps stay cheap to evaluate. The intended use is finding regular
-  subgraphs of strongly regular graphs. A graph is
-  *[strongly regular](https://en.wikipedia.org/wiki/Strongly_regular_graph)* with parameters
-  $`(n, k, \lambda, \mu)`$ when it has $`n`$ vertices, is $`k`$-regular, every two adjacent vertices
-  have exactly $`\lambda`$ common neighbors, and every two non-adjacent vertices exactly $`\mu`$;
-  the [5-cycle](https://en.wikipedia.org/wiki/Cycle_graph), the
-  [Petersen graph](https://en.wikipedia.org/wiki/Petersen_graph) and the
-  [Paley graphs](https://en.wikipedia.org/wiki/Paley_graph) are examples.
-  *[Seidel switching](https://en.wikipedia.org/wiki/Two-graph#Switching_and_graphs)* a graph with
-  respect to a vertex set $`S`$ swaps edges and non-edges between $`S`$ and the rest of the graph,
-  leaving edges within $`S`$ and within the rest unchanged. Switching a strongly regular graph with
-  respect to a suitable regular subgraph can give another strongly regular graph with the same
-  parameters, sometimes one not isomorphic to the original: switching the 4×4
-  [rook's graph](https://en.wikipedia.org/wiki/Rook%27s_graph), $`(16, 6, 2, 2)`$, with respect to a
-  2-regular subgraph on 8 vertices gives the
-  [Shrikhande graph](https://en.wikipedia.org/wiki/Shrikhande_graph). The search can find cliques
-  and independent sets too, but the plain search does that much faster.
-- **Two phases** (`--degree d --two-phase`): first find a subgraph with the right number of edges
-  ($`kd/2`$), then make it regular using only swaps that keep the edge count. It usually finds
-  regular subgraphs about 1.5 to 3.5 times faster than `--degree` alone. With `--fixed`, it
-  computes the edge target from the non-fixed vertices only, so it rarely succeeds; use
-  `--degree` alone there.
-- **Aspiration** (`--aspiration`, edge-count and weight searches only): the tabu search's
-  *aspiration criterion*, which lifts the tabu on a move that would beat the best conflict so far.
-  After each move it also considers the swaps involving the two vertices just swapped, and takes one
-  of them whenever it would. It can help a search that stalls, but usually makes little difference.
-- **Connected subgraphs** (`--connected`, any search): each component of the subgraph beyond the
-  first adds 1 to the conflict, so only connected subgraphs that hit the target count as successes.
-  Swaps are still chosen by the target alone. A disconnected subgraph that hits it leaves the search
-  on a plateau, which it crosses by swaps that keep the target until it reaches a connected one, so
-  this works best when connected subgraphs are common among those that hit the target. It has two
-  main uses. `--degree 2 --connected` finds
-  [induced cycles](https://en.wikipedia.org/wiki/Induced_path) rather than unions of them: on a
-  60-vertex random graph of density 0.08, all 200 of 200 experiments find a single 12-cycle, where
-  `--degree 2` alone ends on one in 110. And `-k k -m k-1 --connected` finds induced
-  [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory)), since a connected graph on $`k`$
-  vertices with $`k - 1`$ edges is a tree: on the same graph it finds 10-vertex trees in all 200
-  experiments, where the edge count alone gives a tree in 25. The two-phase search's second phase
-  makes no random moves, so it crosses such plateaus less often; leave out `--two-phase` here.
-  Counting components after every move costs little in sparse graphs but can double the time in
-  dense ones, whose dense subgraphs are connected anyway, so use it only where disconnected solutions
-  turn up.
-- **Paths** (`--path`, `path=True`): induced paths on $`k`$ vertices. A path is a tree, but the tree
-  search rarely ends on one beyond a few vertices, so paths have a search of their own. It makes
-  the regular search's moves for degree 2, but values each swap by how far the deviation from
-  regularity would be from 2 rather than 0, since a path's two endpoints have degree 1 and every
-  other vertex degree 2, plus how far the edge count would be from $`k - 1`$. The conflict is
-  `|deviation - 2| + |edges - (k - 1)|` plus the components beyond the first, which is 0 exactly
-  for an induced path. On the 60-vertex graph above it finds
-  paths of 29 vertices, longer than the graph's longest induced cycle, and in hypercubes it reaches
-  the known [snake-in-the-box](https://en.wikipedia.org/wiki/Snake-in-the-box) records up to the
-  8-cube's 99 vertices. In the 9-cube, the lowest dimension where the longest snake is unknown, it
-  finds snakes of 185 vertices in under three minutes, 7 short of the record of 192 vertices (191
-  edges, reported in 2026; the previous record, 191 vertices, had stood since 2012); see
-  [Performance](#performance). Fixing a 95-vertex snake of the 8-cube in one half of the 9-cube with
-  `fixed=` gets closer: the search for the rest then finds snakes of 189 vertices in most
-  experiments, 3 short of the record, though only some 8-cube snakes work as the half
-  ([examples/snake_9cube.py](examples/snake_9cube.py)). Like regular searches, it needs an
-  unweighted graph.
-- **Paths between two vertices** (`--endpoints s,t`, `endpoints=(s, t)`, with a path search): induced
-  paths that run from `s` to `t`. The shortest path between two vertices is always induced and easy
-  to find, but long induced paths between them are as hard to find as long induced paths in general.
-  The search attaches a new vertex to each of `s` and `t`, which an induced path can only contain as
-  an end, and looks for a path two vertices longer that contains all four; the results leave the new
-  vertices out, so every subgraph returned, near misses included, contains `s` and `t`. Between
-  opposite corners of the 7-cube it finds paths of 48 vertices in 140 of 200 experiments, in under a
-  second.
-
-### Random graphs and operations
 
 - **exponential**: [Erdős–Rényi](https://en.wikipedia.org/wiki/Erd%C5%91s%E2%80%93R%C3%A9nyi_model);
   each pair of vertices is an edge independently with probability equal to the density. With
@@ -375,7 +345,7 @@ Graph operations help focus a search. Searching the
 with $`m`$ edges become $`k`$ vertices with $`k(k-1)/2 - m`$, and for a dense graph the complement
 is sparse and cheaper to work with. Inducing a subgraph on the common neighborhood of some vertices
 restricts the search to vertices adjacent to all of them, and `switch` performs Seidel switching
-(see [Variants](#variants)) with respect to a vertex set, such as a regular subgraph found by the
+(see [ALGORITHM.md](ALGORITHM.md#variants)) with respect to a vertex set, such as a regular subgraph found by the
 search.
 
 Graphs can also be built from an
@@ -435,91 +405,24 @@ Some reformulations make a search easier:
 Tune a search on your own graph by trying a few settings; `ss.sweep` runs one search per value of
 a setting, and `viz.plot_sweep` compares them. As a rule:
 
-- **Spend the budget on experiments, not long runs.** Most successful experiments succeed early,
-  and an experiment that has stalled rarely recovers, so the defaults are many short runs: 40
-  experiments of up to 250 moves. When successes come quickly, runs of 50 to 250 moves can find
-  solutions 4 to 17 times faster than runs of 1000. To tune this for your target, run a pilot
-  search with generous `--moves` (say 5000), look at the moves successful experiments needed (the
-  success-time distribution, or `viz.plot_run_time_distribution`), and set `--moves` to two or
-  three times the median, using the rest of the time for more `--experiments`. Raise `--moves` if
-  successes cluster near the limit; do not go far below the size of the subgraph, since a random
-  start may need about $`k`$ swaps to reach a solution.
+- **Start with many short runs.** Easy targets are found early, so the defaults are 40
+  experiments of up to 250 moves. To tune this for your target, run a pilot search with generous
+  `--moves` (say 5000), look at the moves successful experiments needed (the success-time
+  distribution, or `viz.plot_run_time_distribution`), and set `--moves` to two or three times the
+  median, using the rest of the time for more `--experiments`. Do not go far below the size of the
+  subgraph, since a random start may need about $`k`$ swaps to reach a solution.
+- **Give hard targets longer runs and compare kick sizes.** Runs longer than `--div-freq` moves
+  make region kicks, 4 vertices by default, which keep finding solutions where an unperturbed run
+  would stall. Larger kicks can help much more on some problems and less on others, so compare a
+  few sizes with `ss.sweep`; `--kick-size 0` turns them off.
 - **Use more experiments to find more solutions.** The success rate estimates how hard a target is,
   and more experiments find more distinct solutions, although many repeat
   (`r.solutions()` lists each once).
-- **Leave diversification at its defaults.** Short bursts of random moves make little difference.
-  Bursts of $`k`$ to $`2k`$ random moves help long runs that stall, because they act as restarts
-  within an experiment, but shorter runs with more experiments do the same more simply. `--div-dur
-  0` gives a pure local search.
+- **Random moves:** the defaults, 4 every 250 moves, rarely need changing; `--div-dur 0` gives a
+  pure local search.
 - **Aspiration** rarely makes a difference; try it on searches that stall.
 - **Seeds:** results depend only on the seed and the settings, not on the number of threads, so a
   search can be repeated exactly; change the seed for independent runs.
-
-## Performance
-
-Wall-clock times on an Apple M3 Max laptop with 16 cores, using all of them, for searches started
-from Python (the command runs the same engine). Settings are given as experiments × maximum moves
-per experiment.
-
-An experiment stops at its first solution, so the moves actually made, not the
-maximum, determine the time.
-
-| Search | Settings | Moves&nbsp;made | Time | Successes |
-| --- | --- | --- | --- | --- |
-| 11-cliques in a random graph on 100 vertices, density 0.6 | 40 × 250 (defaults) | 1,652 | 0.4&nbsp;ms | 40 of 40 |
-| 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 62,157 | 12&nbsp;ms | 41 of 60 |
-| 13-cliques in a random graph on 1,000 vertices, density 0.5 | 200 × 2000 | 11,994 | 13&nbsp;ms | 200 of 200 |
-| 14-cliques in the same graph | 200 × 2000 | 110,696 | 113&nbsp;ms | 195 of 200 |
-| 15-cliques in the same graph | 200 × 2000 | 395,650 | 418&nbsp;ms | 5 of 200 |
-| 8-regular subgraphs on 20 vertices of the [Paley graph](https://en.wikipedia.org/wiki/Paley_graph) on 61 vertices | 100 × 2000, two phases | 183,319 | 49&nbsp;ms | 11 of 100 |
-| 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 399 | 1&nbsp;ms | 40 of 40 |
-| induced paths on 51 vertices in the 7-cube (the [snake-in-the-box](https://en.wikipedia.org/wiki/Snake-in-the-box) record) | 400 × 2000 | 409,366 | 0.51&nbsp;s | 313 of 400 |
-| induced paths on 99 vertices in the 8-cube (the record) | 400 × 20,000 | 7,951,718 | 21&nbsp;s | 3 of 400 |
-| induced paths on 180 vertices in the 9-cube (the record is 192) | 100 × 200,000 | 13,226,544 | 110&nbsp;s | 44 of 100 |
-| induced paths on 185 vertices in the 9-cube | 64 × 300,000 | 18,928,147 | 163&nbsp;s | 1 of 64 |
-| induced paths on 189 vertices in the 9-cube through a fixed 95-vertex snake in one half | 64 × 200,000 | 4,256,688 | 36&nbsp;s | 62 of 64 |
-
-A search that misses its target makes every move it is allowed, so its time is the cost of a move
-times the number of moves. The cost of a move grows in proportion to the number of vertices, and a
-little less than in proportion to the size of the subgraph.
-
-Here are 40 × 250 = 10,000 moves looking for 30 vertices in random graphs of density 0.5:
-
-| Graph | All 16 cores | One thread |
-| --- | --- | --- |
-| 100 vertices | 1.7&nbsp;ms | 20&nbsp;ms |
-| 1,000 vertices | 19&nbsp;ms | 230&nbsp;ms |
-| 10,000 vertices (25 million edges) | 210&nbsp;ms | 2.4&nbsp;s |
-
-On 1,000 vertices, the same 10,000 moves take 14 ms for 20-vertex subgraphs and 61 ms for 100-vertex
-subgraphs. Experiments run in parallel, so on 16 cores a search is 11 to 12 times faster than on
-one thread (`--threads 1`). Once every core is busy, which 40 experiments already ensure here, the
-time grows in proportion to the total number of moves: 160 experiments take four times as long.
-
-A graph on 10,000 vertices with 25 million edges takes about 330 MB of memory. Generating it takes
-0.24 s, writing it as graph6 0.05 s, and reading it back 0.28 s.
-
-Regular, cycle and path searches keep, in every thread, where each vertex's neighbors are in its
-neighbor list. On graphs of up to 2,048 vertices they use a table with an entry for every pair of
-vertices, as the original programs do; on larger ones, an entry for every edge, so their memory
-grows with the number of edges rather than with the square of the number of vertices. A path
-search on all 16 cores in a random graph on 32,000 vertices with 3 edges per vertex peaks at
-0.24 GB. These searches support graphs of up to 32,767 vertices.
-
-### Compared with other methods
-
-subgraphsearch's niche is its own problem: $`k`$ vertices spanning exactly $`m`$ edges, which no
-specialized solver addresses. There it finds solutions in milliseconds where a strong general
-solver, OR-Tools' CP-SAT, needs seconds at 50 vertices and finds nothing within 10 seconds at 70,
-though CP-SAT can also prove that a target is impossible. Weighted targets show the same gap: on
-the maximum diversity problem, choosing $`k`$ items with the largest total distance between them,
-subgraphsearch reaches in about a second the best known values that heuristics made for the
-problem found in two-hour runs, while CP-SAT, in 10 seconds, falls short. For maximum cliques,
-which have specialists too, subgraphsearch finds the largest clique in milliseconds on most of the
-DIMACS benchmarks, far faster than igraph's general exact search but well behind DLS-MC, a local
-search made for maximum cliques. The
-[quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
-has these comparisons.
 
 ## Graph formats
 

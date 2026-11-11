@@ -28,7 +28,8 @@ def test_quickstart_notebooks_are_up_to_date():
 
 # CI turns EncodingWarning into an error; matplotlib's font cache raises one, not the script
 @pytest.mark.filterwarnings("ignore::EncodingWarning:matplotlib")
-def test_make_figures_draws_the_readme_figure(tmp_path):
+def test_make_figures_draws_the_readme_figures(tmp_path):
     pytest.importorskip("matplotlib")
     load(ROOT / "examples" / "make_figures.py").main(tmp_path)
     assert (tmp_path / "overview.png").stat().st_size > 0
+    assert (tmp_path / "comparison.png").stat().st_size > 0

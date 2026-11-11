@@ -1,6 +1,7 @@
 # Benchmark data
 
-These files are used by the quickstart notebook's comparisons with other methods. Each set is
+These files hold the benchmark instances behind the README's comparison with other methods,
+which the quickstart notebook also runs. Each set is
 distributed under its own license, **not** under the MIT license that covers the rest of this
 project, and none of them is part of the Python or Rust packages.
 

@@ -24,7 +24,7 @@ cargo clippy --release -p subgraphsearch-py -- -D warnings   # and the Python bi
 ```
 
 CI runs all of these on Linux, macOS and Windows. The Python tests also run the quickstart notebook,
-check that both copies of it are up to date and draw the README figure. CI runs them with
+check that both copies of it are up to date and draw the README figures. CI runs them with
 `-X warn_default_encoding -W error::EncodingWarning`, so every text file read or written must name its
 encoding.
 

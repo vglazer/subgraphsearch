@@ -29,8 +29,7 @@ as it can reach. The same search finds induced [cycles]({W}Cycle_(graph_theory))
 [trees]({W}Tree_(graph_theory)) and [cliques]({W}Clique_(graph_theory)), and [regular]({W}Regular_graph) and
 connected subgraphs. The method is a randomized [tabu search]({W}Tabu_search).
 
-The notebook starts with one dense random graph: exact edge counts, near misses, and how the search compares
-with a general solver. It then turns to weighted graphs and choosing diverse items, a practical problem where
+The notebook starts with one dense random graph: exact edge counts and near misses. It then turns to weighted graphs and choosing diverse items, a practical problem where
 subgraphsearch reaches published best values in about a second, and to saving and tuning searches. Next come
 shapes: regular subgraphs, cycles and trees, induced paths, cliques and independent sets. Then mathematics:
 strongly regular graphs from switching and block designs, spectral bounds, Hadamard matrices, equiangular
@@ -146,113 +145,6 @@ densest = ss.search(g, 30, 30 * 29 // 2, **settings).best   # aim at a 30-clique
 print("aiming at a 30-clique, the densest 30 vertices found span", g.induced_edge_count(densest.vertices), "edges")
 """),
     md("""
-## Compared with other methods
-
-Finding $k$ vertices that span exactly $m$ edges has no specialist to compare with, so here subgraphsearch is set
-beside a strong general solver: [CP-SAT](https://developers.google.com/optimization/cp/cp_solver) from
-Google's OR-Tools, given one yes-or-no variable per vertex and the edge count as half the sum of the chosen
-vertices' degrees inside the set (for a clique, the usual form, which forbids each pair of non-adjacent vertices,
-is far better). These results were recorded separately, so that this notebook does not need OR-Tools: CP-SAT 9.15
-on 16 cores, stopped after 10 seconds, and subgraphsearch with 60 experiments of up to 2,000 moves, on random graphs
-of density 0.6 unless noted. The first four rows ask for the most edges subgraphsearch finds among 30% of the
-vertices, in graphs of growing size. (Maximum cliques, which do have specialists, are compared with them in
-the section on cliques.)
-"""),
-    code("""
-import matplotlib.pyplot as plt
-from IPython.display import Markdown, display
-
-# Recorded: graph, target, search successes out of 60 (None: no solution exists), search ms,
-# CP-SAT ms (None: nothing found in 10 s)
-edge_runs = [
-    ("30 vertices", "9 vertices, 33 edges", 60, 0.2, 180),
-    ("50 vertices", "15 vertices, 91 edges", 60, 1.1, 8800),
-    ("70 vertices", "21 vertices, 176 edges", 59, 3.4, None),
-    ("100 vertices", "30 vertices, 346 edges", 25, 13, None),
-    ("100 vertices", "30 vertices, 340 edges", 60, 1.0, None),
-    ("50 vertices, density 0.5", "10 vertices, 22 edges", 60, 0.5, 8),
-    ("100 vertices", "an 11-clique", 60, 0.7, 13),
-    ("30 vertices", "9 vertices, 34 edges", None, None, 900),
-]
-
-def duration(ms):
-    return f"{ms:g} ms" if ms < 100 else f"{ms / 1000:g} s"
-
-lines = ["| Graph | Target | subgraphsearch: found / 60 | CP-SAT |", "| --- | --- | --- | --- |"]
-for graph, target, hits, mine, theirs in edge_runs:
-    if hits is None:
-        lines.append(f"| {graph} | {target} | none (none can exist) | proved impossible in {duration(theirs)} |")
-        continue
-    cp = "nothing in 10 s" if theirs is None else f"found in {duration(theirs)}"
-    lines.append(f"| {graph} | {target} | {hits}/60 in {duration(mine)} | {cp}{' (as a clique)' if 'clique' in target else ''} |")
-display(Markdown("\\n".join(lines)))
-"""),
-    code("""
-groups = [("Graphs of growing size: the most edges on 30% of the vertices", [0, 1, 2, 3]), ("Other targets", [4, 5, 6])]
-methods = [("subgraphsearch", "#d6336c"), ("CP-SAT", "#4c6ef5")]
-fig, axs = plt.subplots(1, 2, figsize=(13, 3.8), layout="constrained", sharex=True,
-                        gridspec_kw={"width_ratios": [4, 3]})
-for ax, (title, rows) in zip(axs, groups):
-    for y, i in enumerate(rows):
-        graph, target, hits, mine, theirs = edge_runs[i]
-        for j, ((label, color), t) in enumerate(zip(methods, [mine, theirs or 10000])):
-            capped = j == 1 and theirs is None
-            ax.barh(3 * y + j, t, color=color, hatch="//" if capped else None, edgecolor="white",
-                    label=label if (y, ax) == (0, axs[0]) else None)
-            note = "nothing in 10 s" if capped else (f"{hits}/60" if j == 0 and hits < 60 else "")
-            if note:
-                ax.annotate(note, (t, 3 * y + j), xytext=(3, -3), textcoords="offset points", fontsize=8)
-    ax.set_yticks([3 * y + 0.5 for y in range(len(rows))],
-                  [f"{edge_runs[i][0]}:\\n{edge_runs[i][1]}" for i in rows], fontsize=8)
-    ax.invert_yaxis()
-    ax.set_xscale("log")
-    ax.set_xlim(0.05, 1e6)
-    ax.set_title(title, fontsize=10, loc="left")
-    ax.set_xlabel("ms to find a solution (log)")
-fig.legend(loc="outside lower center", ncol=2, frameon=False, fontsize=9);
-"""),
-    md("""
-Measured on graphs from 20 to 59 vertices, with the same density and target, CP-SAT's time varies a lot from
-graph to graph but grows steeply overall, and from 44 vertices on it mostly finds nothing within its 10 seconds,
-while subgraphsearch's time stays flat, at about a millisecond or less:
-"""),
-    code("""
-# Recorded: vertices, target vertices and edges, subgraphsearch successes / 60 and ms,
-# CP-SAT ms (None: nothing found in 10 s)
-scaling = [(20, 6, 15, 60, 0.20, 25), (23, 7, 20, 60, 0.17, 18), (26, 8, 28, 60, 0.23, 23),
-           (29, 9, 34, 60, 0.22, 414), (32, 10, 43, 60, 0.14, 650), (35, 10, 42, 60, 0.29, 1125),
-           (38, 11, 52, 60, 0.15, 4490), (41, 12, 60, 60, 0.19, 85), (44, 13, 70, 60, 0.25, None),
-           (47, 14, 81, 60, 0.49, None), (50, 15, 91, 60, 1.00, 8814), (53, 16, 105, 60, 1.37, None),
-           (56, 17, 116, 60, 0.70, None), (59, 18, 129, 60, 0.45, None)]
-sizes = [row[0] for row in scaling]
-done = [row for row in scaling if row[5]]
-timed_out = [row for row in scaling if not row[5]]
-fig, (cp, mine) = plt.subplots(1, 2, figsize=(13, 3.8), layout="constrained")
-cp.plot([row[0] for row in done], [row[5] / 1000 for row in done], "o", color="#4c6ef5", label="found")
-cp.plot([row[0] for row in timed_out], [10] * len(timed_out), "^", color="#4c6ef5", markerfacecolor="white",
-        label="nothing in 10 s")
-cp.axhline(10, color="#868e96", lw=0.8, ls="--")
-cp.set_ylim(0, 11)
-cp.set_ylabel("seconds to find a solution")
-cp.set_title("CP-SAT", fontsize=10, loc="left")
-cp.legend(frameon=False, fontsize=9, loc="upper left")
-mine.plot(sizes, [row[4] for row in scaling], "o", color="#d6336c")
-mine.set_ylim(0, 11)
-mine.set_ylabel("milliseconds to find a solution")
-mine.set_title("subgraphsearch", fontsize=10, loc="left")
-for ax in (cp, mine):
-    ax.set_xticks(sizes)
-    ax.set_xlabel("vertices in the graph (target: 30% of them, with the most edges found)")
-"""),
-    md("""
-CP-SAT's time grows steeply with the graph, from a fifth of a second at 30 vertices to more than 10 seconds at 70,
-while subgraphsearch stays at a few milliseconds: exact edge counts in graphs past a few dozen vertices are its
-niche. What CP-SAT can do and subgraphsearch cannot is prove a target impossible, as in the last row, which
-also shows that the 33 edges subgraphsearch found in the first row are the most possible. The two work well together:
-subgraphsearch finds solutions fast, and on small graphs a solver can confirm that nothing better exists.
-
-"""),
-    md("""
 ## Weighted graphs
 
 In a `WeightedGraph` every edge has an integer weight, and the target is the total weight of the subgraph's
@@ -280,22 +172,23 @@ between every two items. Eight of them, with 100 to 400 items, are in `examples/
 license, Creative Commons Attribution). Below, subgraphsearch aims at each best known value with the same
 settings for every instance, once without *region kicks* (`kick_size=0`) and once with large ones
 (`kick_size=16`). A region kick starts each diversification cycle after the first by rebuilding the part of
-the selection nearest a random item; searches use small kicks of 4 by default (more under Tuning).
-Beside it is CP-SAT, maximizing the sum of the distances, from separately recorded runs stopped after 10
-seconds, with the best value it found and the upper bound it proved.
+the selection nearest a random item; searches use small kicks of 4 by default (more under Tuning). The
+[README](https://github.com/vglazer/subgraphsearch#how-it-compares) compares these results with other methods.
 """),
     code("""
 import time
 import urllib.request
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+from IPython.display import Markdown, display
+
 mdp_local = Path("examples/data/mdplib")
 mdp_url = "https://raw.githubusercontent.com/vglazer/subgraphsearch/main/examples/data/mdplib/"
-# instance, best known value, and CP-SAT's best value and proved upper bound after 10 s (recorded)
-diversity = [("SOM-b_1_n100_m10", 333, 329, 390), ("SOM-b_2_n100_m20", 1195, 1171, 1594),
-             ("SOM-b_3_n100_m30", 2457, 2457, 3452), ("SOM-b_4_n100_m40", 4142, 4127, 5822),
-             ("SOM-b_6_n200_m40", 4450, 4263, 6662), ("SOM-b_10_n300_m60", 9689, 9297, 15165),
-             ("SOM-b_13_n400_m40", 4658, 4374, 7020), ("SOM-b_14_n400_m80", 16956, 15595, 27085)]
+# instance and its best known value
+diversity = [("SOM-b_1_n100_m10", 333), ("SOM-b_2_n100_m20", 1195), ("SOM-b_3_n100_m30", 2457),
+             ("SOM-b_4_n100_m40", 4142), ("SOM-b_6_n200_m40", 4450), ("SOM-b_10_n300_m60", 9689),
+             ("SOM-b_13_n400_m40", 4658), ("SOM-b_14_n400_m80", 16956)]
 
 def read_mdplib(name):
     \"\"\"An MDPLIB instance as a weighted graph, and the number of items to pick.\"\"\"
@@ -314,55 +207,41 @@ def diversity_run(items, k, target, kick_size):
 
 mdp_rows = []
 try:
-    for name, best_known, cp_best, cp_bound in diversity:
+    for name, best_known in diversity:
         items, k = read_mdplib(name)
         mdp_rows.append((items.n, k, best_known, diversity_run(items, k, best_known, 0),
-                         diversity_run(items, k, best_known, 16), cp_best, cp_bound))
+                         diversity_run(items, k, best_known, 16)))
 except OSError as error:
     print("could not read the benchmark instances, so this comparison is skipped:", error)
 
-lines = ["| Items | Chosen | Best known | subgraphsearch, `kick_size=0`: found / 60 | `kick_size=16` | CP-SAT after 10 s: best (upper bound) |",
-         "| --- | --- | --- | --- | --- | --- |"]
-for n, k, best_known, (plain_hits, plain_ms), (kick_hits, kick_ms), cp_best, cp_bound in mdp_rows:
-    lines.append(f"| {n} | {k} | {best_known:,} | {plain_hits}/60 in {plain_ms:.0f} ms | {kick_hits}/60 in {kick_ms:.0f} ms "
-                 f"| {cp_best:,} ({cp_bound:,}) |")
+lines = ["| Items | Chosen | Best known | `kick_size=0`: found / 60 | `kick_size=16`: found / 60 |",
+         "| --- | --- | --- | --- | --- |"]
+for n, k, best_known, (plain_hits, plain_ms), (kick_hits, kick_ms) in mdp_rows:
+    lines.append(f"| {n} | {k} | {best_known:,} | {plain_hits}/60 in {plain_ms:.0f} ms | {kick_hits}/60 in {kick_ms:.0f} ms |")
 display(Markdown("\\n".join(lines)))
 """),
     code("""
 if mdp_rows:
     labels = [f"{n} items, {k} chosen" for n, k, *_ in mdp_rows]
     ys = range(len(mdp_rows))
-    fig, (mine_ax, cp_ax) = plt.subplots(1, 2, figsize=(13, 4), layout="constrained", sharey=True)
+    fig, ax = plt.subplots(figsize=(8, 4), layout="constrained")
     for offset, column, label, color in ((-0.2, 3, "kick_size=0", "#f783ac"), (0.2, 4, "kick_size=16", "#d6336c")):
         hits = [row[column][0] for row in mdp_rows]
-        mine_ax.barh([y + offset for y in ys], hits, height=0.4, color=color, label=label)
+        ax.barh([y + offset for y in ys], hits, height=0.4, color=color, label=label)
         for y, h in zip(ys, hits):
-            mine_ax.annotate(str(h), (h, y + offset), xytext=(3, 0), textcoords="offset points", va="center", fontsize=8)
-    mine_ax.set_yticks(list(ys), labels)
-    mine_ax.set_xlim(0, 68)
-    mine_ax.set_xlabel("runs of 60 that reach the best known value")
-    mine_ax.set_title("subgraphsearch", fontsize=10, loc="left")
-    mine_ax.legend(frameon=False, fontsize=9, loc="lower right")
-    shortfall = [100 * (row[2] - row[5]) / row[2] for row in mdp_rows]
-    cp_ax.barh(list(ys), shortfall, color="#4c6ef5")
-    for y, s in zip(ys, shortfall):
-        cp_ax.annotate("matched" if s == 0 else f"{s:.1f}%", (s, y), xytext=(3, 0), textcoords="offset points",
-                       va="center", fontsize=8)
-    cp_ax.set_xlim(0, 1.12 * max(shortfall))
-    cp_ax.set_xlabel("% below the best known value")
-    cp_ax.set_title("CP-SAT after 10 s", fontsize=10, loc="left")
-    mine_ax.invert_yaxis()
+            ax.annotate(str(h), (h, y + offset), xytext=(3, 0), textcoords="offset points", va="center", fontsize=8)
+    ax.set_yticks(list(ys), labels)
+    ax.set_xlim(0, 68)
+    ax.set_xlabel("runs of 60 that reach the best known value")
+    ax.legend(frameon=False, fontsize=9, loc="lower right")
+    ax.invert_yaxis()
 """),
     md("""
 Without kicks, subgraphsearch reaches every best known value up to 300 items but finds the larger instances
 harder, and on the 400-item ones a run rarely gets there, if ever. With large kicks, most runs reach the best
-known value on every instance, in about a second or less for 60 runs. CP-SAT, in 10 seconds, reaches one of them and
-falls further short as the instances grow, by about 8% on the largest; the upper bounds it proves are far above
-the best values, so it cannot show that any of them is optimal. The strongest methods for this problem include
-iterated tabu search (Palubeckis, 2007), which alternates a tabu search with perturbations. subgraphsearch, a
-port of programs written in 2002, combines tabu moves with diversification in much the same way, for any
-target. Choosing $k$ items for a target total of pairwise scores is the kind of problem subgraphsearch is for:
-a practical one, which solvers are used for, where its search is fast and needs little tuning.
+known value on every instance, in about a second or less for 60 runs. Choosing $k$ items for a target total
+of pairwise scores is the kind of problem subgraphsearch is for: a practical one, where its search is fast and
+needs little tuning.
 """),
     md("""
 ## Saving and repeating results
@@ -660,21 +539,17 @@ print("in its neighborhood:", in_nbhd.successes, "of 40 found one")
 assert all(g.induced_edge_count(c) == 55 for c in cliques_via_nbhd)
 """),
     md("""
-### Compared with clique solvers
+### Benchmark graphs
 
-Maximum cliques have methods made for them, and a standard benchmark, the DIMACS graphs, with known clique
-numbers and published results. Eight of them, of three kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
+Maximum cliques have a standard benchmark, the DIMACS graphs, with known clique numbers. Eight of them, of three kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
 from the Network Repository): random dense graphs (C125.9, C250.9, p_hat300-3), structured ones from geometry
 and coding theory (MANN_a27, hamming8-4, keller4), and two *brock* graphs, which hide their largest clique
 among many large cliques that are not quite as large, to defeat local search. The cell reads them from a
 clone of the repository or else downloads them from GitHub.
 
-Below, subgraphsearch aims at each graph's clique number with 32 experiments. It is set beside two other methods:
-igraph's exact clique number, which also proves the answer (measured separately and stopped after 90
-seconds), and DLS-MC, a local search made for maximum cliques, from its published results (W. Pullan and
-H. H. Hoos, *Journal of Artificial Intelligence Research* 25, 2006, Table 1: mean time per run over 100 runs).
-Those come from one core of a 2006 processor several times slower than today's, while subgraphsearch here uses
-every core, so the comparison flatters subgraphsearch.
+Below, subgraphsearch aims at each graph's clique number with 32 experiments. The
+[README](https://github.com/vglazer/subgraphsearch#maximum-cliques) sets these results beside a solver made for
+maximum cliques and an exact search.
 """),
     code("""
 local = Path("examples/data/dimacs.g6")
@@ -688,8 +563,6 @@ except OSError as error:
 
 names = ["C125.9", "C250.9", "p_hat300-3", "MANN_a27", "hamming8-4", "keller4", "brock200_2", "brock400_2"]
 clique_number = [34, 44, 36, 126, 16, 11, 12, 29]
-dls_mc_ms = [0.1, 0.9, 0.7, 47.6, None, None, 24.2, 477.4]   # published; None: under 0.1 ms
-igraph_ms = [None, None, None, None, 18100, 1800, 300, None]   # None: not finished in 90 s
 
 search_ms, found, successes = [], [], []
 for bench, k in zip(dimacs, clique_number):   # not g: later sections use g
@@ -701,48 +574,17 @@ for bench, k in zip(dimacs, clique_number):   # not g: later sections use g
                                                      max_moves=20000, div_freq=300, div_dur=8).size)
 
 if dimacs:
-    lines = ["| Graph | Vertices | Edges | Largest clique | subgraphsearch: found / 32 | DLS-MC | igraph (exact) |",
-             "| --- | --- | --- | --- | --- | --- | --- |"]
-    for bench, name, k, ms, f, hits, dls, ig in zip(dimacs, names, clique_number, search_ms, found, successes,
-                                                     dls_mc_ms, igraph_ms):
+    lines = ["| Graph | Vertices | Edges | Largest clique | subgraphsearch: found / 32 |",
+             "| --- | --- | --- | --- | --- |"]
+    for bench, name, k, ms, f, hits in zip(dimacs, names, clique_number, search_ms, found, successes):
         mine = f"{hits}/32 in {ms:.1f} ms" if f == k else f"0/32 (best {f}), {ms:.0f} ms"
-        theirs = "under 0.1 ms" if dls is None else f"{dls:.1f} ms"
-        exact = "over 90 s" if ig is None else f"{ig / 1000:.1f} s"
-        lines.append(f"| {name} | {bench.n} | {bench.m:,} | {k} | {mine} | {theirs} | {exact} |")
+        lines.append(f"| {name} | {bench.n} | {bench.m:,} | {k} | {mine} |")
     display(Markdown("\\n".join(lines)))
 """),
-    code("""
-if dimacs:
-    groups = [("Random dense graphs", [0, 1, 2]), ("Structured graphs", [3, 4, 5]),
-              ("Deceptive graphs: subgraphsearch fails", [6, 7])]
-    methods = [("subgraphsearch", "#d6336c"), ("DLS-MC (2006 machine)", "#4c6ef5"), ("igraph, exact", "#868e96")]
-    fig, axs = plt.subplots(1, 3, figsize=(13, 3.6), layout="constrained", sharex=True,
-                            gridspec_kw={"width_ratios": [3, 3, 2.2]})
-    for ax, (title, rows) in zip(axs, groups):
-        for y, i in enumerate(rows):
-            times = [search_ms[i], dls_mc_ms[i] or 0.1, igraph_ms[i] or 90000]   # under 0.1 ms drawn at 0.1
-            capped = [found[i] != clique_number[i], False, igraph_ms[i] is None]
-            for j, ((label, color), t, cap) in enumerate(zip(methods, times, capped)):
-                ax.barh(4 * y + j, t, color=color, hatch="//" if cap else None, edgecolor="white",
-                        label=label if (y, title) == (0, groups[0][0]) else None)
-                note = ("not found" if j == 0 else "over 90 s") if cap else ""
-                if note:
-                    ax.annotate(note, (t, 4 * y + j), xytext=(3, -3), textcoords="offset points", fontsize=8)
-        ax.set_yticks([4 * y + 1 for y in range(len(rows))], [f"{names[i]} ({clique_number[i]})" for i in rows])
-        ax.invert_yaxis()
-        ax.set_xscale("log")
-        ax.set_xlim(0.05, 1e6)
-        ax.set_title(title, fontsize=10, loc="left")
-        ax.set_xlabel("ms to find a largest clique (log)")
-    fig.legend(loc="outside lower center", ncol=3, frameon=False, fontsize=9)
-"""),
     md("""
-On most of these graphs subgraphsearch finds a largest clique in milliseconds, where igraph's general exact
-search takes seconds or more than a minute and a half (dedicated exact clique solvers are not compared here).
-DLS-MC is faster than subgraphsearch by one to two orders of magnitude on the plot, and more on equal hardware, and
-it solves the brock graphs, where subgraphsearch ends in one of the decoy cliques however it is tuned. For maximum
-cliques, a solver made for them is the better tool; what subgraphsearch offers is one method for many kinds of
-target, most of which have no such solver.
+On most of these graphs subgraphsearch finds a largest clique in milliseconds. On the brock graphs it ends in
+one of the decoy cliques however it is tuned; a solver made for maximum cliques does better there, and is
+faster on the others too, so for maximum cliques alone it is the better tool.
 """),
     md(f"""
 ## Switching
