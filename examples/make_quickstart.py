@@ -217,6 +217,92 @@ for aspiration in (False, True):
     res = ss.search(g, 30, 346, aspiration=aspiration, **settings)
     print(f"aspiration={aspiration}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
 """),
+    md("""
+## Compared with other methods
+
+How fast is the search next to methods built for one problem? Maximum cliques have a standard benchmark,
+the DIMACS graphs, with known clique numbers, and published results for other methods. Eight of them, of three
+kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
+from the Network Repository): random dense graphs (C125.9, C250.9, p_hat300-3), structured ones from geometry
+and coding theory (MANN_a27, hamming8-4, keller4), and two *brock* graphs, which hide their largest clique
+among many large cliques that are not quite as large, to defeat local search. The cell reads them from a
+clone of the repository or else downloads them from GitHub.
+
+The search below aims at each graph's clique number with 32 experiments. It is set beside two other methods:
+igraph's exact clique number, which also proves the answer (measured separately and stopped after 90
+seconds), and DLS-MC, a local search made for maximum cliques, from its published results (W. Pullan and
+H. H. Hoos, *Journal of Artificial Intelligence Research* 25, 2006, Table 1: mean time per run over 100 runs).
+Those come from one core of a 2006 processor several times slower than today's, while the search here uses
+every core, so the comparison flatters the search.
+"""),
+    code("""
+import time
+import urllib.request
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+
+local = Path("examples/data/dimacs.g6")
+url = "https://raw.githubusercontent.com/vglazer/subgraphsearch/main/examples/data/dimacs.g6"
+try:
+    text = local.read_text(encoding="utf-8") if local.exists() else urllib.request.urlopen(url, timeout=30).read().decode()
+    dimacs = ss.parse_all(text, "graph6")
+except OSError as error:
+    dimacs = []
+    print("could not read the benchmark graphs, so this comparison is skipped:", error)
+
+names = ["C125.9", "C250.9", "p_hat300-3", "MANN_a27", "hamming8-4", "keller4", "brock200_2", "brock400_2"]
+clique_number = [34, 44, 36, 126, 16, 11, 12, 29]
+dls_mc_ms = [0.1, 0.9, 0.7, 47.6, 0.1, 0.1, 24.2, 477.4]   # published; under 0.1 ms shown as 0.1
+igraph_ms = [None, None, None, None, 18100, 1800, 300, None]   # None: not finished in 90 s
+
+search_ms, found = [], []
+for bench, k in zip(dimacs, clique_number):   # not g: later sections use g
+    start = time.perf_counter()
+    res = ss.search(bench, k, k * (k - 1) // 2, experiments=32, max_moves=20000, div_freq=300, div_dur=8)
+    search_ms.append(1000 * (time.perf_counter() - start))
+    found.append(k if res.successes else ss.largest(bench, "clique", start=k - 8, lookahead=1, experiments=32,
+                                                     max_moves=20000, div_freq=300, div_dur=8).size)
+
+if dimacs:
+    print(f"{'graph':11} {'clique':>6}   {'this search':>22}   {'DLS-MC':>8}   {'igraph (exact)':>14}")
+    for name, k, ms, f, dls, ig in zip(names, clique_number, search_ms, found, dls_mc_ms, igraph_ms):
+        mine = f"{ms:.1f} ms" if f == k else f"not found ({f}), {ms:.0f} ms"
+        print(f"{name:11} {k:6}   {mine:>22}   {dls:>5.1f} ms   {'over 90 s' if ig is None else f'{ig / 1000:.1f} s':>14}")
+"""),
+    code("""
+if dimacs:
+    groups = [("Random dense graphs", [0, 1, 2]), ("Structured graphs", [3, 4, 5]),
+              ("Deceptive graphs: the search fails", [6, 7])]
+    methods = [("this search", "#d6336c"), ("DLS-MC (2006 machine)", "#4c6ef5"), ("igraph, exact", "#868e96")]
+    fig, axs = plt.subplots(1, 3, figsize=(13, 3.6), layout="constrained", sharex=True,
+                            gridspec_kw={"width_ratios": [3, 3, 2.2]})
+    for ax, (title, rows) in zip(axs, groups):
+        for y, i in enumerate(rows):
+            times = [search_ms[i], dls_mc_ms[i], igraph_ms[i] or 90000]
+            capped = [found[i] != clique_number[i], False, igraph_ms[i] is None]
+            for j, ((label, color), t, cap) in enumerate(zip(methods, times, capped)):
+                ax.barh(4 * y + j, t, color=color, hatch="//" if cap else None, edgecolor="white",
+                        label=label if (y, title) == (0, groups[0][0]) else None)
+                note = ("not found" if j == 0 else "over 90 s") if cap else ""
+                if note:
+                    ax.annotate(note, (t, 4 * y + j), xytext=(3, -3), textcoords="offset points", fontsize=8)
+        ax.set_yticks([4 * y + 1 for y in range(len(rows))], [f"{names[i]} ({clique_number[i]})" for i in rows])
+        ax.invert_yaxis()
+        ax.set_xscale("log")
+        ax.set_xlim(0.05, 1e6)
+        ax.set_title(title, fontsize=10, loc="left")
+        ax.set_xlabel("ms to find a largest clique (log)")
+    fig.legend(loc="outside lower center", ncol=3, frameon=False, fontsize=9)
+"""),
+    md("""
+On most of these graphs the search finds a largest clique in milliseconds, where igraph's general exact
+search takes seconds or more than a minute and a half (dedicated exact clique solvers are not compared here).
+DLS-MC is faster than the search by one to two orders of magnitude on the plot, and more on equal hardware, and
+it solves the brock graphs, where the search ends in one of the decoy cliques however it is tuned. For maximum
+cliques, a solver made for them is the better tool; what this search offers is one method for many kinds of
+target, most of which have no such solver.
+"""),
     md(f"""
 ## Regular subgraphs
 
@@ -984,83 +1070,6 @@ Despite its name, the `"power"` model has no heavy tail, so its graphs are not
 """),
     code("""
 viz.plot_degree_distribution(ss.generate("power", 1500, 0.2, seed=52));
-"""),
-    md("""
-## Compared with other methods
-
-How fast is the search next to methods built for one problem? Maximum cliques have a standard benchmark,
-the DIMACS graphs, with known clique numbers, and published results for other methods. Eight of them, of three
-kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
-from the Network Repository): random dense graphs (C125.9, C250.9, p_hat300-3), structured ones from geometry
-and coding theory (MANN_a27, hamming8-4, keller4), and two *brock* graphs, which hide their largest clique
-among many large cliques that are not quite as large, to defeat local search. The cell reads them from a
-clone of the repository or else downloads them from GitHub.
-
-The search below aims at each graph's clique number with 32 experiments. It is set beside two other methods:
-igraph's exact clique number, which also proves the answer (measured separately and stopped after 90
-seconds), and DLS-MC, a local search made for maximum cliques, from its published results (W. Pullan and
-H. H. Hoos, *Journal of Artificial Intelligence Research* 25, 2006, Table 1: mean time per run over 100 runs).
-Those come from one core of a 2006 processor several times slower than today's, while the search here uses
-every core, so the comparison flatters the search.
-"""),
-    code("""
-import urllib.request
-from pathlib import Path
-
-local = Path("examples/data/dimacs.g6")
-url = "https://raw.githubusercontent.com/vglazer/subgraphsearch/main/examples/data/dimacs.g6"
-try:
-    text = local.read_text(encoding="utf-8") if local.exists() else urllib.request.urlopen(url, timeout=30).read().decode()
-    dimacs = ss.parse_all(text, "graph6")
-except OSError as error:
-    dimacs = []
-    print("could not read the benchmark graphs, so this comparison is skipped:", error)
-
-names = ["C125.9", "C250.9", "p_hat300-3", "MANN_a27", "hamming8-4", "keller4", "brock200_2", "brock400_2"]
-clique_number = [34, 44, 36, 126, 16, 11, 12, 29]
-dls_mc_ms = [0.1, 0.9, 0.7, 47.6, 0.1, 0.1, 24.2, 477.4]   # published; under 0.1 ms shown as 0.1
-igraph_ms = [None, None, None, None, 18100, 1800, 300, None]   # None: not finished in 90 s
-
-search_ms, found = [], []
-for g, k in zip(dimacs, clique_number):
-    start = time.perf_counter()
-    res = ss.search(g, k, k * (k - 1) // 2, experiments=32, max_moves=20000, div_freq=300, div_dur=8)
-    search_ms.append(1000 * (time.perf_counter() - start))
-    found.append(k if res.successes else ss.largest(g, "clique", start=k - 8, lookahead=1, experiments=32,
-                                                     max_moves=20000, div_freq=300, div_dur=8).size)
-for name, k, ms, f in zip(names, clique_number, search_ms, found):
-    print(f"{name:11} clique number {k:3}: search {'found it' if f == k else f'found {f} at best':16} {ms:7.1f} ms")
-"""),
-    code("""
-if dimacs:
-    fig, ax = plt.subplots(figsize=(8, 4.4), layout="constrained")
-    rows = range(len(names))
-    ax.scatter(dls_mc_ms, rows, marker="^", color="#4c6ef5", label="DLS-MC (published, 2006 machine)", zorder=3)
-    ax.scatter([ms if ms else 90000 for ms in igraph_ms], rows, marker="s", color="#868e96",
-               label="igraph, exact (90 s cap)", zorder=3)
-    for r, ms in zip(rows, igraph_ms):
-        if ms is None:
-            ax.annotate("over 90 s", (90000, r), xytext=(6, -3), textcoords="offset points", fontsize=8, color="#868e96")
-    hit = [r for r in rows if found[r] == clique_number[r]]
-    miss = [r for r in rows if found[r] != clique_number[r]]
-    ax.scatter([search_ms[r] for r in hit], hit, color="#d6336c", label="this search", zorder=4)
-    ax.scatter([search_ms[r] for r in miss], miss, facecolors="none", edgecolors="#d6336c",
-               label="this search, clique not found", zorder=4)
-    ax.set_xscale("log")
-    ax.set_xlim(0.05, 1e6)
-    ax.set_yticks(list(rows), [f"{n} ({k})" for n, k in zip(names, clique_number)])
-    ax.invert_yaxis()
-    ax.set_xlabel("time to find a largest clique (ms, log scale); DLS-MC times under 0.1 ms are shown at 0.1")
-    ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, frameon=False)
-    ax.set_title("DIMACS clique benchmarks: graph (clique number)", fontsize=10, loc="left")
-"""),
-    md("""
-On most of these graphs the search finds a largest clique in milliseconds, where igraph's general exact
-search takes seconds or more than a minute and a half (dedicated exact clique solvers are not compared here).
-DLS-MC is faster than the search by one to two orders of magnitude on the plot, and more
-on equal hardware, and it solves the brock graphs, where the search ends in one of the decoy cliques however it
-is tuned. For maximum cliques, a solver made for them is the better tool; what this search offers is one
-method for many kinds of target, most of which have no such solver.
 """),
     md("""
 ## Formats and other libraries
