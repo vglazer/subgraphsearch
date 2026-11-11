@@ -288,6 +288,33 @@ for ax, (title, rows) in zip(axs, groups):
 fig.legend(loc="outside lower center", ncol=2, frameon=False, fontsize=9);
 """),
     md("""
+Measured at more sizes in between, with the same density, target and limit, CP-SAT's time climbs from a fifth
+of a second to several seconds and then past its limit, varying from graph to graph, while subgraphsearch stays
+under a millisecond:
+"""),
+    code("""
+# Recorded: vertices, target vertices and edges, subgraphsearch successes / 60 and ms, CP-SAT ms (None: nothing in 10 s)
+scaling = [(30, 9, 33, 60, 0.30, 183), (35, 10, 42, 60, 0.16, 1064), (40, 12, 59, 60, 0.37, None),
+           (45, 14, 82, 60, 0.34, 1563), (50, 15, 91, 60, 0.88, 8660), (55, 16, 102, 60, 0.69, None),
+           (60, 18, 131, 60, 0.59, None)]
+sizes = [row[0] for row in scaling]
+fig, ax = plt.subplots(figsize=(7, 3.8), layout="constrained")
+ax.plot(sizes, [row[4] for row in scaling], "o-", color="#d6336c", label="subgraphsearch")
+ax.plot([row[0] for row in scaling if row[5]], [row[5] for row in scaling if row[5]], "o", color="#4c6ef5",
+        label="CP-SAT")
+ax.plot([row[0] for row in scaling if not row[5]], [10000] * sum(not row[5] for row in scaling), "^",
+        color="#4c6ef5", markerfacecolor="white", label="CP-SAT: nothing in 10 s")
+ax.axhline(10000, color="#868e96", lw=0.8, ls="--")
+ax.annotate("CP-SAT's 10 s limit", (sizes[0], 10000), xytext=(0, 4), textcoords="offset points", fontsize=8,
+            color="#868e96")
+ax.set_yscale("log")
+ax.set_ylim(0.05, 1e5)
+ax.set_xticks(sizes)
+ax.set_xlabel("vertices in the graph (target: 30% of them, with the most edges found)")
+ax.set_ylabel("ms to find a solution (log)")
+ax.legend(frameon=False, fontsize=9, loc="center right");
+"""),
+    md("""
 CP-SAT's time grows steeply with the graph, from a fifth of a second at 30 vertices to more than 10 seconds at 70,
 while subgraphsearch stays at a few milliseconds: exact edge counts in graphs past a few dozen vertices are its
 niche. What CP-SAT can do and subgraphsearch cannot is prove a target impossible, as in the last row, which
