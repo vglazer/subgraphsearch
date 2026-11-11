@@ -79,8 +79,9 @@ proved upper bounds, for example, lie 17% to 60% above the best known values.
 The result does not depend on SOM-b's small integer distances. MDPLIB's GKD-c instances hold
 Euclidean distances between random points and its MDG-a instances random real distances from 0 to
 10. subgraphsearch's weights are integers, so for it and CP-SAT the distances were scaled (by 10
-and by 25) and rounded; subgraphsearch then aimed above any reachable total and kept the heaviest
-selection it found. Every method's selection is scored with the original distances.
+and by 25) and rounded, which `ss.WeightedGraph.from_scores` does automatically; subgraphsearch
+then aimed above any reachable total, as `ss.densest` does, and kept the heaviest selection it
+found. Every method's selection is scored with the original distances.
 
 | Instance | Items | Chosen | Best known | subgraphsearch | CP-SAT | SCIP |
 | --- | --- | --- | --- | --- | --- | --- |

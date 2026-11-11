@@ -19,7 +19,7 @@ are given by their Python names, with the command-line options in parentheses.
 | induced cycles on $`k`$ vertices | `degree=2, connected=True` (`--degree 2 --connected`) |
 | induced paths on $`k`$ vertices | `path=True` (`--path`), between two vertices with `endpoints=(s, t)` (`--endpoints s,t`) |
 | induced trees on $`k`$ vertices | `edges=k-1, connected=True` (`-m k-1 --connected`) |
-| a total weight in a weighted graph | `ss.search(w, k, total)` on a `WeightedGraph` (`--weighted -m total`) |
+| a total weight in a weighted graph | `ss.search(w, k, total)` on a `WeightedGraph` (`--weighted -m total`); from real-valued scores, `ss.WeightedGraph.from_scores` |
 | the largest path, cycle, tree, clique or independent set | `ss.largest(g, shape)` (`subgraphsearch largest --shape shape`) |
 
 Some reformulations make a search easier:

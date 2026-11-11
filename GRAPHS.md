@@ -55,6 +55,17 @@ of those given, and `ss.Graph.from_words(words, distances)` joins two binary wor
 Hamming distance is one of those given. Codes, Hadamard matrices and sets of equiangular lines are
 then cliques or independent sets of these graphs; `ss.vectors` has helpers to make and check them.
 
+## Weighted graphs from scores
+
+Edge weights are integers from 1 to 255. Real-valued scores between pairs of items, such as
+distances or similarities, become weights with `ss.WeightedGraph.from_scores(scores)`, from a
+symmetric matrix or from `(u, v, score)` triples with `n=` given. It scales the scores so that the
+largest becomes 255 and rounds them; a positive score too small to survive rounding keeps weight 1,
+and a score of 0 is no edge. It returns the graph and the scale factor, so a total weight $`t`$
+stands for scores totalling about $`t`$ divided by the factor. 255 levels are usually enough: on
+the maximum diversity benchmark's real-valued instances, the heaviest selections found this way
+match the best known values to the precision the scores are published with.
+
 ## Incidence structures
 
 Graphs can also be built from an

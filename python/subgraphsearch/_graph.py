@@ -475,6 +475,44 @@ class WeightedGraph:
         return WeightedGraph(_core.WeightedGraph.from_graph(graph._g))
 
     @staticmethod
+    def from_scores(scores, n: int | None = None, *, resolution: int = 255) -> tuple[WeightedGraph, float]:
+        """A weighted graph from real-valued, non-negative scores between pairs of vertices, such as
+        distances or similarities, and the factor they were scaled by.
+
+        ``scores`` is a symmetric ``n x n`` matrix, or ``(u, v, score)`` triples with ``n`` given. Weights
+        are integers from 1 to 255, so each score is multiplied by ``resolution / largest score`` and
+        rounded: the largest becomes ``resolution`` (255 by default). A positive score too small to survive
+        rounding keeps weight 1, and a score of 0 is no edge. Returns the graph and the factor, so a
+        total weight ``t`` corresponds to scores totalling about ``t / factor``.
+
+        >>> w, factor = WeightedGraph.from_scores([[0, 2.5, 0.01], [2.5, 0, 1.0], [0.01, 1.0, 0]])
+        >>> w.weight(0, 1), w.weight(1, 2), w.weight(0, 2), factor
+        (255, 102, 1, 102.0)
+        """
+        if n is None:
+            a = np.asarray(scores, dtype=float)
+            if a.ndim != 2 or a.shape[0] != a.shape[1]:
+                raise ValueError("scores must be a square matrix, or (u, v, score) triples with n given")
+            if not np.allclose(a, a.T):
+                raise ValueError("a score matrix must be symmetric")
+            n = a.shape[0]
+            u, v = np.triu_indices(n, 1)
+            s = a[u, v]
+        else:
+            t = np.asarray(scores, dtype=float).reshape(-1, 3)
+            u, v, s = t[:, 0].astype(np.int64), t[:, 1].astype(np.int64), t[:, 2]
+        if not 1 <= resolution <= 255:
+            raise ValueError("resolution must be from 1 to 255, the range of weights")
+        if np.any(s < 0) or not np.all(np.isfinite(s)):
+            raise ValueError("scores must be finite and non-negative")
+        top = float(s.max()) if len(s) else 0.0
+        factor = resolution / top if top > 0 else 1.0
+        w = np.rint(s * factor).astype(np.int64)
+        w[(s > 0) & (w == 0)] = 1
+        keep = w > 0
+        return WeightedGraph(int(n), np.column_stack([u[keep], v[keep], w[keep]])), factor
+
+    @staticmethod
     def read(path: str | PathLike, format: str | None = None) -> WeightedGraph:
         """Reads weights from an edge list's third column, a Matrix Market file's values, or
         weighted lists (``format="wlists"``); formats without weights give every edge weight 1."""

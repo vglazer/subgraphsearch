@@ -97,8 +97,9 @@ In Jupyter, graphs and results display as summaries with small charts.
 - **Graphs:** from edges, files, other libraries (networkx, igraph, SciPy, NumPy), random models,
   hypercubes and grids, incidence structures such as block designs, and sets of vectors or binary
   words joined by their inner products or Hamming distances (`ss.Graph.from_vectors`,
-  `ss.Graph.from_words`); complements, induced subgraphs, Seidel switching, and products of
-  graphs (Cartesian, tensor, strong, lexicographic, replacement and zig-zag).
+  `ss.Graph.from_words`), and weighted graphs from real-valued scores
+  (`ss.WeightedGraph.from_scores`); complements, induced subgraphs, Seidel switching, and products
+  of graphs (Cartesian, tensor, strong, lexicographic, replacement and zig-zag).
 - **Seeing what happened:** drawings of graphs and the subgraphs found, diagnostics of a search,
   spectra, and parameter sweeps for tuning.
 

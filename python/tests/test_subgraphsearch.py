@@ -881,3 +881,27 @@ def test_cli_densest_and_sparsest(tmp_path):
                           "-k", "6", "--densest", "-q"], check=False, capture_output=True, text=True, encoding="utf-8")
     assert run.returncode == 0 and f"{ss.densest(w, 6).value} total weight" in run.stdout
     assert cli("-k", "8", "--densest", "-m", "5").returncode != 0
+
+
+def test_weighted_graph_from_scores():
+    rng = np.random.default_rng(5)
+    a = rng.uniform(0, 7.3, (12, 12))
+    a = np.triu(a, 1)
+    a = a + a.T
+    w, factor = ss.WeightedGraph.from_scores(a)
+    assert factor == pytest.approx(255 / a.max()) and w.n == 12 and w.m == 66
+    assert max(w.weight(u, v) for u in range(12) for v in range(u + 1, 12)) == 255
+    # each weight is the scaled score rounded, or 1 for a positive score that would round to 0
+    assert all(abs(w.weight(u, v) - a[u, v] * factor) <= 0.5 or (w.weight(u, v) == 1 and a[u, v] * factor < 0.5)
+               for u in range(12) for v in range(u + 1, 12))
+    # the same from (u, v, score) triples
+    triples = [(u, v, a[u, v]) for u in range(12) for v in range(u + 1, 12)]
+    w2, factor2 = ss.WeightedGraph.from_scores(triples, n=12)
+    assert factor2 == factor and np.array_equal(w2.weight_matrix(), w.weight_matrix())
+    # tiny positive scores stay edges, zeros are not edges, and the resolution can be lowered
+    w3, _ = ss.WeightedGraph.from_scores([(0, 1, 100.0), (1, 2, 0.001), (0, 2, 0.0)], n=3)
+    assert (w3.weight(0, 1), w3.weight(1, 2), w3.m) == (255, 1, 2)
+    assert ss.WeightedGraph.from_scores([(0, 1, 2.0)], n=2, resolution=10)[0].weight(0, 1) == 10
+    for bad, kwargs in (([[0, 1], [2, 0]], {}), ([(0, 1, -1.0)], {"n": 2}), ([(0, 1, 1.0)], {"n": 2, "resolution": 300})):
+        with pytest.raises(ValueError):
+            ss.WeightedGraph.from_scores(bad, **kwargs)
