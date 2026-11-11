@@ -48,12 +48,14 @@ The [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html) p
 $`n`$ items so that the total distance between the chosen ones is as large as possible: a weighted
 search, with the items as vertices and the distances as edge weights. Its standard benchmark,
 MDPLIB, lists best known values found by two-hour runs of a scatter search made for the problem;
-the specialist heuristics that lead on it, such as iterated tabu search, reach them too. Here
-subgraphsearch aims at each best known value with 60 experiments of up to 20,000 moves and
-`kick_size=16`. The general solvers maximize the total distance for 10 seconds, with the same
-formulations as above, and the table gives the best total each found.
+the specialist heuristics that lead on it, such as iterated tabu search, reach them too. Its SOM-b
+instances have integer distances from 0 to 9. Here subgraphsearch aims at each best known value
+with 60 experiments of up to 20,000 moves and `kick_size=16`. The general solvers maximize the
+total distance for 10 seconds, with the same formulations as above, and the table gives the best
+total each found. HiGHS and CBC, which found nothing at 300 and 400 items, were not run on the
+largest instances.
 
-![For each of eight MDPLIB instances, how far each method's best total after 10 seconds falls below the best known value: subgraphsearch matches every one; CP-SAT falls 0 to 8% short; SCIP, HiGHS and CBC fall 6% to 38% short where they find a solution, and HiGHS and CBC find none on the 300- and 400-item instances](assets/benchmarks_diversity.png)
+![For each of fourteen MDPLIB instances, how far each method's best total after 10 seconds falls below the best known value: subgraphsearch matches every one; CP-SAT falls 0 to 9% short; SCIP, HiGHS and CBC fall 5% to 38% short where they find a solution, and HiGHS and CBC find none on the 300- and 400-item instances](assets/benchmarks_diversity.png)
 
 | Items | Chosen | Best known | subgraphsearch | CP-SAT | SCIP | HiGHS | CBC |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -65,10 +67,29 @@ formulations as above, and the table gives the best total each found.
 | 300 | 60 | 9,689 | 59 of 60 in 0.42&nbsp;s | 9,297 | 8,350 | none | none |
 | 400 | 40 | 4,658 | 39 of 60 in 0.70&nbsp;s | 4,374 | 3,635 | none | none |
 | 400 | 80 | 16,956 | 41 of 60 in 1.1&nbsp;s | 15,595 | not run | not run | not run |
+| 500 | 50 | 7,141 | 28 of 60 in 1.1&nbsp;s | 6,636 | 5,638 | not run | not run |
+| 500 | 100 | 26,258 | 59 of 60 in 0.9&nbsp;s | 23,802 | 23,300 | not run | not run |
+| 500 | 150 | 56,572 | 60 of 60 in 0.5&nbsp;s | 52,257 | 52,137 | not run | not run |
+| 500 | 200 | 97,344 | 59 of 60 in 1.2&nbsp;s | 91,945 | 92,174 | not run | not run |
 
-CP-SAT comes within 0.4% to 8% of the best known values, and the mixed-integer solvers within 6% to
-38%, where they find a solution at all. None of them can show that any value is optimal: CP-SAT's
+CP-SAT comes within 0.4% to 9.4% of the best known values, and the mixed-integer solvers within 5%
+to 38%, where they find a solution at all. None of them can show that any value is optimal: CP-SAT's
 proved upper bounds, for example, lie 17% to 60% above the best known values.
+
+The result does not depend on SOM-b's small integer distances. MDPLIB's GKD-c instances hold
+Euclidean distances between random points and its MDG-a instances random real distances from 0 to
+10. subgraphsearch's weights are integers, so for it and CP-SAT the distances were scaled (by 10
+and by 25) and rounded; subgraphsearch then aimed above any reachable total and kept the heaviest
+selection it found. Every method's selection is scored with the original distances.
+
+| Instance | Items | Chosen | Best known | subgraphsearch | CP-SAT | SCIP |
+| --- | --- | --- | --- | --- | --- | --- |
+| GKD-c 1 | 500 | 50 | 19,485.19 | 19,485.19 in all 60 runs, 1.5&nbsp;s | 19,329.0 | 15,997.4 |
+| MDG-a 1 | 500 | 50 | 7,833.83 | 7,833.83 in all 60 runs, 1.6&nbsp;s | 7,294.0 | 6,229.7 |
+
+subgraphsearch's totals differ from the best known values by less than 0.003, below the precision
+of the distances as published, so it matches them; CP-SAT falls 0.8% and 6.9% short, SCIP 18% and
+20%.
 
 ## Maximum cliques
 

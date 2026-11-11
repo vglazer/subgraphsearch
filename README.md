@@ -112,7 +112,7 @@ goes through all of these.
   HiGHS and CBC) need seconds at a few dozen vertices and mostly find nothing within 10 seconds
   past 40.
 - **Maximum diversity:** the best published values on the MDPLIB benchmark in about a second, where
-  the best general solver, CP-SAT, falls up to 8% short and the MIP solvers up to 38%.
+  the best general solver, CP-SAT, falls up to 9% short and the MIP solvers up to 38%.
 - **Snake-in-the-box:** the known records up to the 8-cube, and within 3 vertices of the 9-cube's.
 - **Maximum cliques:** far faster than a general exact search; a dedicated clique solver is faster
   still.

@@ -166,10 +166,20 @@ EDGE_SOLVERS = {20: {"CP-SAT": 0.025, "SCIP": 0.10, "HiGHS": 0.35, "CBC": 0.51},
                 44: {"CP-SAT": None, "SCIP": None, "HiGHS": None, "CBC": None},
                 50: {"CP-SAT": 8.8, "SCIP": None, "HiGHS": None, "CBC": None},
                 59: {"CP-SAT": None, "SCIP": None, "HiGHS": None, "CBC": None}}
-# Maximum diversity: the best total each solver found in 10 s, by instance as in DIVERSITY.
-DIVERSITY_SOLVERS = {"SCIP": [206, 847, 2101, 3665, 3830, 8350, 3635, "not run"],
-                     "HiGHS": [209, 915, 1911, 3881, 3582, None, None, "not run"],
-                     "CBC": [221, 853, 1940, 3534, 3426, None, None, "not run"]}
+# Maximum diversity: the best total each solver found in 10 s, by instance: label, best known value, and the
+# totals of CP-SAT, SCIP, HiGHS and CBC. subgraphsearch reaches every best known value (the real-valued GKD-c and
+# MDG-a to within the rounding of their published values).
+_MIP = {"SCIP": [206, 847, 2101, 3665, 3830, 8350, 3635, "not run"],
+        "HiGHS": [209, 915, 1911, 3881, 3582, None, None, "not run"],
+        "CBC": [221, 853, 1940, 3534, 3426, None, None, "not run"]}
+DIVERSITY_ALL = [(f"SOM-b, {n} items, {k} chosen", best, (cp, _MIP["SCIP"][i], _MIP["HiGHS"][i], _MIP["CBC"][i]))
+                 for i, (n, k, best, cp) in enumerate(DIVERSITY)] + [
+    ("SOM-b, 500 items, 50 chosen", 7141, (6636, 5638, "not run", "not run")),
+    ("SOM-b, 500 items, 100 chosen", 26258, (23802, 23300, "not run", "not run")),
+    ("SOM-b, 500 items, 150 chosen", 56572, (52257, 52137, "not run", "not run")),
+    ("SOM-b, 500 items, 200 chosen", 97344, (91945, 92174, "not run", "not run")),
+    ("GKD-c, 500 items, 50 chosen", 19485.19, (19329.0, 15997.4, "not run", "not run")),
+    ("MDG-a, 500 items, 50 chosen", 7833.83, (7294.0, 6229.7, "not run", "not run"))]
 
 
 def benchmarks(out: Path) -> None:
@@ -204,15 +214,15 @@ def benchmarks(out: Path) -> None:
     print(out / "benchmarks_edges.png")
 
     # maximum diversity: % below the best known value, by solver
-    labels = [f"{n} items, {k} chosen" for n, k, _, _ in DIVERSITY]
-    found = {"CP-SAT": [cp for *_, cp in DIVERSITY], **DIVERSITY_SOLVERS}
-    fig, ax = plt.subplots(figsize=(11, 6.2), layout="constrained")
+    labels = [label for label, _, _ in DIVERSITY_ALL]
+    found = {name: [row[2][j] for row in DIVERSITY_ALL] for j, name in enumerate(SOLVER_COLORS)}
+    fig, ax = plt.subplots(figsize=(11, 9.5), layout="constrained")
     height = 0.18
     cap = 45   # the x-axis limit, in %
     for j, (name, color) in enumerate(SOLVER_COLORS.items()):
-        for i, ((_, _, best, _), value) in enumerate(zip(DIVERSITY, found[name])):
+        for i, ((_, best, _), value) in enumerate(zip(DIVERSITY_ALL, found[name])):
             y = i + (j - 1.5) * height
-            if isinstance(value, int):
+            if isinstance(value, (int, float)):
                 short = 100 * (best - value) / best
                 ax.barh(y, short, height=height, color=color, label=name if i == 0 else None)
                 text = "matched" if short == 0 else f"{short:.1f}%" if short < 1 else f"{short:.0f}%"
@@ -220,9 +230,9 @@ def benchmarks(out: Path) -> None:
             else:
                 ax.annotate(f"{name}: " + ("no solution" if value is None else "not run"), (0, y), xytext=(10, 0),
                             textcoords="offset points", va="center", fontsize=7, color=color, fontweight="bold")
-    ax.plot([0] * len(DIVERSITY), range(len(DIVERSITY)), "D", color="#d6336c", markersize=7,
+    ax.plot([0] * len(DIVERSITY_ALL), range(len(DIVERSITY_ALL)), "D", color="#d6336c", markersize=7,
             label="subgraphsearch: matched every one", zorder=3)
-    ax.set_yticks(range(len(DIVERSITY)), labels)
+    ax.set_yticks(range(len(DIVERSITY_ALL)), labels)
     ax.invert_yaxis()
     ax.set_xlim(-1, cap)
     ax.set_xlabel("% below the best known value after 10 s")
