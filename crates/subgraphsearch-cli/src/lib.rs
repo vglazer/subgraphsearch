@@ -279,6 +279,14 @@ struct LargestArgs {
     /// Number of random moves per burst (0 disables diversification).
     #[arg(long, default_value_t = 4)]
     div_dur: usize,
+    /// Start each burst after the first with a region kick of this many subgraph vertices (0 =
+    /// off). Default: 4 for trees, cliques and independent sets, none for paths, cycles and
+    /// --rng legacy.
+    #[arg(long)]
+    kick_size: Option<usize>,
+    /// Moves a vertex removed by a region kick stays out.
+    #[arg(long, default_value_t = 20)]
+    kick_ban: usize,
     /// Random seed.
     #[arg(short, long, default_value_t = 1)]
     seed: i64,
@@ -662,9 +670,19 @@ fn run_largest(args: LargestArgs) -> Result<u8> {
     base.div_dur = args.div_dur;
     base.seed = args.seed;
     base.rng = args.rng.into();
-    if matches!(args.rng, RngArg::Legacy) {
-        base.kick_size = 0; // reproduce the original programs' runs
-    }
+    let regular_or_path = matches!(args.shape, ShapeArg::Path | ShapeArg::Cycle);
+    base.kick_size = match args.kick_size {
+        Some(k) if k > 0 && regular_or_path => {
+            bail!(
+                "region kicks are available for trees, cliques and independent sets, not paths or cycles"
+            )
+        }
+        Some(k) => k,
+        // the legacy rng reproduces the original programs' runs, which had no kicks
+        None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 0,
+        None => subgraphsearch_core::DEFAULT_KICK_SIZE,
+    };
+    base.kick_ban = args.kick_ban;
     let shape = subgraphsearch_core::Shape::from(args.shape);
     let start = std::time::Instant::now();
     let found = subgraphsearch_core::largest(&graph, shape, &base, args.start, args.lookahead)?;

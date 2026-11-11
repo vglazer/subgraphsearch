@@ -693,6 +693,16 @@ def test_largest(tmp_path):
     assert run.returncode == 0 and "largest induced cycle found: 26 vertices" in run.stdout
     saved = json.loads((tmp_path / "l.json").read_text(encoding="utf-8"))
     assert saved["shape"] == "cycle" and saved["size"] == 26
+    # region kicks: on by default for cliques, settable, and refused for paths and cycles
+    largest = lambda *a: subprocess.run([sys.executable, "-m", "subgraphsearch._cli", "largest", str(graph_path), *a],
+                                        check=False, capture_output=True, text=True, encoding="utf-8")
+    for extra, kick in (((), 4), (("--kick-size", "8"), 8)):
+        run = largest("--shape", "independent", "-q", "--json", str(tmp_path / "k.json"), *extra)
+        assert run.returncode == 0, run.stderr
+        kicks = set(re.findall(r'"kick_size":\s*(\d+)', (tmp_path / "k.json").read_text(encoding="utf-8")))
+        assert kicks == {str(kick)}, kicks
+    run = largest("--shape", "path", "--kick-size", "4")
+    assert run.returncode != 0 and "not paths or cycles" in run.stderr
 
 
 def test_legacy_regular_programs():
