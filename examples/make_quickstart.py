@@ -23,18 +23,18 @@ cells = [
     md(f"""
 # subgraphsearch quickstart
 
-`subgraphsearch` finds **induced [cycles]({W}Cycle_(graph_theory)), [paths]({W}Induced_path),
-[trees]({W}Tree_(graph_theory)) and [cliques]({W}Clique_(graph_theory))** in a graph, or any
-[induced subgraph]({W}Induced_subgraph) with a given number of vertices and edges. It also finds
-[regular]({W}Regular_graph) subgraphs, connected subgraphs and subgraphs of a given total weight. The method
-is a randomized [tabu search]({W}Tabu_search).
+`subgraphsearch` finds [induced subgraphs]({W}Induced_subgraph) with a given number of vertices and edges,
+or a given total weight in a weighted graph: $k$ items whose pairwise scores add up to a target, or to as much
+as it can reach. The same search finds induced [cycles]({W}Cycle_(graph_theory)), [paths]({W}Induced_path),
+[trees]({W}Tree_(graph_theory)) and [cliques]({W}Clique_(graph_theory)), and [regular]({W}Regular_graph) and
+connected subgraphs. The method is a randomized [tabu search]({W}Tabu_search).
 
-The notebook starts with searches of one dense random graph: cliques, harder targets, near misses and fixed
-vertices, then how to save, repeat and tune searches. It then turns to regular subgraphs, cycles and trees,
-and induced paths, including paths between two given vertices. It combines regular subgraphs with switching
-and block designs to construct strongly regular graphs, and finds Hadamard matrices, equiangular lines and
-error-correcting codes as cliques of vectors. It ends with weighted graphs, views of a graph's structure, and
-file formats.
+The notebook starts with one dense random graph: exact edge counts, near misses, and how the search compares
+with a general solver. It then turns to weighted graphs and choosing diverse items, a practical problem where
+subgraphsearch reaches published best values in under a second, and to saving and tuning searches. Next come
+shapes: regular subgraphs, cycles and trees, induced paths, cliques and independent sets. Then mathematics:
+strongly regular graphs from switching and block designs, spectral bounds, Hadamard matrices, equiangular
+lines and error-correcting codes. It ends with graph structure and file formats.
 """),
     code("""
 import subgraphsearch as ss
@@ -77,41 +77,26 @@ which lets the search undo its last swap when that would beat the best conflict 
 criterion* of a tabu search). The sections below try each one.
 """),
     md("""
-## Cliques and independent sets
+## A given number of edges
 
-An 11-vertex clique has all 11 · 10 / 2 = 55 edges, so this asks for 11 vertices spanning 55 edges. Each of
-the 40 *experiments* (independent restarts) reports the best subgraph it found.
+The basic search asks for $k$ vertices spanning exactly $m$ edges, here 30 vertices spanning 330. Each of the
+40 *experiments* (independent restarts) reports the best subgraph it found.
 """),
     code("""
-cliques = ss.search(g, size=11, edges=55)
-cliques
+basic = ss.search(g, size=30, edges=330)
+basic
 """),
     md("""
-Many experiments find the same clique; `solutions()` lists each distinct vertex set once, and
+`solutions()` lists the distinct vertex sets the experiments found, here a different one for each, and
 `viz.plot_graph` draws one.
 """),
     code("""
-print(len(cliques.solutions()), "distinct 11-cliques")
-viz.plot_graph(g, cliques.best.vertices, title="an 11-clique");
-"""),
-    md(f"""
-An [independent set]({W}Independent_set_(graph_theory)) is the opposite: vertices with no edges among them,
-so the target is 0. It is also a clique of the complement, `g.complement()`, and the two searches find the
-same sets. This graph is dense, so its independent sets are smaller than its cliques: the search finds 7
-vertices every time and 8 never. `is_independent()` checks a set (and `is_clique()` a clique), on the subgraph
-it induces.
-"""),
-    code("""
-independent = ss.search(g, 7, 0)
-print(independent.successes, "of 40 experiments found a 7-vertex independent set")
-print("the same as 7-cliques of the complement:", independent.solutions() == ss.search(g.complement(), 7, 21).solutions())
-print("each induces no edges:", all(g.induced(vs).is_independent() for vs in independent.solutions()))
+print(len(basic.solutions()), "distinct solutions")
+viz.plot_graph(g, basic.best.vertices, title="30 vertices spanning 330 edges");
 """),
     md("""
-## A harder target
-
-Any edge count can be the target. For 30 vertices of this graph, 346 edges is near the limit of what the
-search finds, and it succeeds only some of the time. `trace=True` records the *conflict*, the distance from
+Some targets are harder. For 30 vertices of this graph, 346 edges is near the limit of what the search finds,
+and it succeeds only some of the time. `trace=True` records the *conflict*, the distance from
 the target edge count, after every move.
 """),
     code("""
@@ -159,71 +144,7 @@ densest = ss.search(g, 30, 30 * 29 // 2, **settings).best   # aim at a 30-clique
 print("aiming at a 30-clique, the densest 30 vertices found span", g.induced_edge_count(densest.vertices), "edges")
 """),
     md("""
-## Fixed vertices and neighborhoods
-
-`fixed=` names vertices the subgraph must contain, here cliques through the vertex of highest degree. A
-clique through a vertex also lies in its neighborhood, so searching the subgraph induced on the neighborhood
-for one vertex fewer finds the same cliques, with a smaller graph to search.
-"""),
-    code("""
-v = int(g.degrees().argmax())
-through_v = ss.search(g, 11, 55, fixed=[v])
-
-nbrs = g.common_neighborhood([v])
-in_nbhd = ss.search(g.induced(nbrs), 10, 45)
-cliques_via_nbhd = [sorted([v, *(int(nbrs[i]) for i in vs)]) for vs in in_nbhd.solutions()]
-
-print(f"vertex {v} has {len(nbrs)} neighbors")
-print("with fixed=[v]:", through_v.successes, "of 40 experiments found an 11-clique through it")
-print("in its neighborhood:", in_nbhd.successes, "of 40 found one")
-assert all(g.induced_edge_count(c) == 55 for c in cliques_via_nbhd)
-"""),
-    md("""
-## Saving and repeating results
-
-`result.save(path)` writes a result as JSON, and `ss.SearchResult.load(path, g)` reads it back given the
-graph. Results depend only on the seed and the settings, not on the number of threads, so a search can be
-repeated exactly; change the seed for independent runs.
-"""),
-    code("""
-import pathlib
-import tempfile
-
-result = ss.search(g, 30, 330, experiments=8, seed=2)
-path = pathlib.Path(tempfile.mkdtemp()) / "result.json"
-result.save(path)
-assert ss.SearchResult.load(path, g).solutions() == result.solutions()
-print("the same seed gives the same solutions:", ss.search(g, 30, 330, experiments=8, seed=2).solutions() == result.solutions())
-"""),
-    md("""
-## Tuning
-
-`ss.sweep` runs one search per value of a setting, and `viz.plot_sweep` compares them. Here the setting is
-`div_dur`, the number of random moves at the start of every `div_freq` moves.
-"""),
-    code("""
-sweep = ss.sweep(g, 30, 340, "div_dur", [0, 4, 16, 64], experiments=40, max_moves=1500, div_freq=300)
-viz.plot_sweep(sweep, parameter="div_dur");
-"""),
-    md("""
-Aspiration is worth comparing the same way. On the hard 346-edge target from earlier it raises the number of
-successes; on many targets it makes little difference. So is `kick_size`, which replaces the random moves
-of each diversification cycle by rebuilding the part of the subgraph nearest a random vertex. The best size
-depends on the problem, a few vertices for some and a large part of the subgraph for others, so it is worth
-comparing several; the error-correcting codes below show it at work.
-"""),
-    code("""
-for aspiration in (False, True):
-    res = ss.search(g, 30, 346, aspiration=aspiration, **settings)
-    print(f"aspiration={aspiration}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
-"""),
-    md("""
 ## Compared with other methods
-
-Two comparisons follow: first on subgraphsearch's own problem, exact edge counts, against a strong general solver,
-and then on maximum cliques, which have a standard benchmark and methods made for them.
-
-### Exact edge counts
 
 Finding $k$ vertices that span exactly $m$ edges has no specialist to compare with, so here subgraphsearch is set
 beside a strong general solver: [CP-SAT](https://developers.google.com/optimization/cp/cp_solver) from
@@ -232,7 +153,8 @@ vertices' degrees inside the set (for a clique, the usual form, which forbids ea
 is far better). These results were recorded separately, so that this notebook does not need OR-Tools: CP-SAT 9.15
 on 16 cores, stopped after 10 seconds, and subgraphsearch with 60 experiments of up to 2,000 moves, on random graphs
 of density 0.6 unless noted. The first four rows ask for the most edges subgraphsearch finds among 30% of the
-vertices, in graphs of growing size.
+vertices, in graphs of growing size. (Maximum cliques, which do have specialists, are compared with them in
+the section on cliques.)
 """),
     code("""
 import matplotlib.pyplot as plt
@@ -327,93 +249,17 @@ niche. What CP-SAT can do and subgraphsearch cannot is prove a target impossible
 also shows that the 33 edges subgraphsearch found in the first row are the most possible. The two work well together:
 subgraphsearch finds solutions fast, and on small graphs a solver can confirm that nothing better exists.
 
-### Maximum cliques
-
-Maximum cliques have methods made for them, and a standard benchmark, the DIMACS graphs, with known clique
-numbers and published results. Eight of them, of three kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
-from the Network Repository): random dense graphs (C125.9, C250.9, p_hat300-3), structured ones from geometry
-and coding theory (MANN_a27, hamming8-4, keller4), and two *brock* graphs, which hide their largest clique
-among many large cliques that are not quite as large, to defeat local search. The cell reads them from a
-clone of the repository or else downloads them from GitHub.
-
-Below, subgraphsearch aims at each graph's clique number with 32 experiments. It is set beside two other methods:
-igraph's exact clique number, which also proves the answer (measured separately and stopped after 90
-seconds), and DLS-MC, a local search made for maximum cliques, from its published results (W. Pullan and
-H. H. Hoos, *Journal of Artificial Intelligence Research* 25, 2006, Table 1: mean time per run over 100 runs).
-Those come from one core of a 2006 processor several times slower than today's, while subgraphsearch here uses
-every core, so the comparison flatters subgraphsearch.
-"""),
-    code("""
-import time
-import urllib.request
-from pathlib import Path
-
-local = Path("examples/data/dimacs.g6")
-url = "https://raw.githubusercontent.com/vglazer/subgraphsearch/main/examples/data/dimacs.g6"
-try:
-    text = local.read_text(encoding="utf-8") if local.exists() else urllib.request.urlopen(url, timeout=30).read().decode()
-    dimacs = ss.parse_all(text, "graph6")
-except OSError as error:
-    dimacs = []
-    print("could not read the benchmark graphs, so this comparison is skipped:", error)
-
-names = ["C125.9", "C250.9", "p_hat300-3", "MANN_a27", "hamming8-4", "keller4", "brock200_2", "brock400_2"]
-clique_number = [34, 44, 36, 126, 16, 11, 12, 29]
-dls_mc_ms = [0.1, 0.9, 0.7, 47.6, None, None, 24.2, 477.4]   # published; None: under 0.1 ms
-igraph_ms = [None, None, None, None, 18100, 1800, 300, None]   # None: not finished in 90 s
-
-search_ms, found, successes = [], [], []
-for bench, k in zip(dimacs, clique_number):   # not g: later sections use g
-    start = time.perf_counter()
-    res = ss.search(bench, k, k * (k - 1) // 2, experiments=32, max_moves=20000, div_freq=300, div_dur=8)
-    search_ms.append(1000 * (time.perf_counter() - start))
-    successes.append(res.successes)
-    found.append(k if res.successes else ss.largest(bench, "clique", start=k - 8, lookahead=1, experiments=32,
-                                                     max_moves=20000, div_freq=300, div_dur=8).size)
-
-if dimacs:
-    lines = ["| Graph | Vertices | Edges | Largest clique | subgraphsearch: found / 32 | DLS-MC | igraph (exact) |",
-             "| --- | --- | --- | --- | --- | --- | --- |"]
-    for bench, name, k, ms, f, hits, dls, ig in zip(dimacs, names, clique_number, search_ms, found, successes,
-                                                     dls_mc_ms, igraph_ms):
-        mine = f"{hits}/32 in {ms:.1f} ms" if f == k else f"0/32 (best {f}), {ms:.0f} ms"
-        theirs = "under 0.1 ms" if dls is None else f"{dls:.1f} ms"
-        exact = "over 90 s" if ig is None else f"{ig / 1000:.1f} s"
-        lines.append(f"| {name} | {bench.n} | {bench.m:,} | {k} | {mine} | {theirs} | {exact} |")
-    display(Markdown("\\n".join(lines)))
-"""),
-    code("""
-if dimacs:
-    groups = [("Random dense graphs", [0, 1, 2]), ("Structured graphs", [3, 4, 5]),
-              ("Deceptive graphs: subgraphsearch fails", [6, 7])]
-    methods = [("subgraphsearch", "#d6336c"), ("DLS-MC (2006 machine)", "#4c6ef5"), ("igraph, exact", "#868e96")]
-    fig, axs = plt.subplots(1, 3, figsize=(13, 3.6), layout="constrained", sharex=True,
-                            gridspec_kw={"width_ratios": [3, 3, 2.2]})
-    for ax, (title, rows) in zip(axs, groups):
-        for y, i in enumerate(rows):
-            times = [search_ms[i], dls_mc_ms[i] or 0.1, igraph_ms[i] or 90000]   # under 0.1 ms drawn at 0.1
-            capped = [found[i] != clique_number[i], False, igraph_ms[i] is None]
-            for j, ((label, color), t, cap) in enumerate(zip(methods, times, capped)):
-                ax.barh(4 * y + j, t, color=color, hatch="//" if cap else None, edgecolor="white",
-                        label=label if (y, title) == (0, groups[0][0]) else None)
-                note = ("not found" if j == 0 else "over 90 s") if cap else ""
-                if note:
-                    ax.annotate(note, (t, 4 * y + j), xytext=(3, -3), textcoords="offset points", fontsize=8)
-        ax.set_yticks([4 * y + 1 for y in range(len(rows))], [f"{names[i]} ({clique_number[i]})" for i in rows])
-        ax.invert_yaxis()
-        ax.set_xscale("log")
-        ax.set_xlim(0.05, 1e6)
-        ax.set_title(title, fontsize=10, loc="left")
-        ax.set_xlabel("ms to find a largest clique (log)")
-    fig.legend(loc="outside lower center", ncol=3, frameon=False, fontsize=9)
 """),
     md("""
-On most of these graphs subgraphsearch finds a largest clique in milliseconds, where igraph's general exact
-search takes seconds or more than a minute and a half (dedicated exact clique solvers are not compared here).
-DLS-MC is faster than subgraphsearch by one to two orders of magnitude on the plot, and more on equal hardware, and
-it solves the brock graphs, where subgraphsearch ends in one of the decoy cliques however it is tuned. For maximum
-cliques, a solver made for them is the better tool; what subgraphsearch offers is one method for many kinds of
-target, most of which have no such solver.
+## Weighted graphs
+
+In a `WeightedGraph` every edge has an integer weight, and the target is the total weight of the subgraph's
+edges. This graph has 200 vertices and a mean weight of 0.65 per pair of vertices; the search looks for 15
+vertices whose edges weigh 140 in total. The next section puts weights to a practical use.
+"""),
+    code("""
+w = ss.generate_weighted(200, 0.65, seed=1)
+ss.search(w, 15, 140, experiments=40, max_moves=3000, div_freq=300, div_dur=10)
 """),
     md("""
 ## Choosing diverse items
@@ -433,6 +279,10 @@ settings for every instance. Beside it is CP-SAT, maximizing the sum of the dist
 runs stopped after 10 seconds, with the best value it found and the upper bound it proved.
 """),
     code("""
+import time
+import urllib.request
+from pathlib import Path
+
 mdp_local = Path("examples/data/mdplib")
 mdp_url = "https://raw.githubusercontent.com/vglazer/subgraphsearch/main/examples/data/mdplib/"
 # instance, best known value, and CP-SAT's best value and proved upper bound after 10 s (recorded)
@@ -495,6 +345,45 @@ separately, the pattern continues: with 400 items subgraphsearch still reaches t
 about 5 seconds when given 100,000 moves per run, while CP-SAT falls 6% to 8% short. Choosing $k$ items for a
 target total of pairwise scores is the kind of problem subgraphsearch is for: a practical one, which solvers are
 used for, where its search is fast and needs no tuning for each instance.
+"""),
+    md("""
+## Saving and repeating results
+
+`result.save(path)` writes a result as JSON, and `ss.SearchResult.load(path, g)` reads it back given the
+graph. Results depend only on the seed and the settings, not on the number of threads, so a search can be
+repeated exactly; change the seed for independent runs.
+"""),
+    code("""
+import pathlib
+import tempfile
+
+result = ss.search(g, 30, 330, experiments=8, seed=2)
+path = pathlib.Path(tempfile.mkdtemp()) / "result.json"
+result.save(path)
+assert ss.SearchResult.load(path, g).solutions() == result.solutions()
+print("the same seed gives the same solutions:", ss.search(g, 30, 330, experiments=8, seed=2).solutions() == result.solutions())
+"""),
+    md("""
+## Tuning
+
+`ss.sweep` runs one search per value of a setting, and `viz.plot_sweep` compares them. Here the setting is
+`div_dur`, the number of random moves at the start of every `div_freq` moves.
+"""),
+    code("""
+sweep = ss.sweep(g, 30, 340, "div_dur", [0, 4, 16, 64], experiments=40, max_moves=1500, div_freq=300)
+viz.plot_sweep(sweep, parameter="div_dur");
+"""),
+    md("""
+Aspiration is worth comparing the same way. On the hard 346-edge target from earlier it raises the number of
+successes; on many targets it makes little difference. So is `kick_size`, which replaces the random moves
+of each diversification cycle by rebuilding the part of the subgraph nearest a random vertex. The best size
+depends on the problem, a few vertices for some and a large part of the subgraph for others, so it is worth
+comparing several; the error-correcting codes below show it at work.
+"""),
+    code("""
+for aspiration in (False, True):
+    res = ss.search(g, 30, 346, aspiration=aspiration, **settings)
+    print(f"aspiration={aspiration}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
 """),
     md(f"""
 ## Regular subgraphs
@@ -694,6 +583,135 @@ for vs in corner_paths[48].solutions(max_conflict=1):
         sizes = sorted((int((labels == c).sum()) for c in range(pieces)), reverse=True)
         print(f"a near miss: a path of {sizes[0]} vertices from 0 to 127, and a separate cycle of {sizes[1]}")
         break
+"""),
+    md("""
+## Cliques and independent sets
+
+A clique is a target like any other: an 11-vertex clique has all 11 · 10 / 2 = 55 edges, so this asks for 11
+vertices spanning 55 edges.
+"""),
+    code("""
+cliques = ss.search(g, size=11, edges=55)
+print(cliques.successes, "of 40 experiments found an 11-clique;", len(cliques.solutions()), "distinct 11-cliques")
+viz.plot_graph(g, cliques.best.vertices, title="an 11-clique");
+"""),
+    md(f"""
+An [independent set]({W}Independent_set_(graph_theory)) is the opposite: vertices with no edges among them,
+so the target is 0. It is also a clique of the complement, `g.complement()`, and the two searches find the
+same sets. This graph is dense, so its independent sets are smaller than its cliques: the search finds 7
+vertices every time and 8 never. `is_independent()` checks a set (and `is_clique()` a clique), on the subgraph
+it induces.
+"""),
+    code("""
+independent = ss.search(g, 7, 0)
+print(independent.successes, "of 40 experiments found a 7-vertex independent set")
+print("the same as 7-cliques of the complement:", independent.solutions() == ss.search(g.complement(), 7, 21).solutions())
+print("each induces no edges:", all(g.induced(vs).is_independent() for vs in independent.solutions()))
+"""),
+    md("""
+### Fixed vertices and neighborhoods
+
+`fixed=` names vertices the subgraph must contain, here cliques through the vertex of highest degree. A
+clique through a vertex also lies in its neighborhood, so searching the subgraph induced on the neighborhood
+for one vertex fewer finds the same cliques, with a smaller graph to search.
+"""),
+    code("""
+v = int(g.degrees().argmax())
+through_v = ss.search(g, 11, 55, fixed=[v])
+
+nbrs = g.common_neighborhood([v])
+in_nbhd = ss.search(g.induced(nbrs), 10, 45)
+cliques_via_nbhd = [sorted([v, *(int(nbrs[i]) for i in vs)]) for vs in in_nbhd.solutions()]
+
+print(f"vertex {v} has {len(nbrs)} neighbors")
+print("with fixed=[v]:", through_v.successes, "of 40 experiments found an 11-clique through it")
+print("in its neighborhood:", in_nbhd.successes, "of 40 found one")
+assert all(g.induced_edge_count(c) == 55 for c in cliques_via_nbhd)
+"""),
+    md("""
+### Compared with clique solvers
+
+Maximum cliques have methods made for them, and a standard benchmark, the DIMACS graphs, with known clique
+numbers and published results. Eight of them, of three kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
+from the Network Repository): random dense graphs (C125.9, C250.9, p_hat300-3), structured ones from geometry
+and coding theory (MANN_a27, hamming8-4, keller4), and two *brock* graphs, which hide their largest clique
+among many large cliques that are not quite as large, to defeat local search. The cell reads them from a
+clone of the repository or else downloads them from GitHub.
+
+Below, subgraphsearch aims at each graph's clique number with 32 experiments. It is set beside two other methods:
+igraph's exact clique number, which also proves the answer (measured separately and stopped after 90
+seconds), and DLS-MC, a local search made for maximum cliques, from its published results (W. Pullan and
+H. H. Hoos, *Journal of Artificial Intelligence Research* 25, 2006, Table 1: mean time per run over 100 runs).
+Those come from one core of a 2006 processor several times slower than today's, while subgraphsearch here uses
+every core, so the comparison flatters subgraphsearch.
+"""),
+    code("""
+local = Path("examples/data/dimacs.g6")
+url = "https://raw.githubusercontent.com/vglazer/subgraphsearch/main/examples/data/dimacs.g6"
+try:
+    text = local.read_text(encoding="utf-8") if local.exists() else urllib.request.urlopen(url, timeout=30).read().decode()
+    dimacs = ss.parse_all(text, "graph6")
+except OSError as error:
+    dimacs = []
+    print("could not read the benchmark graphs, so this comparison is skipped:", error)
+
+names = ["C125.9", "C250.9", "p_hat300-3", "MANN_a27", "hamming8-4", "keller4", "brock200_2", "brock400_2"]
+clique_number = [34, 44, 36, 126, 16, 11, 12, 29]
+dls_mc_ms = [0.1, 0.9, 0.7, 47.6, None, None, 24.2, 477.4]   # published; None: under 0.1 ms
+igraph_ms = [None, None, None, None, 18100, 1800, 300, None]   # None: not finished in 90 s
+
+search_ms, found, successes = [], [], []
+for bench, k in zip(dimacs, clique_number):   # not g: later sections use g
+    start = time.perf_counter()
+    res = ss.search(bench, k, k * (k - 1) // 2, experiments=32, max_moves=20000, div_freq=300, div_dur=8)
+    search_ms.append(1000 * (time.perf_counter() - start))
+    successes.append(res.successes)
+    found.append(k if res.successes else ss.largest(bench, "clique", start=k - 8, lookahead=1, experiments=32,
+                                                     max_moves=20000, div_freq=300, div_dur=8).size)
+
+if dimacs:
+    lines = ["| Graph | Vertices | Edges | Largest clique | subgraphsearch: found / 32 | DLS-MC | igraph (exact) |",
+             "| --- | --- | --- | --- | --- | --- | --- |"]
+    for bench, name, k, ms, f, hits, dls, ig in zip(dimacs, names, clique_number, search_ms, found, successes,
+                                                     dls_mc_ms, igraph_ms):
+        mine = f"{hits}/32 in {ms:.1f} ms" if f == k else f"0/32 (best {f}), {ms:.0f} ms"
+        theirs = "under 0.1 ms" if dls is None else f"{dls:.1f} ms"
+        exact = "over 90 s" if ig is None else f"{ig / 1000:.1f} s"
+        lines.append(f"| {name} | {bench.n} | {bench.m:,} | {k} | {mine} | {theirs} | {exact} |")
+    display(Markdown("\\n".join(lines)))
+"""),
+    code("""
+if dimacs:
+    groups = [("Random dense graphs", [0, 1, 2]), ("Structured graphs", [3, 4, 5]),
+              ("Deceptive graphs: subgraphsearch fails", [6, 7])]
+    methods = [("subgraphsearch", "#d6336c"), ("DLS-MC (2006 machine)", "#4c6ef5"), ("igraph, exact", "#868e96")]
+    fig, axs = plt.subplots(1, 3, figsize=(13, 3.6), layout="constrained", sharex=True,
+                            gridspec_kw={"width_ratios": [3, 3, 2.2]})
+    for ax, (title, rows) in zip(axs, groups):
+        for y, i in enumerate(rows):
+            times = [search_ms[i], dls_mc_ms[i] or 0.1, igraph_ms[i] or 90000]   # under 0.1 ms drawn at 0.1
+            capped = [found[i] != clique_number[i], False, igraph_ms[i] is None]
+            for j, ((label, color), t, cap) in enumerate(zip(methods, times, capped)):
+                ax.barh(4 * y + j, t, color=color, hatch="//" if cap else None, edgecolor="white",
+                        label=label if (y, title) == (0, groups[0][0]) else None)
+                note = ("not found" if j == 0 else "over 90 s") if cap else ""
+                if note:
+                    ax.annotate(note, (t, 4 * y + j), xytext=(3, -3), textcoords="offset points", fontsize=8)
+        ax.set_yticks([4 * y + 1 for y in range(len(rows))], [f"{names[i]} ({clique_number[i]})" for i in rows])
+        ax.invert_yaxis()
+        ax.set_xscale("log")
+        ax.set_xlim(0.05, 1e6)
+        ax.set_title(title, fontsize=10, loc="left")
+        ax.set_xlabel("ms to find a largest clique (log)")
+    fig.legend(loc="outside lower center", ncol=3, frameon=False, fontsize=9)
+"""),
+    md("""
+On most of these graphs subgraphsearch finds a largest clique in milliseconds, where igraph's general exact
+search takes seconds or more than a minute and a half (dedicated exact clique solvers are not compared here).
+DLS-MC is faster than subgraphsearch by one to two orders of magnitude on the plot, and more on equal hardware, and
+it solves the brock graphs, where subgraphsearch ends in one of the decoy cliques however it is tuned. For maximum
+cliques, a solver made for them is the better tool; what subgraphsearch offers is one method for many kinds of
+target, most of which have no such solver.
 """),
     md(f"""
 ## Switching
@@ -1206,17 +1224,6 @@ Each code wants what the other cannot stand. The 72-word code gains from rebuild
 codewords, nearly half the code, find it in every experiment with a seventh of the work. The constant-weight code
 is best with small kicks of 4 and is wrecked by large ones. So compare a few sizes on a problem, as for any
 setting, before relying on one.
-"""),
-    md("""
-## Weighted graphs
-
-In a `WeightedGraph` every edge has an integer weight, and the target is the total weight of the subgraph's
-edges. This graph has 200 vertices and a mean weight of 0.65 per pair of vertices; the search looks for 15
-vertices whose edges weigh 140 in total.
-"""),
-    code("""
-w = ss.generate_weighted(200, 0.65, seed=1)
-ss.search(w, 15, 140, experiments=40, max_moves=3000, div_freq=300, div_dur=10)
 """),
     md(f"""
 ## Graph structure
