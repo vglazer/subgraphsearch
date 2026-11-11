@@ -130,7 +130,7 @@ def comparison(out: Path) -> None:
     cp.axhline(10, color="#868e96", lw=0.8, ls="--")
     cp.set_ylim(0, 11)
     cp.set_ylabel("seconds")
-    cp.set_title("CP-SAT: exact edge counts", fontsize=11, loc="left")
+    cp.set_title("CP-SAT, the strongest general solver tried", fontsize=11, loc="left")
     cp.legend(frameon=False, fontsize=9, loc="upper left")
     mine.plot([n for n, _, _ in EDGE_SCALING], [ms for _, ms, _ in EDGE_SCALING], "o", color="#d6336c")
     mine.set_ylim(0, 11)

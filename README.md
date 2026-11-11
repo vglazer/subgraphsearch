@@ -108,10 +108,11 @@ goes through all of these.
 
 ![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
 
-- **Exact edge counts:** milliseconds, where the general solver CP-SAT needs seconds at a few dozen
-  vertices and mostly finds nothing within 10 seconds past 40.
+- **Exact edge counts:** milliseconds, where general solvers (CP-SAT, and the MIP solvers SCIP,
+  HiGHS and CBC) need seconds at a few dozen vertices and mostly find nothing within 10 seconds
+  past 40.
 - **Maximum diversity:** the best published values on the MDPLIB benchmark in about a second, where
-  CP-SAT falls up to 8% short.
+  the best general solver, CP-SAT, falls up to 8% short and the MIP solvers up to 38%.
 - **Snake-in-the-box:** the known records up to the 8-cube, and within 3 vertices of the 9-cube's.
 - **Maximum cliques:** far faster than a general exact search; a dedicated clique solver is faster
   still.

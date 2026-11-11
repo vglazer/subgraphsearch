@@ -3,32 +3,41 @@
 *Part of the [subgraphsearch documentation](README.md#documentation).*
 
 subgraphsearch is one general search: it finds any number of vertices and edges, total weights,
-and induced paths, cycles, trees and cliques with the same method. Below it is set beside the methods one would otherwise
-use, on problems with public benchmarks or known records. Times are wall-clock on an Apple M3 Max
+and induced paths, cycles, trees and cliques with the same method. Below it is set beside the
+methods one would otherwise use, on problems with public benchmarks or known records. Times are wall-clock on an Apple M3 Max
 laptop with 16 cores; subgraphsearch's are for all its experiments together.
 
 ![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
 
 ## Exact edge counts
 
-No specialized solver finds $`k`$ vertices spanning exactly $`m`$ edges, so the alternative is a
-general constraint solver. Here it is OR-Tools'
-[CP-SAT](https://developers.google.com/optimization/cp/cp_solver), with one yes-or-no variable per
-vertex and the edge count as half the sum of the chosen vertices' degrees inside the set, on 16
-cores and stopped after 10 seconds. The graphs are random, with density 0.6; the target is the most
-edges subgraphsearch finds among 30% of the vertices, the hardest kind of target.
+No specialized solver finds $`k`$ vertices spanning exactly $`m`$ edges, so the alternatives are
+general solvers, each stopped after 10 seconds:
 
-| Graph | Target | subgraphsearch | CP-SAT |
-| --- | --- | --- | --- |
-| 20 vertices | 6 vertices, 15 edges | 0.13&nbsp;ms | 25&nbsp;ms |
-| 29 vertices | 9 vertices, 34 edges | 0.13&nbsp;ms | 0.41&nbsp;s |
-| 38 vertices | 11 vertices, 52 edges | 0.15&nbsp;ms | 4.5&nbsp;s |
-| 44 vertices | 13 vertices, 70 edges | 0.17&nbsp;ms | nothing in 10&nbsp;s |
-| 50 vertices | 15 vertices, 91 edges | 0.83&nbsp;ms | 8.8&nbsp;s |
-| 59 vertices | 18 vertices, 129 edges | 0.31&nbsp;ms | nothing in 10&nbsp;s |
+- OR-Tools' [CP-SAT](https://developers.google.com/optimization/cp/cp_solver), a constraint
+  solver, on 16 cores, with one yes-or-no variable per vertex and the edge count as half the sum
+  of the chosen vertices' degrees inside the set;
+- the open-source mixed-integer programming solvers [SCIP](https://www.scipopt.org),
+  [HiGHS](https://highs.dev) and [CBC](https://github.com/coin-or/Cbc) (CBC on 16 cores), through
+  PuLP, with the standard formulation: a yes-or-no variable per vertex and per edge, the edge's
+  variable 1 exactly when both its ends are chosen.
 
-subgraphsearch ran 60 experiments of up to 2,000 moves, and every one succeeded. What CP-SAT can do
-and subgraphsearch cannot is prove a target impossible: one edge more on the 30-vertex graph of the
+The graphs are random, with density 0.6; the target is the most edges subgraphsearch finds among
+30% of the vertices, the hardest kind of target.
+
+| Graph | Target | subgraphsearch | CP-SAT | SCIP | HiGHS | CBC |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20 vertices | 6 vertices, 15 edges | 0.13&nbsp;ms | 25&nbsp;ms | 0.10&nbsp;s | 0.35&nbsp;s | 0.51&nbsp;s |
+| 29 vertices | 9 vertices, 34 edges | 0.13&nbsp;ms | 0.41&nbsp;s | 0.78&nbsp;s | 3.0&nbsp;s | 2.6&nbsp;s |
+| 38 vertices | 11 vertices, 52 edges | 0.15&nbsp;ms | 4.5&nbsp;s | nothing | nothing | nothing |
+| 44 vertices | 13 vertices, 70 edges | 0.17&nbsp;ms | nothing | nothing | nothing | nothing |
+| 50 vertices | 15 vertices, 91 edges | 0.83&nbsp;ms | 8.8&nbsp;s | nothing | nothing | nothing |
+| 59 vertices | 18 vertices, 129 edges | 0.31&nbsp;ms | nothing | nothing | nothing | nothing |
+
+"Nothing" means no solution within 10 seconds.
+
+subgraphsearch ran 60 experiments of up to 2,000 moves, and every one succeeded. What the general
+solvers can do and subgraphsearch cannot is prove a target impossible: one edge more on the 30-vertex graph of the
 same kind, CP-SAT proves in 0.9 s that none exists.
 
 ## Maximum diversity
@@ -39,21 +48,23 @@ search, with the items as vertices and the distances as edge weights. Its standa
 MDPLIB, lists best known values found by two-hour runs of a scatter search made for the problem;
 the specialist heuristics that lead on it, such as iterated tabu search, reach them too. Here
 subgraphsearch aims at each best known value with 60 experiments of up to 20,000 moves and
-`kick_size=16`, and CP-SAT maximizes the total distance for 10 seconds.
+`kick_size=16`. The general solvers maximize the total distance for 10 seconds, with the same
+formulations as above, and the table gives the best total each found.
 
-| Items | Chosen | Best known | subgraphsearch | CP-SAT after 10&nbsp;s |
-| --- | --- | --- | --- | --- |
-| 100 | 10 | 333 | 60 of 60 in 2&nbsp;ms | 329 |
-| 100 | 20 | 1,195 | 60 of 60 in 16&nbsp;ms | 1,171 |
-| 100 | 30 | 2,457 | 60 of 60 in 10&nbsp;ms | 2,457 |
-| 100 | 40 | 4,142 | 60 of 60 in 3&nbsp;ms | 4,127 |
-| 200 | 40 | 4,450 | 56 of 60 in 183&nbsp;ms | 4,263 |
-| 300 | 60 | 9,689 | 59 of 60 in 0.42&nbsp;s | 9,297 |
-| 400 | 40 | 4,658 | 39 of 60 in 0.70&nbsp;s | 4,374 |
-| 400 | 80 | 16,956 | 41 of 60 in 1.1&nbsp;s | 15,595 |
+| Items | Chosen | Best known | subgraphsearch | CP-SAT | SCIP | HiGHS | CBC |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 100 | 10 | 333 | 60 of 60 in 2&nbsp;ms | 329 | 206 | 209 | 221 |
+| 100 | 20 | 1,195 | 60 of 60 in 16&nbsp;ms | 1,171 | 847 | 915 | 853 |
+| 100 | 30 | 2,457 | 60 of 60 in 10&nbsp;ms | 2,457 | 2,101 | 1,911 | 1,940 |
+| 100 | 40 | 4,142 | 60 of 60 in 3&nbsp;ms | 4,127 | 3,665 | 3,881 | 3,534 |
+| 200 | 40 | 4,450 | 56 of 60 in 183&nbsp;ms | 4,263 | 3,830 | 3,582 | 3,426 |
+| 300 | 60 | 9,689 | 59 of 60 in 0.42&nbsp;s | 9,297 | 8,350 | none | none |
+| 400 | 40 | 4,658 | 39 of 60 in 0.70&nbsp;s | 4,374 | 3,635 | none | none |
+| 400 | 80 | 16,956 | 41 of 60 in 1.1&nbsp;s | 15,595 | not run | not run | not run |
 
-CP-SAT's proved upper bounds lie 17% to 60% above the best known values, so it cannot show that any
-of them is optimal either.
+CP-SAT comes within 0.4% to 8% of the best known values, and the mixed-integer solvers within 6% to
+38%, where they find a solution at all. None of them can show that any value is optimal: CP-SAT's
+proved upper bounds, for example, lie 17% to 60% above the best known values.
 
 ## Maximum cliques
 
