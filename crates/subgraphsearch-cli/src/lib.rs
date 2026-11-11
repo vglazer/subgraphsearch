@@ -145,10 +145,18 @@ struct SearchArgs {
     #[arg(
         short = 'm',
         long,
-        required_unless_present_any = ["degree", "path"],
-        conflicts_with_all = ["degree", "path"]
+        required_unless_present_any = ["degree", "path", "densest", "sparsest"],
+        conflicts_with_all = ["degree", "path", "densest", "sparsest"]
     )]
     edges: Option<i64>,
+    /// Instead of an edge count, find the -k vertices spanning the most edges (or the most total
+    /// weight, with --weighted) the search can reach.
+    #[arg(long, conflicts_with_all = ["degree", "path", "sparsest"])]
+    densest: bool,
+    /// Instead of an edge count, find the -k vertices spanning the fewest edges (or the least total
+    /// weight, with --weighted).
+    #[arg(long, conflicts_with_all = ["degree", "path"])]
+    sparsest: bool,
     /// Instead of an edge count, look for subgraphs that are regular of this degree (the original
     /// reg_search).
     #[arg(short = 'd', long, conflicts_with = "path")]
@@ -606,13 +614,44 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         }),
     };
     let mut out = io::stdout().lock();
+    // --densest and --sparsest aim at the most any -k vertices could span, capped at the graph's
+    // total, or at nothing, so the closest subgraphs found are the densest or sparsest
+    let extreme = |most_per_pair: i64, total: i64| -> i64 {
+        let pairs = (args.vertices * args.vertices.saturating_sub(1) / 2) as i64;
+        if args.densest {
+            (pairs * most_per_pair).min(total)
+        } else {
+            0
+        }
+    };
+    let extreme_search = args.densest || args.sparsest;
     if args.weighted {
         let graph = args.input.load_weighted()?;
+        let mut params = params.clone();
+        if extreme_search {
+            params.edges = extreme(255, graph.total_weight() as i64);
+        }
         let start = std::time::Instant::now();
         let result = run_one(&graph, &params)?;
-        report(&mut out, &result, start.elapsed(), "", &args)?;
+        let values: Vec<i64> = result
+            .experiments
+            .iter()
+            .map(|e| graph.induced_weight(&e.vertices) as i64)
+            .collect();
+        report(
+            &mut out,
+            &result,
+            start.elapsed(),
+            "",
+            &args,
+            extreme_search.then_some(&values[..]),
+        )?;
         write_json(&args, &[(0, result.clone())])?;
-        return Ok(if result.successes() > 0 { 0 } else { 2 });
+        return Ok(if result.successes() > 0 || extreme_search {
+            0
+        } else {
+            2
+        });
     }
     let mut results = Vec::with_capacity(graphs.len());
     let mut graphs_with_success = 0;
@@ -622,6 +661,10 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         } else {
             String::new()
         };
+        let mut params = params.clone();
+        if extreme_search {
+            params.edges = extreme(1, graph.num_edges() as i64);
+        }
         let start = std::time::Instant::now();
         let result = match run_one(graph, &params) {
             Ok(r) => r,
@@ -632,11 +675,23 @@ fn run_search(args: SearchArgs) -> Result<u8> {
             }
             Err(e) => return Err(e.into()),
         };
-        report(&mut out, &result, start.elapsed(), &prefix, &args)?;
-        graphs_with_success += usize::from(result.successes() > 0);
+        let values: Vec<i64> = result
+            .experiments
+            .iter()
+            .map(|e| graph.induced_edge_count(&e.vertices) as i64)
+            .collect();
+        report(
+            &mut out,
+            &result,
+            start.elapsed(),
+            &prefix,
+            &args,
+            extreme_search.then_some(&values[..]),
+        )?;
+        graphs_with_success += usize::from(result.successes() > 0 || extreme_search);
         results.push((index, result));
     }
-    if args.all {
+    if args.all && !extreme_search {
         writeln!(
             out,
             "{graphs_with_success}/{} graphs contain a {}-vertex subgraph {}",
@@ -810,8 +865,45 @@ fn report(
     elapsed: std::time::Duration,
     prefix: &str,
     args: &SearchArgs,
+    values: Option<&[i64]>,
 ) -> Result<()> {
     let params = &result.params;
+    if let Some(values) = values {
+        // --densest or --sparsest: the best value found, and the experiments within --max-conflict of it
+        let what = if args.weighted {
+            "total weight"
+        } else {
+            "edges"
+        };
+        let best = result
+            .experiments
+            .iter()
+            .zip(values)
+            .min_by_key(|(e, _)| e.best_conflict)
+            .map_or(0, |(_, &v)| v);
+        if !args.quiet {
+            for (i, (e, &v)) in result.experiments.iter().zip(values).enumerate() {
+                if (v - best).abs() <= args.max_conflict {
+                    let list: Vec<String> = e.vertices.iter().map(usize::to_string).collect();
+                    writeln!(
+                        out,
+                        "{prefix}experiment {i}: {v} {what}: {}",
+                        list.join(" ")
+                    )?;
+                }
+            }
+        }
+        let reached = values.iter().filter(|&&v| v == best).count();
+        writeln!(
+            out,
+            "{prefix}{} {}-vertex subgraph found: {best} {what}, in {reached}/{} experiments ({:.2}s)",
+            if args.densest { "densest" } else { "sparsest" },
+            params.size,
+            result.experiments.len(),
+            elapsed.as_secs_f64()
+        )?;
+        return Ok(());
+    }
     if !args.quiet {
         for (i, e) in result.experiments.iter().enumerate() {
             if e.best_conflict <= args.max_conflict {

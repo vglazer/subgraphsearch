@@ -131,11 +131,11 @@ lower bound, like any heuristic's.
 
 ## Densest and sparsest
 
-`ss.densest` finds the $`k`$ vertices spanning the most edges, or the most total weight, without a
+`ss.densest` (`--densest`) finds the $`k`$ vertices spanning the most edges, or the most total weight, without a
 target: it aims at a value no $`k`$ vertices can exceed, all $`k(k-1)/2`$ pairs (each at the largest
 weight, 255, in a weighted graph) or the whole graph's edges or weight if that is less. The conflict
 is then how far a subgraph falls short, so minimizing it maximizes the edges or weight, and the
-best subgraph found is the densest. `ss.sparsest` aims at 0 and so minimizes them. Like
+best subgraph found is the densest. `ss.sparsest` (`--sparsest`) aims at 0 and so minimizes them. Like
 `ss.largest`, both report a heuristic's bound: the densest value found is a lower bound on the most
 possible.
 

@@ -12,7 +12,7 @@ are given by their Python names, with the command-line options in parentheses.
 | --- | --- |
 | $`k`$ vertices with exactly $`m`$ edges | `size=k, edges=m` (`-k k -m m`) |
 | a $`k`$-clique, a $`k`$-vertex independent set | `edges` set to $`k(k-1)/2`$, or to 0 |
-| the densest (or sparsest) $`k`$ vertices, or the heaviest (lightest) in a weighted graph | `ss.densest(g, k)` (`ss.sparsest(g, k)`); on the command line, aim `-m` at $`k(k-1)/2`$ (or 0) and read the best near miss |
+| the densest (or sparsest) $`k`$ vertices, or the heaviest (lightest) in a weighted graph | `ss.densest(g, k)` (`--densest`), `ss.sparsest(g, k)` (`--sparsest`) |
 | subgraphs close to a target | `r.solutions(max_conflict=n)` (`--max-conflict n`) |
 | subgraphs containing given vertices | `fixed=` (`--fixed`), or for cliques, search their common neighborhood (below) |
 | regular subgraphs of degree $`d`$ | `degree=d, two_phase=True` (`--degree d --two-phase`), or `degree=d` alone with fixed vertices |

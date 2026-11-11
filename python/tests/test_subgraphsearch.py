@@ -861,3 +861,23 @@ def test_densest_and_sparsest_match_brute_force():
     assert 0 in ss.densest(g, 5, fixed=[0]).vertices
     with pytest.raises(ValueError):
         ss.densest(g, 5, degree=2)
+
+
+def test_cli_densest_and_sparsest(tmp_path):
+    import subprocess
+    import sys
+    g = ss.generate("exponential", 40, 0.5, seed=2)
+    path = tmp_path / "g.g6"
+    g.write(path)
+    cli = lambda *a: subprocess.run([sys.executable, "-m", "subgraphsearch._cli", "search", str(path), *a],
+                                    check=False, capture_output=True, text=True, encoding="utf-8")
+    for flag, fn in (("--densest", ss.densest), ("--sparsest", ss.sparsest)):
+        run = cli("-k", "8", flag, "-q")
+        assert run.returncode == 0, run.stderr
+        assert f" {fn(g, 8).value} edges" in run.stdout
+    w = ss.generate_weighted(40, 0.8, seed=2)
+    w.write(tmp_path / "w.edges")
+    run = subprocess.run([sys.executable, "-m", "subgraphsearch._cli", "search", str(tmp_path / "w.edges"), "--weighted",
+                          "-k", "6", "--densest", "-q"], check=False, capture_output=True, text=True, encoding="utf-8")
+    assert run.returncode == 0 and f"{ss.densest(w, 6).value} total weight" in run.stdout
+    assert cli("-k", "8", "--densest", "-m", "5").returncode != 0

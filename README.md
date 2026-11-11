@@ -181,6 +181,7 @@ subgraphsearch generate hypercube --dimension 7 -o q7.g6           # or a standa
 # search it
 subgraphsearch search g.g6 -k 11 -m 55                            # 11-cliques
 subgraphsearch search g.g6 -k 30 -m 340 --max-conflict 2          # 30 vertices, 340 edges; near misses too
+subgraphsearch search g.g6 -k 30 --densest                        # the 30 vertices spanning the most edges
 subgraphsearch search g.g6 -k 10 --degree 4                       # 4-regular subgraphs
 subgraphsearch search q7.g6 -k 36 --degree 2 --connected          # induced 36-cycles
 subgraphsearch search q7.g6 -k 40 --path --endpoints 0,127        # induced 40-vertex paths from 0 to 127
@@ -202,7 +203,8 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 | Option | Meaning | Default |
 | --- | --- | --- |
 | `-k`, `--vertices` | subgraph vertices | required |
-| `-m`, `--edges` | subgraph edges (total weight, with `--weighted`) | required, unless `--degree` |
+| `-m`, `--edges` | subgraph edges (total weight, with `--weighted`) | required, unless `--densest`, `--sparsest`, `--degree` or `--path` |
+| `--densest`, `--sparsest` | instead, the subgraph with the most (fewest) edges, or total weight | |
 | `-d`, `--degree` | instead, a subgraph regular of this degree | |
 | `--path` | instead, an induced path | |
 | `--endpoints` | with `--path`, the two vertices the path runs between, e.g. `0,7` | none |
