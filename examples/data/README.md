@@ -40,7 +40,7 @@ Please cite the Network Repository when using these graphs:
 
 ## MDPLIB maximum diversity instances
 
-`mdplib/` holds six SOM-b instances of the maximum diversity problem from MDPLIB: choose `m` of `n`
+`mdplib/` holds eight SOM-b instances of the maximum diversity problem from MDPLIB: choose `m` of `n`
 items to maximize the sum of the distances between the chosen ones. Each file's first line is
 `n m`, and each further line `i j d` gives the distance `d`, an integer from 0 to 9, between items
 `i` and `j`, numbered from 0.
@@ -53,6 +53,8 @@ items to maximize the sum of the distances between the chosen ones. Each file's 
 | SOM-b_4_n100_m40.txt | 100 | 40 | 4,142 |
 | SOM-b_6_n200_m40.txt | 200 | 40 | 4,450 |
 | SOM-b_10_n300_m60.txt | 300 | 60 | 9,689 |
+| SOM-b_13_n400_m40.txt | 400 | 40 | 4,658 |
+| SOM-b_14_n400_m80.txt | 400 | 80 | 16,956 |
 
 The best known values are those MDPLIB lists, from two-hour runs of scatter search.
 
@@ -64,7 +66,7 @@ Valencia; [problem page](https://grafo.etsii.urjc.es/optsicom/mdp.html)), distri
 [Creative Commons Attribution 4.0 license](https://creativecommons.org/licenses/by/4.0/). The files
 in `mdplib/` are distributed under the same license.
 
-Changes: none; the six files are copied unchanged from the MDPLIB archive.
+Changes: none; the eight files are copied unchanged from the MDPLIB archive.
 
 Please cite MDPLIB when using these instances:
 

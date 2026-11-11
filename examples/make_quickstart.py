@@ -31,7 +31,7 @@ connected subgraphs. The method is a randomized [tabu search]({W}Tabu_search).
 
 The notebook starts with one dense random graph: exact edge counts, near misses, and how the search compares
 with a general solver. It then turns to weighted graphs and choosing diverse items, a practical problem where
-subgraphsearch reaches published best values in under a second, and to saving and tuning searches. Next come
+subgraphsearch reaches published best values in about a second, and to saving and tuning searches. Next come
 shapes: regular subgraphs, cycles and trees, induced paths, cliques and independent sets. Then mathematics:
 strongly regular graphs from switching and block designs, spectral bounds, Hadamard matrices, equiangular
 lines and error-correcting codes. It ends with graph structure and file formats.
@@ -274,10 +274,12 @@ search aims at.
 
 The problem has a standard benchmark, MDPLIB (Martí, Gallego and Duarte, 2010), with best known values from
 two-hour runs of a scatter search made for the problem. Its SOM-b instances have integer distances from 0 to 9
-between every two items. Six of them, with 100 to 300 items, are in `examples/data/mdplib` (under their own
-license, Creative Commons Attribution). Below, subgraphsearch aims at each best known value, with the same
-settings for every instance. Beside it is CP-SAT, maximizing the sum of the distances, from separately recorded
-runs stopped after 10 seconds, with the best value it found and the upper bound it proved.
+between every two items. Eight of them, with 100 to 400 items, are in `examples/data/mdplib` (under their own
+license, Creative Commons Attribution). Below, subgraphsearch aims at each best known value with the same
+settings for every instance, once as it is and once with *region kicks* (`kick_size=16`), which at the start
+of each diversification cycle rebuild the part of the selection nearest a random item (more under Tuning).
+Beside it is CP-SAT, maximizing the sum of the distances, from separately recorded runs stopped after 10
+seconds, with the best value it found and the upper bound it proved.
 """),
     code("""
 import time
@@ -289,7 +291,8 @@ mdp_url = "https://raw.githubusercontent.com/vglazer/subgraphsearch/main/example
 # instance, best known value, and CP-SAT's best value and proved upper bound after 10 s (recorded)
 diversity = [("SOM-b_1_n100_m10", 333, 329, 390), ("SOM-b_2_n100_m20", 1195, 1171, 1594),
              ("SOM-b_3_n100_m30", 2457, 2457, 3452), ("SOM-b_4_n100_m40", 4142, 4127, 5822),
-             ("SOM-b_6_n200_m40", 4450, 4263, 6662), ("SOM-b_10_n300_m60", 9689, 9297, 15165)]
+             ("SOM-b_6_n200_m40", 4450, 4263, 6662), ("SOM-b_10_n300_m60", 9689, 9297, 15165),
+             ("SOM-b_13_n400_m40", 4658, 4374, 7020), ("SOM-b_14_n400_m80", 16956, 15595, 27085)]
 
 def read_mdplib(name):
     \"\"\"An MDPLIB instance as a weighted graph, and the number of items to pick.\"\"\"
@@ -300,54 +303,63 @@ def read_mdplib(name):
     pairs = [tuple(map(int, line.split())) for line in rest if line.strip()]
     return ss.WeightedGraph(n, [(u, v, d) for u, v, d in pairs if d]), k
 
+def diversity_run(items, k, target, kick_size):
+    \"\"\"Successes out of 60 and milliseconds taken.\"\"\"
+    start = time.perf_counter()
+    found = ss.search(items, k, target, experiments=60, max_moves=20000, div_freq=300, div_dur=10, kick_size=kick_size)
+    return found.successes, 1000 * (time.perf_counter() - start)
+
 mdp_rows = []
 try:
     for name, best_known, cp_best, cp_bound in diversity:
         items, k = read_mdplib(name)
-        start = time.perf_counter()
-        mdp_result = ss.search(items, k, best_known, experiments=60, max_moves=20000, div_freq=300, div_dur=10)
-        mdp_rows.append((items.n, k, best_known, mdp_result.successes, 1000 * (time.perf_counter() - start),
-                         items.induced_weight(mdp_result.best.vertices), cp_best, cp_bound))
+        mdp_rows.append((items.n, k, best_known, diversity_run(items, k, best_known, 0),
+                         diversity_run(items, k, best_known, 16), cp_best, cp_bound))
 except OSError as error:
     print("could not read the benchmark instances, so this comparison is skipped:", error)
 
-lines = ["| Items | Chosen | Best known | subgraphsearch: found / 60 | CP-SAT after 10 s: best (upper bound) |",
-         "| --- | --- | --- | --- | --- |"]
-for n, k, best_known, hits, ms, reached, cp_best, cp_bound in mdp_rows:
-    mine = f"{hits}/60 in {ms:.0f} ms" if hits else f"0/60 (best {reached}), {ms:.0f} ms"
-    lines.append(f"| {n} | {k} | {best_known:,} | {mine} | {cp_best:,} ({cp_bound:,}) |")
+lines = ["| Items | Chosen | Best known | subgraphsearch: found / 60 | with `kick_size=16` | CP-SAT after 10 s: best (upper bound) |",
+         "| --- | --- | --- | --- | --- | --- |"]
+for n, k, best_known, (plain_hits, plain_ms), (kick_hits, kick_ms), cp_best, cp_bound in mdp_rows:
+    lines.append(f"| {n} | {k} | {best_known:,} | {plain_hits}/60 in {plain_ms:.0f} ms | {kick_hits}/60 in {kick_ms:.0f} ms "
+                 f"| {cp_best:,} ({cp_bound:,}) |")
 display(Markdown("\\n".join(lines)))
 """),
     code("""
 if mdp_rows:
     labels = [f"{n} items, {k} chosen" for n, k, *_ in mdp_rows]
-    fig, (mine_ax, cp_ax) = plt.subplots(1, 2, figsize=(13, 3.4), layout="constrained", sharey=True)
-    mine_ax.barh(labels, [row[4] for row in mdp_rows], color="#d6336c")
-    mine_ax.set_xlabel("milliseconds for 60 runs")
-    mine_ax.set_title("subgraphsearch: reaches every best known value", fontsize=10, loc="left")
-    shortfall = [100 * (best_known - cp_best) / best_known for _, _, best_known, *_, cp_best, _ in mdp_rows]
-    cp_ax.barh(labels, shortfall, color="#4c6ef5")
+    ys = range(len(mdp_rows))
+    fig, (mine_ax, cp_ax) = plt.subplots(1, 2, figsize=(13, 4), layout="constrained", sharey=True)
+    for offset, column, label, color in ((-0.2, 3, "as it is", "#f783ac"), (0.2, 4, "with kick_size=16", "#d6336c")):
+        hits = [row[column][0] for row in mdp_rows]
+        mine_ax.barh([y + offset for y in ys], hits, height=0.4, color=color, label=label)
+        for y, h in zip(ys, hits):
+            mine_ax.annotate(str(h), (h, y + offset), xytext=(3, 0), textcoords="offset points", va="center", fontsize=8)
+    mine_ax.set_yticks(list(ys), labels)
+    mine_ax.set_xlim(0, 68)
+    mine_ax.set_xlabel("runs of 60 that reach the best known value")
+    mine_ax.set_title("subgraphsearch", fontsize=10, loc="left")
+    mine_ax.legend(frameon=False, fontsize=9, loc="lower right")
+    shortfall = [100 * (row[2] - row[5]) / row[2] for row in mdp_rows]
+    cp_ax.barh(list(ys), shortfall, color="#4c6ef5")
+    for y, s in zip(ys, shortfall):
+        cp_ax.annotate("matched" if s == 0 else f"{s:.1f}%", (s, y), xytext=(3, 0), textcoords="offset points",
+                       va="center", fontsize=8)
+    cp_ax.set_xlim(0, 1.12 * max(shortfall))
     cp_ax.set_xlabel("% below the best known value")
     cp_ax.set_title("CP-SAT after 10 s", fontsize=10, loc="left")
-    for y, row in enumerate(mdp_rows):
-        mine_ax.annotate(f"{row[4]:.0f} ms", (row[4], y), xytext=(3, 0), textcoords="offset points", va="center",
-                         fontsize=8)
-        cp_ax.annotate("matched" if shortfall[y] == 0 else f"{shortfall[y]:.1f}%", (shortfall[y], y), xytext=(3, 0),
-                       textcoords="offset points", va="center", fontsize=8)
-    mine_ax.set_xlim(0, 1.12 * max(row[4] for row in mdp_rows))
-    cp_ax.set_xlim(0, 1.12 * max(shortfall))
     mine_ax.invert_yaxis()
 """),
     md("""
-subgraphsearch reaches every best known value, in under a second for 60 runs, while CP-SAT, in ten times as
-long, reaches one of them and falls further short as the instances grow; the upper bounds it proves are far
-above the best values, so it cannot show that any of them is optimal. On larger SOM-b instances, measured
-separately, the pattern continues: with 400 items subgraphsearch still reaches the best known values, within
-about 5 seconds when given 100,000 moves per run, while CP-SAT falls 6% to 8% short. The strongest methods
-for this problem include iterated tabu search (Palubeckis, 2007), which alternates a tabu search with
-perturbations. subgraphsearch, a port of programs written in 2002, combines tabu moves with diversification in
-much the same way, for any target. Choosing $k$ items for a target total of pairwise scores is the kind of problem subgraphsearch is for: a practical one, which solvers are
-used for, where its search is fast and needs no tuning for each instance.
+As it is, subgraphsearch reaches every best known value up to 300 items but finds the larger instances harder,
+and on the 400-item ones a run rarely gets there, if ever. With region kicks, most runs reach the best known
+value on every instance, in about a second or less for 60 runs. CP-SAT, in 10 seconds, reaches one of them and
+falls further short as the instances grow, by about 8% on the largest; the upper bounds it proves are far above
+the best values, so it cannot show that any of them is optimal. The strongest methods for this problem include
+iterated tabu search (Palubeckis, 2007), which alternates a tabu search with perturbations. subgraphsearch, a
+port of programs written in 2002, combines tabu moves with diversification in much the same way, for any
+target. Choosing $k$ items for a target total of pairwise scores is the kind of problem subgraphsearch is for:
+a practical one, which solvers are used for, where its search is fast and needs little tuning.
 """),
     md("""
 ## Saving and repeating results
@@ -378,15 +390,28 @@ viz.plot_sweep(sweep, parameter="div_dur");
 """),
     md("""
 Aspiration is worth comparing the same way. On the hard 346-edge target from earlier it raises the number of
-successes; on many targets it makes little difference. So is `kick_size`, which replaces the random moves
-of each diversification cycle by rebuilding the part of the subgraph nearest a random vertex. The best size
-depends on the problem, a few vertices for some and a large part of the subgraph for others, so it is worth
-comparing several; the error-correcting codes below show it at work.
+successes; on many targets it makes little difference.
 """),
     code("""
 for aspiration in (False, True):
     res = ss.search(g, 30, 346, aspiration=aspiration, **settings)
     print(f"aspiration={aspiration}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
+"""),
+    md("""
+`kick_size` often matters more. A *region kick* replaces the random moves at the start of each diversification
+cycle: it swaps out the $k$ subgraph vertices nearest a random one, each for the best replacement, and keeps
+them out for a while (`kick_ban` moves), so it rebuilds one part of the subgraph at a time. On the same target:
+"""),
+    code("""
+for kick_size in (0, 4, 16):
+    res = ss.search(g, 30, 346, kick_size=kick_size, **settings)
+    print(f"kick_size={kick_size:<2}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
+"""),
+    md("""
+In every problem tried, kicks of about 4 vertices helped or did no harm: this target, the maximum diversity
+benchmark above, the DIMACS clique graphs and error-correcting codes. Larger kicks often help much more, but on
+some problems they rebuild too much at once and do worse than none, as the codes below show, so compare a few
+sizes.
 """),
     md(f"""
 ## Regular subgraphs
@@ -1199,10 +1224,9 @@ print(f"two bits flipped: {noticed} of 72 noticed as errors")
     md(f"""
 A code can be searched the other way round too: as an independent set in the graph of words that are *too
 close*, joined when they differ in fewer than $d$ places. That graph is sparse, and distances in it mean
-something: the codewords nearest a codeword lie in one region of the space of words. This is where a *region
-kick* can pay off. With `kick_size=k`, at the start of each diversification cycle the search removes the $k$
-codewords nearest a random one, instead of making random moves, and refills the gap with the best words it can
-find, so it rebuilds one region of the code at a time, the kind of move searches for codes use.
+something: the codewords nearest a codeword lie in one region of the space of words. A region kick (see
+Tuning) then removes the $k$ codewords nearest a random one and refills the gap with the best words it can
+find, rebuilding one region of the code at a time, the kind of move searches for codes use.
 
 How large a region to rebuild depends on the problem, so the size is a setting to compare. Here it is for the
 72-word code above and for a [constant-weight code]({W}Constant-weight_code): 69 words of length 15, each with

@@ -13,7 +13,7 @@ vertices and edges** in a graph, or with a given total weight in a weighted grap
 Near misses are reported in addition to exact solutions, enabling use as an approximation algorithm.
 For exact edge counts, solutions take milliseconds where a general solver such as CP-SAT gives out
 at a few dozen vertices. On the [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), choosing items as different from
-each other as possible, the search reaches published best values in under a second (see
+each other as possible, the search reaches published best values in about a second (see
 [Compared with other methods](#compared-with-other-methods)).
 
 A search can also find induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
@@ -158,7 +158,7 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 | `-n`, `--experiments` | independent restarts | 40 |
 | `--moves` | maximum moves per experiment | 250 |
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
-| `--kick-size`, `--kick-ban` | instead, start every `div-freq` moves by rebuilding this many subgraph vertices nearest a random one, keeping the vertices removed out for `kick-ban` moves; the best size depends on the problem | off, 20 |
+| `--kick-size`, `--kick-ban` | instead, start every `div-freq` moves by rebuilding this many subgraph vertices nearest a random one, keeping the vertices removed out for `kick-ban` moves; about 4 is a safe start, and the best size depends on the problem | off, 20 |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
 
@@ -170,8 +170,8 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
   chosen ones is as large as possible, the [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), is a weighted search: the
   items are vertices and the distances edge weights. On the MDPLIB benchmark, subgraphsearch
   reaches the best known values, found by two-hour runs of a scatter search made for the problem,
-  in under a second with up to 300 items and in about 5 seconds with 400. OR-Tools' CP-SAT, given
-  10 seconds, falls up to 8% short.
+  in about a second with up to 400 items, using region kicks. OR-Tools' CP-SAT, given 10 seconds,
+  falls up to 8% short.
 - **Error-correcting codes.** A binary code of minimum distance $`d`$ is a clique in the graph of
   words joined when they differ in at least $`d`$ places.
   [examples/codes.py](examples/codes.py) finds codes of the largest possible size for lengths 9 to
@@ -246,11 +246,12 @@ Experiments run in parallel on all cores, and results still depend only on the s
 
 A *region kick* (`--kick-size k`) shakes harder: instead of the random moves, it swaps out the
 $`k`$ subgraph vertices nearest a random one, each for the best replacement, and keeps them out
-for a while, rebuilding one part of the subgraph at a time. It pays off where nearness in the
-graph means something, as for codes searched as independent sets in the graph of words that are
-too close: there it finds the 72-word code of length 11 and distance 4 in every experiment instead
-of half. The best size differs a lot between problems, a few vertices for some and half the
-subgraph for others, so compare a few.
+for a while, rebuilding one part of the subgraph at a time. It helped on every kind of problem
+tried: hard edge-count targets in random graphs, the maximum diversity benchmark, where it turns
+occasional successes on the 400-item instances into most runs, the DIMACS clique graphs, and codes,
+where it finds the 72-word code of length 11 and distance 4 in every experiment instead of half.
+Kicks of about 4 vertices never made results worse in these tests. Larger ones often help much
+more but can rebuild too much at once and do worse than none, so compare a few sizes.
 
 ### Reading the results
 
@@ -508,7 +509,7 @@ specialized solver addresses. There it finds solutions in milliseconds where a s
 solver, OR-Tools' CP-SAT, needs seconds at 50 vertices and finds nothing within 10 seconds at 70,
 though CP-SAT can also prove that a target is impossible. Weighted targets show the same gap: on
 the maximum diversity problem, choosing $`k`$ items with the largest total distance between them,
-subgraphsearch reaches in under a second the best known values that heuristics made for the
+subgraphsearch reaches in about a second the best known values that heuristics made for the
 problem found in two-hour runs, while CP-SAT, in 10 seconds, falls short. For maximum cliques,
 which have specialists too, subgraphsearch finds the largest clique in milliseconds on most of the
 DIMACS benchmarks, far faster than igraph's general exact search but well behind DLS-MC, a local
