@@ -19,8 +19,8 @@ The same structure, a tabu search interrupted by perturbations, was later propos
 *Applied Mathematics and Computation* 189, 2007), now among the strongest methods for that problem;
 subgraphsearch's programs predate it by five years.
 
-This page describes the method. [TUNING.md](TUNING.md) covers choosing its settings, and the README
-shows [how it compares](README.md#how-it-compares) with other methods. Parameters are given by their
+This page describes the method. [TUNING.md](TUNING.md) covers choosing its settings, and
+[BENCHMARKS.md](BENCHMARKS.md) shows how it compares with other methods. Parameters are given by their
 Python names, with the command-line options in parentheses on first mention.
 
 ## Objective and moves

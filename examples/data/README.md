@@ -1,6 +1,6 @@
 # Benchmark data
 
-These files hold the benchmark instances behind the README's comparison with other methods,
+These files hold the benchmark instances behind [BENCHMARKS.md](../../BENCHMARKS.md),
 which the quickstart notebook also runs. Each set is
 distributed under its own license, **not** under the MIT license that covers the rest of this
 project, and none of them is part of the Python or Rust packages.

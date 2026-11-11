@@ -173,7 +173,8 @@ license, Creative Commons Attribution). Below, subgraphsearch aims at each best 
 settings for every instance, once without *region kicks* (`kick_size=0`) and once with large ones
 (`kick_size=16`). A region kick starts each diversification cycle after the first by rebuilding the part of
 the selection nearest a random item; searches use small kicks of 4 by default (more under Tuning). The
-[README](https://github.com/vglazer/subgraphsearch#how-it-compares) compares these results with other methods.
+[benchmarks](https://github.com/vglazer/subgraphsearch/blob/main/BENCHMARKS.md#maximum-diversity) compare these results with other
+methods.
 """),
     code("""
 import time
@@ -548,7 +549,7 @@ among many large cliques that are not quite as large, to defeat local search. Th
 clone of the repository or else downloads them from GitHub.
 
 Below, subgraphsearch aims at each graph's clique number with 32 experiments. The
-[README](https://github.com/vglazer/subgraphsearch#maximum-cliques) sets these results beside a solver made for
+[benchmarks](https://github.com/vglazer/subgraphsearch/blob/main/BENCHMARKS.md#maximum-cliques) set these results beside a solver made for
 maximum cliques and an exact search.
 """),
     code("""
