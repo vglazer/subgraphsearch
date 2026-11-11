@@ -220,9 +220,84 @@ for aspiration in (False, True):
     md("""
 ## Compared with other methods
 
-How fast is the search next to methods built for one problem? Maximum cliques have a standard benchmark,
-the DIMACS graphs, with known clique numbers, and published results for other methods. Eight of them, of three
-kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
+Two comparisons follow: first on the search's own problem, exact edge counts, against a strong general solver,
+and then on maximum cliques, which have a standard benchmark and methods made for them.
+
+### Exact edge counts
+
+Finding $k$ vertices that span exactly $m$ edges has no specialist to compare with, so here the search is set
+beside a strong general solver: [CP-SAT](https://developers.google.com/optimization/cp/cp_solver) from
+Google's OR-Tools, given one yes-or-no variable per vertex and the edge count as half the sum of the chosen
+vertices' degrees inside the set (for a clique, the usual form, which forbids each pair of non-adjacent vertices,
+is far better). These results were recorded separately, so that this notebook does not need OR-Tools: CP-SAT 9.15
+on 16 cores, stopped after 10 seconds, and the search with 60 experiments of up to 2,000 moves, on random graphs
+of density 0.6 unless noted. The first four rows ask for the most edges the search finds among 30% of the
+vertices, in graphs of growing size.
+"""),
+    code("""
+import matplotlib.pyplot as plt
+from IPython.display import Markdown, display
+
+# Recorded: graph, target, search successes out of 60 (None: no solution exists), search ms,
+# CP-SAT ms (None: nothing found in 10 s)
+edge_runs = [
+    ("30 vertices", "9 vertices, 33 edges", 60, 0.2, 180),
+    ("50 vertices", "15 vertices, 91 edges", 60, 1.1, 8800),
+    ("70 vertices", "21 vertices, 176 edges", 59, 3.4, None),
+    ("100 vertices", "30 vertices, 346 edges", 25, 13, None),
+    ("100 vertices", "30 vertices, 340 edges", 60, 1.0, None),
+    ("50 vertices, density 0.5", "10 vertices, 22 edges", 60, 0.5, 8),
+    ("100 vertices", "an 11-clique", 60, 0.7, 13),
+    ("30 vertices", "9 vertices, 34 edges", None, None, 900),
+]
+
+def duration(ms):
+    return f"{ms:g} ms" if ms < 100 else f"{ms / 1000:g} s"
+
+lines = ["| Graph | Target | This search: found / 60 | CP-SAT |", "| --- | --- | --- | --- |"]
+for graph, target, hits, mine, theirs in edge_runs:
+    if hits is None:
+        lines.append(f"| {graph} | {target} | none (none can exist) | proved impossible in {duration(theirs)} |")
+        continue
+    cp = "nothing in 10 s" if theirs is None else f"found in {duration(theirs)}"
+    lines.append(f"| {graph} | {target} | {hits}/60 in {duration(mine)} | {cp}{' (as a clique)' if 'clique' in target else ''} |")
+display(Markdown("\\n".join(lines)))
+"""),
+    code("""
+groups = [("Graphs of growing size: the most edges on 30% of the vertices", [0, 1, 2, 3]), ("Other targets", [4, 5, 6])]
+methods = [("this search", "#d6336c"), ("CP-SAT", "#4c6ef5")]
+fig, axs = plt.subplots(1, 2, figsize=(13, 3.8), layout="constrained", sharex=True,
+                        gridspec_kw={"width_ratios": [4, 3]})
+for ax, (title, rows) in zip(axs, groups):
+    for y, i in enumerate(rows):
+        graph, target, hits, mine, theirs = edge_runs[i]
+        for j, ((label, color), t) in enumerate(zip(methods, [mine, theirs or 10000])):
+            capped = j == 1 and theirs is None
+            ax.barh(3 * y + j, t, color=color, hatch="//" if capped else None, edgecolor="white",
+                    label=label if (y, ax) == (0, axs[0]) else None)
+            note = "nothing in 10 s" if capped else (f"{hits}/60" if j == 0 and hits < 60 else "")
+            if note:
+                ax.annotate(note, (t, 3 * y + j), xytext=(3, -3), textcoords="offset points", fontsize=8)
+    ax.set_yticks([3 * y + 0.5 for y in range(len(rows))],
+                  [f"{edge_runs[i][0]}:\\n{edge_runs[i][1]}" for i in rows], fontsize=8)
+    ax.invert_yaxis()
+    ax.set_xscale("log")
+    ax.set_xlim(0.05, 1e6)
+    ax.set_title(title, fontsize=10, loc="left")
+    ax.set_xlabel("ms to find a solution (log)")
+fig.legend(loc="outside lower center", ncol=2, frameon=False, fontsize=9)
+"""),
+    md("""
+CP-SAT's time grows steeply with the graph, from a fifth of a second at 30 vertices to more than 10 seconds at 70,
+while the search stays at a few milliseconds: exact edge counts in graphs past a few dozen vertices are this
+search's niche. What CP-SAT can do and the search cannot is prove a target impossible, as in the last row, which
+also shows that the 33 edges the search found in the first row are the most possible. The two work well together:
+the search finds solutions fast, and on small graphs a solver can confirm that nothing better exists.
+
+### Maximum cliques
+
+Maximum cliques have methods made for them, and a standard benchmark, the DIMACS graphs, with known clique
+numbers and published results. Eight of them, of three kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
 from the Network Repository): random dense graphs (C125.9, C250.9, p_hat300-3), structured ones from geometry
 and coding theory (MANN_a27, hamming8-4, keller4), and two *brock* graphs, which hide their largest clique
 among many large cliques that are not quite as large, to defeat local search. The cell reads them from a
@@ -239,8 +314,6 @@ every core, so the comparison flatters the search.
 import time
 import urllib.request
 from pathlib import Path
-
-import matplotlib.pyplot as plt
 
 local = Path("examples/data/dimacs.g6")
 url = "https://raw.githubusercontent.com/vglazer/subgraphsearch/main/examples/data/dimacs.g6"
@@ -266,8 +339,6 @@ for bench, k in zip(dimacs, clique_number):   # not g: later sections use g
                                                      max_moves=20000, div_freq=300, div_dur=8).size)
 
 if dimacs:
-    from IPython.display import Markdown, display
-
     lines = ["| Graph | Vertices | Edges | Largest clique | This search: found / 32 | DLS-MC | igraph (exact) |",
              "| --- | --- | --- | --- | --- | --- | --- |"]
     for bench, name, k, ms, f, hits, dls, ig in zip(dimacs, names, clique_number, search_ms, found, successes,
@@ -310,34 +381,6 @@ DLS-MC is faster than the search by one to two orders of magnitude on the plot, 
 it solves the brock graphs, where the search ends in one of the decoy cliques however it is tuned. For maximum
 cliques, a solver made for them is the better tool; what this search offers is one method for many kinds of
 target, most of which have no such solver.
-"""),
-    md(f"""
-### Exact edge counts
-
-The search's own problem, $k$ vertices spanning exactly $m$ edges, has no specialist to compare with, so here it
-is set beside a strong general solver: [CP-SAT](https://developers.google.com/optimization/cp/cp_solver) from Google's OR-Tools, given one
-yes-or-no variable per vertex and the edge count as half the sum of the chosen vertices' degrees inside the set
-(for a clique, the usual form, which forbids each pair of non-adjacent vertices, is far better). These results
-were recorded separately, so that this notebook does not need OR-Tools: CP-SAT 9.15 on 16 cores, stopped after 10
-seconds, and the search with 60 experiments of up to 2,000 moves, on random graphs of density 0.6 unless noted.
-
-| Graph | Target | This search: found / 60 | CP-SAT |
-| --- | --- | --- | --- |
-| 50 vertices, density 0.5 | 10 vertices, 22 edges | 60/60 in 0.5 ms | found in 8 ms |
-| 100 vertices | an 11-clique | 60/60 in 0.7 ms | found in 13 ms (as a clique) |
-| 100 vertices | 30 vertices, 340 edges | 60/60 in 1.0 ms | nothing in 10 s |
-| 100 vertices | 30 vertices, 346 edges | 25/60 in 13 ms | nothing in 10 s |
-| 30 vertices | 9 vertices, 33 edges | 60/60 in 0.2 ms | found in 0.18 s |
-| 50 vertices | 15 vertices, 91 edges | 60/60 in 1.1 ms | found in 8.8 s |
-| 70 vertices | 21 vertices, 176 edges | 59/60 in 3.4 ms | nothing in 10 s |
-| 30 vertices | 9 vertices, 34 edges | none (none can exist) | proved impossible in 0.9 s |
-
-The last four rows look for the most edges the search finds among 30% of the vertices. CP-SAT's time grows
-steeply with the graph, from a fifth of a second at 30 vertices to more than 10 seconds at 70, while the search
-stays at a few milliseconds: exact edge counts in graphs past a few dozen vertices are this search's niche. What
-CP-SAT can do and the search cannot is prove a target impossible, as in the last row, which also shows that the
-33 edges the search found there are the most possible. The two work well together: the search finds solutions
-fast, and on small graphs a solver can confirm that nothing better exists.
 """),
     md(f"""
 ## Regular subgraphs
