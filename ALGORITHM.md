@@ -168,7 +168,7 @@ grows with the number of edges rather than with the square of the number of vert
 10,000 vertices with 25 million edges needs about 200 MB per thread, and a search can use fewer
 threads (`--threads`) when memory is short. Edge-count and weight searches, including those for
 cliques, independent sets and trees, keep no such table, so for them only the adjacency matrix and
-lists count. The original programs stored positions in 16 bits,
-which limited these searches to 32,767 vertices; subgraphsearch has no such limit, so a path search
-runs in the 16-cube, with 65,536 vertices, as in smaller ones. No search has a fixed limit on the
-number of vertices: memory is the limit.
+lists count. The original programs stored positions in 16 bits, which limited these searches to
+32,767 vertices; subgraphsearch has no such limit, so a path search runs in the 16-cube, with 65,536
+vertices, as in smaller ones. No search has a fixed limit on the number of vertices: memory is the
+limit.
