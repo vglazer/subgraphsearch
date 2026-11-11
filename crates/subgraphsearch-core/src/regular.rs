@@ -44,17 +44,13 @@ use crate::graph::Graph;
 use crate::rng::{Randu, RngKind, SearchRng, Xoshiro};
 use crate::search::{Components, Experiment, SearchParams, SearchResult};
 
-/// The most vertices a regular search supports: like the C programs, it stores neighbor
-/// positions in 16-bit integers.
-pub const MAX_VERTICES: usize = i16::MAX as usize;
-
 /// The most vertices for which a search keeps neighbor positions in a `v * v` table, as the C
-/// programs do: 8 MB per thread at most. Larger graphs keep one per edge end, which is slower to
+/// programs do: 16 MB per thread at most. Larger graphs keep one per edge end, which is slower to
 /// look up but takes memory in proportion to the number of edges.
 const DENSE_POSITIONS: usize = 2048;
 
 /// A `v * v` position table's entry for a pair of vertices that is not an edge.
-const NOT_AN_EDGE: u16 = u16::MAX;
+const NOT_AN_EDGE: u32 = u32::MAX;
 
 #[cfg(test)]
 thread_local! {
@@ -240,12 +236,6 @@ where
 
 fn validate(graph: &Graph, params: &SearchParams) -> Result<(), Error> {
     params.validate(graph.num_vertices())?;
-    if graph.num_vertices() > MAX_VERTICES {
-        return Err(Error::Invalid(format!(
-            "regular searches support at most {MAX_VERTICES} vertices, got {}",
-            graph.num_vertices()
-        )));
-    }
     if params.aspiration {
         return Err(Error::Invalid(
             "aspiration is not available for regular or path searches".into(),
@@ -283,7 +273,7 @@ struct Workspace {
     /// [`DENSE_POSITIONS`] vertices, a `v * v` table as in the C programs, `NOT_AN_EDGE` for
     /// non-edges; with more, one entry per edge end, in the order of `nbrs`. Every thread has its
     /// own, so a `v * v` table for a large graph would take more memory than the graph itself.
-    pos: Vec<u16>,
+    pos: Vec<u32>,
     dense: bool,
     /// Neighbor lists, partitioned: subgraph neighbors first.
     adj_list: Vec<Vec<u32>>,
@@ -397,7 +387,7 @@ impl Workspace {
     #[inline]
     fn set_position(&mut self, i: usize, j: usize, position: usize) {
         let s = self.slot(i, j).expect("a neighbor");
-        self.pos[s] = position as u16;
+        self.pos[s] = position as u32;
     }
 
     fn run<R: SearchRng>(
@@ -1309,5 +1299,37 @@ mod tests {
         p.aspiration = false;
         let w = crate::graph::WeightedGraph::from_graph(&g);
         assert!(search(&w, &p).is_err());
+    }
+
+    #[test]
+    fn graphs_beyond_sixteen_bit_positions() {
+        // the 16-cube has 65,536 vertices, more than 16-bit neighbor positions can index
+        let cube = crate::generate::hypercube(16).unwrap();
+        let mut path = SearchParams::new(8, 0);
+        path.path = true;
+        path.experiments = 16;
+        path.max_moves = 2000;
+        let r = search(&cube, &path).unwrap();
+        let found = r
+            .experiments
+            .iter()
+            .find(|e| e.success)
+            .expect("an induced path");
+        assert_eq!(cube.induced_edge_count(&found.vertices), 7);
+        let mut coil = SearchParams::new(8, 0);
+        coil.regular = Some(Regular {
+            degree: 2,
+            two_phase: false,
+        });
+        coil.connected = true;
+        coil.experiments = 16;
+        coil.max_moves = 2000;
+        let r = search(&cube, &coil).unwrap();
+        let found = r
+            .experiments
+            .iter()
+            .find(|e| e.success)
+            .expect("an induced cycle");
+        assert_eq!(cube.induced_edge_count(&found.vertices), 8);
     }
 }

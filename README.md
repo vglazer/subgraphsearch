@@ -161,8 +161,10 @@ for one outside vertex, chosen among the swaps that bring the edge count (or tot
 to the target; recently swapped vertices are tabu, so the search does not cycle; and every few
 hundred moves a perturbation, random moves or a *region kick* that rebuilds the part of the subgraph
 nearest a random vertex, moves it out of local minima. Independent experiments run in parallel, and
-results depend only on the seed. [ALGORITHM.md](ALGORITHM.md) describes the method in full, and
-[TUNING.md](TUNING.md) how to choose a search and its settings.
+results depend only on the seed. There is no fixed limit on the size of a graph; memory is the
+limit, mostly one bit per pair of vertices, about 1.25 GB at 100,000 vertices
+([details](ALGORITHM.md#data-structures-and-limits)). [ALGORITHM.md](ALGORITHM.md) describes the
+method in full, and [TUNING.md](TUNING.md) how to choose a search and its settings.
 
 ## Command line
 

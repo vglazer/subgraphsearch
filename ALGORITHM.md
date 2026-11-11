@@ -150,9 +150,11 @@ A graph is held as an adjacency matrix and as adjacency lists. The matrix has on
 vertices in an unweighted graph and one byte, the edge's weight, in a weighted one; it gives
 constant-time adjacency tests during move evaluation, read a row at a time. The lists bound the work
 of updating $`d_S(v)`$ after a swap by the degrees of the two vertices swapped. The lists take most
-of the memory: a graph on 10,000 vertices with 25 million edges takes about 330 MB. Each thread keeps its own
-$`d_S(v)`$ array and move lists, so the memory of a search beyond the graph grows with the number of
-vertices times the number of threads.
+of the memory of a dense graph: one on 10,000 vertices with 25 million edges takes about 330 MB. The
+matrix dominates in large sparse graphs: one bit per pair of vertices is about 1.25 GB at 100,000
+vertices, and a weighted graph's byte per pair about 10 GB. Each thread keeps its own $`d_S(v)`$
+array and move lists, so the memory of a search beyond the graph grows with the number of vertices
+times the number of threads.
 
 The cost of a move grows in proportion to the number of vertices, and a little less than in
 proportion to the size of the subgraph; a search that misses its target makes every move it is
@@ -161,5 +163,8 @@ allowed. Experiments are independent, so the time divides almost evenly among co
 Regular, cycle and path searches also keep, in every thread, where each vertex's neighbors are in
 its neighbor list. On graphs of up to 2,048 vertices they use a table with an entry for every pair
 of vertices, as the original programs do; on larger ones, an entry for every edge, so their memory
-grows with the number of edges rather than with the square of the number of vertices. These
-searches support graphs of up to 32,767 vertices.
+grows with the number of edges rather than with the square of the number of vertices. Positions
+are 32-bit integers. The original programs stored them in 16 bits, which limited these searches to
+32,767 vertices; subgraphsearch has no such limit, so a path search runs in the 16-cube, with
+65,536 vertices, as in smaller ones. No search has a fixed limit on the number of vertices: memory
+is the limit.
