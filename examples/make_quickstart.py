@@ -300,25 +300,23 @@ scaling = [(30, 9, 33, 60, 0.30, 183), (35, 10, 42, 60, 0.16, 1064), (40, 12, 59
 sizes = [row[0] for row in scaling]
 done = [row for row in scaling if row[5]]
 timed_out = [row for row in scaling if not row[5]]
-fig, (lin, log) = plt.subplots(1, 2, figsize=(13, 3.8), layout="constrained")
-for ax, scale in ((lin, 1000), (log, 1)):   # the left panel in seconds, the right in ms
-    ax.plot(sizes, [row[4] / scale for row in scaling], "o-", color="#d6336c", label="subgraphsearch")
-    ax.plot([row[0] for row in done], [row[5] / scale for row in done], "o", color="#4c6ef5", label="CP-SAT")
-    ax.plot([row[0] for row in timed_out], [10000 / scale] * len(timed_out), "^", color="#4c6ef5",
-            markerfacecolor="white", label="CP-SAT: nothing in 10 s")
-    ax.axhline(10000 / scale, color="#868e96", lw=0.8, ls="--")
-    ax.annotate("CP-SAT's 10 s limit", (sizes[0], 10000 / scale), xytext=(0, 4), textcoords="offset points",
-                fontsize=8, color="#868e96")
+fig, (cp, mine) = plt.subplots(1, 2, figsize=(13, 3.8), layout="constrained")
+cp.plot([row[0] for row in done], [row[5] / 1000 for row in done], "o", color="#4c6ef5", label="found")
+cp.plot([row[0] for row in timed_out], [10] * len(timed_out), "^", color="#4c6ef5", markerfacecolor="white",
+        label="nothing in 10 s")
+cp.axhline(10, color="#868e96", lw=0.8, ls="--")
+cp.annotate("10 s limit", (sizes[0], 10), xytext=(0, 4), textcoords="offset points", fontsize=8, color="#868e96")
+cp.set_ylim(0, 11)
+cp.set_ylabel("seconds to find a solution")
+cp.set_title("CP-SAT", fontsize=10, loc="left")
+cp.legend(frameon=False, fontsize=9, loc="center left")
+mine.plot(sizes, [row[4] for row in scaling], "o-", color="#d6336c")
+mine.set_ylim(0, 1.1)
+mine.set_ylabel("milliseconds to find a solution")
+mine.set_title("subgraphsearch", fontsize=10, loc="left")
+for ax in (cp, mine):
     ax.set_xticks(sizes)
     ax.set_xlabel("vertices in the graph (target: 30% of them, with the most edges found)")
-lin.set_ylim(-0.3, 11)
-lin.set_ylabel("seconds to find a solution")
-lin.set_title("On a linear scale, subgraphsearch's times are indistinguishable from 0", fontsize=10, loc="left")
-log.set_yscale("log")
-log.set_ylim(0.05, 1e5)
-log.set_ylabel("ms to find a solution (log)")
-log.set_title("On a log scale", fontsize=10, loc="left")
-lin.legend(frameon=False, fontsize=9, loc="center right");
 """),
     md("""
 CP-SAT's time grows steeply with the graph, from a fifth of a second at 30 vertices to more than 10 seconds at 70,
