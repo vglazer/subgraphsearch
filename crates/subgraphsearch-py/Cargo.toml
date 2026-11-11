@@ -15,5 +15,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.30.1", features = ["extension-module", "abi3-py310"] }
-subgraphsearch = { version = "2.0.1", path = "../subgraphsearch-cli" }
-subgraphsearch-core = { version = "2.0.1", path = "../subgraphsearch-core" }
+subgraphsearch = { version = "3.0.0", path = "../subgraphsearch-cli" }
+subgraphsearch-core = { version = "3.0.0", path = "../subgraphsearch-core" }

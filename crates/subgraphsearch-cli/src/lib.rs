@@ -178,11 +178,12 @@ struct SearchArgs {
     /// Number of random moves per burst (0 disables diversification).
     #[arg(long, default_value_t = 4)]
     div_dur: usize,
-    /// Start each burst with a region kick instead of random moves: swap out this many subgraph
-    /// vertices nearest a random one, each for the best replacement (0 = off). The best size depends
-    /// on the problem; compare a few.
-    #[arg(long, default_value_t = 0)]
-    kick_size: usize,
+    /// Start each burst after the first with a region kick instead of random moves: swap out this
+    /// many subgraph vertices nearest a random one, each for the best replacement (0 = off). Default:
+    /// 4 for edge-count and weight searches, none for --degree, --path and --rng legacy. Larger
+    /// sizes can help much more on some problems; compare a few.
+    #[arg(long)]
+    kick_size: Option<usize>,
     /// Moves a vertex removed by a region kick stays out.
     #[arg(long, default_value_t = 20)]
     kick_ban: usize,
@@ -548,6 +549,15 @@ fn run_search(args: SearchArgs) -> Result<u8> {
     if args.two_phase && args.degree.is_none() {
         bail!("--two-phase needs --degree: it searches for regular subgraphs");
     }
+    let regular_or_path = args.degree.is_some() || args.path;
+    let kick_size = match args.kick_size {
+        Some(k) if k > 0 && regular_or_path => {
+            bail!("region kicks are available for edge-count searches only, not --degree or --path")
+        }
+        Some(k) => k,
+        None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 0,
+        None => subgraphsearch_core::DEFAULT_KICK_SIZE,
+    };
     let graphs = if args.weighted {
         Vec::new()
     } else if args.all {
@@ -569,7 +579,7 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         max_moves: args.moves,
         div_freq: args.div_freq,
         div_dur: args.div_dur,
-        kick_size: args.kick_size,
+        kick_size,
         kick_ban: args.kick_ban,
         seed: args.seed,
         rng: args.rng.into(),
@@ -652,6 +662,9 @@ fn run_largest(args: LargestArgs) -> Result<u8> {
     base.div_dur = args.div_dur;
     base.seed = args.seed;
     base.rng = args.rng.into();
+    if matches!(args.rng, RngArg::Legacy) {
+        base.kick_size = 0; // reproduce the original programs' runs
+    }
     let shape = subgraphsearch_core::Shape::from(args.shape);
     let start = std::time::Instant::now();
     let found = subgraphsearch_core::largest(&graph, shape, &base, args.start, args.lookahead)?;

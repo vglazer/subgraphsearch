@@ -421,6 +421,7 @@ def test_words_and_codes():
     with pytest.raises(ValueError, match="edge-count searches only"):
         ss.search(close, 8, path=True, kick_size=4)
 
+
     # Hadamard checks
     assert v.is_hadamard([[1, 1], [1, -1]]) and not v.is_hadamard([[1, 1], [1, 1]]) and not v.is_hadamard([[1, 0]])
 
@@ -801,3 +802,28 @@ def test_fano_plane_and_switching_drawings():
     with pytest.raises(ValueError):
         viz.plot_switchings(t8, sets, above=[t8])
     plt.close("all")
+
+
+def test_kick_default():
+    g = ss.generate("exponential", 60, 0.5, seed=3)
+    # edge-count and weight searches kick by default; path, regular and legacy searches do not
+    assert ss.search(g, 10, 20).params.kick_size == ss.DEFAULT_KICK_SIZE == 4
+    assert ss.search(ss.generate_weighted(40, 0.5), 5, 4).params.kick_size == 4
+    assert ss.search(g, 6, path=True).params.kick_size == 0
+    assert ss.search(g, 6, degree=2).params.kick_size == 0
+    assert ss.search(g, 10, 20, rng="legacy").params.kick_size == 0
+    assert ss.largest(g, "cycle").results[3].params.kick_size == 0
+    assert ss.largest(g, "clique").best.params.kick_size == 4
+    # within the first div_freq moves kicks change nothing, so default-length searches are as before
+    short = {"experiments": 20, "max_moves": 250, "div_freq": 250}
+    assert ss.search(g, 15, 60, **short).experiments == ss.search(g, 15, 60, kick_size=0, **short).experiments
+
+
+def test_targets_above_the_total_find_the_closest_subgraphs():
+    # the weighted graph's total weight is far below the target, yet the search still finds the
+    # heaviest subgraphs it can, as near misses
+    w = ss.generate_weighted(60, 0.5, seed=2)
+    target = w.total_weight + 100
+    best = ss.search(w, 8, target, max_moves=1000).best
+    assert best.best_conflict == target - w.induced_weight(best.vertices)
+    assert w.induced_weight(best.vertices) > 0

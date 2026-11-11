@@ -29,6 +29,7 @@ from ._graph import (
     write_all,
 )
 from ._search import (
+    DEFAULT_KICK_SIZE,
     Experiment,
     LargestResult,
     SearchParams,
@@ -46,6 +47,7 @@ def formats() -> dict[str, bool]:
 
 
 __all__ = [
+    "DEFAULT_KICK_SIZE",
     "MODELS",
     "Experiment",
     "Graph",

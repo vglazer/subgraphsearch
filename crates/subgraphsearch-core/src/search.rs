@@ -153,10 +153,13 @@ pub struct SearchParams {
     /// random moves: the `k` free subgraph vertices nearest a random one (in breadth-first order from
     /// it, at whatever distance) are swapped out, one per move, each for the best vertex to swap in,
     /// and the vertices removed may not return for `kick_ban` moves. It rebuilds one part of the
-    /// subgraph at a time, as large-neighborhood moves in searches for codes do. The best size
-    /// depends on the problem, small for some and a large part of the subgraph for others, so it is
-    /// a setting to compare, as with `div_dur`; 0 (the default) keeps the random moves. Edge-count
-    /// searches only.
+    /// subgraph at a time, as large-neighborhood moves in searches for codes do. The first cycle
+    /// keeps its random moves. [`SearchParams::new`] sets [`DEFAULT_KICK_SIZE`], which helped or did
+    /// no harm on every problem tried; larger sizes can help much more on some problems and hurt on
+    /// others, so compare a few, as with `div_dur`. 0 keeps the random moves throughout, and is what
+    /// results saved before kicks existed used. Edge-count and weight searches only: regular and
+    /// path searches ignore it. To reproduce the original programs' runs with
+    /// [`RngKind::Legacy`], set it to 0.
     #[serde(default)]
     pub kick_size: usize,
     /// How many moves a vertex removed by a region kick stays out (see `kick_size`).
@@ -209,10 +212,15 @@ fn default_kick_ban() -> usize {
     20
 }
 
+/// The region kick size [`SearchParams::new`] sets: small kicks helped or did no harm on every
+/// problem tried.
+pub const DEFAULT_KICK_SIZE: usize = 4;
+
 impl SearchParams {
     /// Parameters with the given subgraph size and edge count and otherwise reasonable defaults:
     /// 40 experiments of up to 250 moves (many short runs usually beat a few long ones), 4 random
-    /// moves every 250, seed 1, xoshiro.
+    /// moves every 250, region kicks of [`DEFAULT_KICK_SIZE`] from the second cycle on, seed 1,
+    /// xoshiro.
     pub fn new(size: usize, edges: i64) -> Self {
         SearchParams {
             size,
@@ -222,7 +230,7 @@ impl SearchParams {
             max_moves: 250,
             div_freq: 250,
             div_dur: 4,
-            kick_size: 0,
+            kick_size: DEFAULT_KICK_SIZE,
             kick_ban: default_kick_ban(),
             seed: 1,
             rng: RngKind::Xoshiro,
@@ -565,7 +573,18 @@ impl Workspace {
         let mut ws = Workspace {
             v_sub: params.size - v_fix,
             v_rest: v - params.size,
-            e: graph.objective_bound(),
+            // a bound on the conflict: the graph's edge count or total weight, as in the original
+            // programs, unless the target lies above it, when the conflict can reach the target.
+            // The legacy rng keeps the original bound, whose searches then never record a best
+            // subgraph and move at random (see PORTING.md)
+            e: {
+                let bound = graph.objective_bound();
+                if params.edges > bound && params.rng != RngKind::Legacy {
+                    params.edges + 1
+                } else {
+                    bound
+                }
+            },
             sub_degs: vec![0; v],
             sub_verts: vec![0; params.size - v_fix],
             rest_verts: vec![0; v - params.size],
@@ -790,7 +809,8 @@ impl Workspace {
         }
         let mut j = 0;
         while j < params.max_moves {
-            // a region kick starts each diversification cycle, with the kick on
+            // with kicks on, a region kick starts each diversification cycle after the first, whose
+            // random moves are kept (so a search shorter than div_freq moves is the same either way)
             if kick && j > 0 && params.div_dur > 0 && j % params.div_freq == 0 {
                 self.kick_queue = self.region(graph, params.kick_size, rng);
             }
@@ -808,7 +828,9 @@ impl Workspace {
             // optimal one
             let (sub_vert, rest_vert) = if let Some(swap) = kicked {
                 swap
-            } else if (!kick && j % params.div_freq < params.div_dur) || opt_mov == 0 {
+            } else if ((!kick || j < params.div_freq) && j % params.div_freq < params.div_dur)
+                || opt_mov == 0
+            {
                 let s = self.sub_verts[rng.below(v_sub as u32) as usize];
                 let r = self.rest_verts[rng.below(v_rest as u32) as usize];
                 (s, r)
@@ -1136,13 +1158,16 @@ mod tests {
         let mut p = SearchParams::new(32, 0);
         p.experiments = 4;
         p.max_moves = 1000;
-        p.div_freq = 100;
+        p.div_freq = 10; // kicks from move 10 on, before these searches succeed
+        p.kick_size = 0;
         let plain = search(&cube, &p).unwrap();
         p.kick_size = 6;
         assert_ne!(plain.experiments, search(&cube, &p).unwrap().experiments);
-        // not for regular or path searches
+        // regular and path searches ignore the kick size
         p.path = true;
-        assert!(search(&cube, &p).is_err());
+        let kicked = search(&cube, &p).unwrap();
+        p.kick_size = 0;
+        assert_eq!(kicked.experiments, search(&cube, &p).unwrap().experiments);
     }
 
     #[test]
@@ -1162,5 +1187,62 @@ mod tests {
         p.div_freq = 5;
         p.fixed = vec![2, 2];
         assert!(matches!(search(&g, &p), Err(Error::DuplicateVertex(2))));
+    }
+
+    #[test]
+    fn targets_above_the_total_still_find_the_closest_subgraphs() {
+        // a 30-cycle has 30 edges, so 40 among 10 vertices is out of reach: the closest is an
+        // induced path with 9, at conflict 31
+        let g = cycle(30);
+        let mut p = SearchParams::new(10, 40);
+        p.experiments = 8;
+        let r = search(&g, &p).unwrap();
+        let best = r
+            .experiments
+            .iter()
+            .min_by_key(|e| e.best_conflict)
+            .unwrap();
+        assert_eq!(best.best_conflict, 31);
+        assert_eq!(best.vertices.len(), 10);
+        assert_eq!(g.induced_edge_count(&best.vertices), 9);
+        // the same in a weighted path whose total weight is 25: 3 vertices weigh at most 10
+        let w = WeightedGraph::from_weighted_edges(6, (0..5).map(|i| (i, i + 1, 5))).unwrap();
+        let mut p = SearchParams::new(3, 100);
+        p.experiments = 8;
+        let r = search(&w, &p).unwrap();
+        let best = r
+            .experiments
+            .iter()
+            .min_by_key(|e| e.best_conflict)
+            .unwrap();
+        assert_eq!(best.best_conflict, 90);
+        assert_eq!(best.vertices.len(), 3);
+    }
+
+    #[test]
+    fn kicks_start_after_the_first_cycle() {
+        assert_eq!(SearchParams::new(4, 4).kick_size, DEFAULT_KICK_SIZE);
+        // within the first div_freq moves a search with kicks is the same as one without
+        let n = 6;
+        let cube = Graph::from_edges(
+            1 << n,
+            (0..1usize << n)
+                .flat_map(|u| (0..n).map(move |b| (u, u ^ (1 << b))))
+                .filter(|&(u, w)| u < w),
+        )
+        .unwrap();
+        let mut p = SearchParams::new(16, 32);
+        p.experiments = 20;
+        p.max_moves = 100;
+        p.div_freq = 100;
+        p.kick_size = 0;
+        let plain = search(&cube, &p).unwrap();
+        p.kick_size = 6;
+        assert_eq!(search(&cube, &p).unwrap().experiments, plain.experiments);
+        // and regular and path searches ignore the kick size
+        let mut p = SearchParams::new(10, 0);
+        p.path = true;
+        p.kick_size = 4;
+        assert!(search(&cycle(30), &p).unwrap().successes() > 0);
     }
 }

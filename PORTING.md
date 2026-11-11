@@ -55,6 +55,10 @@ The port deliberately keeps the programs' quirks so that results match:
   every mode, which is why the README advises `--degree` alone with `--fixed`.
 - `reg_search` and `ereg_search` carry their partitioned neighbor lists over from one experiment
   to the next, which affects the order in which a solution's adjacency lists are printed.
+- A search starts its best conflict at the graph's edge count (or total weight), an upper bound on
+  the conflict only when the target is no larger. With a target above it, the programs never
+  record a best subgraph and choose every move at random. The legacy rng keeps this; with xoshiro,
+  such searches start from a bound above the target and find the closest subgraphs as usual.
 - Input is parsed the way C's `scanf("%d")` parses it, so `5-1` reads as `5` followed by `-1`
   (`ggen`'s output relies on this), and numbers print as C's `%g` prints them.
 

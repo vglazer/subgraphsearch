@@ -212,6 +212,19 @@ class SearchResult:
         return search_html(self)
 
 
+#: The region kick size of edge-count and weight searches unless ``kick_size`` is given.
+DEFAULT_KICK_SIZE = 4
+
+
+def _kick_size(kick_size: int | None, regular_or_path: bool, rng: str) -> int:
+    """The kick size a search uses: the default where kicks apply, else 0; explicit kicks must apply."""
+    if kick_size is None:
+        return 0 if regular_or_path or rng == "legacy" else DEFAULT_KICK_SIZE
+    if kick_size > 0 and regular_or_path:
+        raise ValueError("region kicks are available for edge-count searches only, not regular or path searches")
+    return int(kick_size)
+
+
 def search(
     graph: Graph | WeightedGraph,
     size: int,
@@ -231,7 +244,7 @@ def search(
     connected: bool = False,
     path: bool = False,
     endpoints: tuple[int, int] | None = None,
-    kick_size: int = 0,
+    kick_size: int | None = None,
     kick_ban: int = 20,
 ) -> SearchResult:
     """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges, or, in
@@ -272,13 +285,16 @@ def search(
     end, and looks for a path two vertices longer through all four; the results leave the new
     vertices out, so every subgraph returned, near misses included, contains ``s`` and ``t``.
 
-    ``kick_size=k`` starts each diversification cycle with a *region kick* instead of random moves:
-    the ``k`` free subgraph vertices nearest a random one (in breadth-first order from it, at
-    whatever distance) are swapped out, one per move, each for the best vertex to swap in, and the
-    vertices removed may not return for ``kick_ban`` moves. It rebuilds one part of the subgraph at a
-    time, like the large-neighborhood moves of searches for codes. The best size depends on the
-    problem: for some a few vertices, for others a large part of the subgraph, so compare several,
-    for example with :func:`sweep`. Edge-count searches only.
+    ``kick_size=k`` starts each diversification cycle after the first with a *region kick* instead of
+    random moves: the ``k`` free subgraph vertices nearest a random one (in breadth-first order from
+    it, at whatever distance) are swapped out, one per move, each for the best vertex to swap in, and
+    the vertices removed may not return for ``kick_ban`` moves. It rebuilds one part of the subgraph
+    at a time, like the large-neighborhood moves of searches for codes. Edge-count and weight
+    searches use kicks of :data:`DEFAULT_KICK_SIZE` (4) by default, which helped or did no harm on
+    every problem tried; they only take effect in searches longer than ``div_freq`` moves. Larger
+    sizes can help much more on some problems and hurt on others, so compare several, for example
+    with :func:`sweep`; ``kick_size=0`` turns kicks off. Regular and path searches have no kicks, and
+    neither, by default, does ``rng="legacy"``, so that it still reproduces the original programs.
     """
     if (edges is not None) + (degree is not None) + bool(path) != 1:
         raise ValueError(
@@ -292,6 +308,7 @@ def search(
         if len(endpoints) != 2:
             raise ValueError("endpoints takes two vertices, the ends of the path")
     fixed = tuple(int(v) for v in fixed)
+    kick_size = _kick_size(kick_size, degree is not None or bool(path), rng)
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
         int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
@@ -378,7 +395,7 @@ def largest(
     rng: str = "xoshiro",
     trace: bool = False,
     aspiration: bool = False,
-    kick_size: int = 0,
+    kick_size: int | None = None,
     kick_ban: int = 20,
 ) -> LargestResult:
     """Searches ``graph`` for the largest ``shape`` it can find: an induced ``"path"``, ``"cycle"`` or
@@ -401,6 +418,7 @@ def largest(
     if not isinstance(graph, Graph):
         raise TypeError("largest needs an unweighted Graph")
     fixed = tuple(int(v) for v in fixed)
+    kick_size = _kick_size(kick_size, shape in ("path", "cycle"), rng)
     if endpoints is not None:
         endpoints = tuple(int(v) for v in endpoints)
         if len(endpoints) != 2:

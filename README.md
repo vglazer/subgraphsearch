@@ -158,7 +158,7 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 | `-n`, `--experiments` | independent restarts | 40 |
 | `--moves` | maximum moves per experiment | 250 |
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
-| `--kick-size`, `--kick-ban` | instead, start every `div-freq` moves by rebuilding this many subgraph vertices nearest a random one, keeping the vertices removed out for `kick-ban` moves; about 4 is a safe start, and the best size depends on the problem | off, 20 |
+| `--kick-size`, `--kick-ban` | instead, start every `div-freq` moves after the first by rebuilding this many subgraph vertices nearest a random one, keeping the vertices removed out for `kick-ban` moves; larger sizes can help much more on some problems, and 0 turns kicks off | 4 (0 with `--degree`, `--path` or `--rng legacy`), 20 |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
 
@@ -244,14 +244,18 @@ Local search gets stuck in local minima. To shake it loose, the first `--div-dur
 (`--div-dur 0` turns them off). Each *experiment* is an independent restart from random vertices.
 Experiments run in parallel on all cores, and results still depend only on the seed.
 
-A *region kick* (`--kick-size k`) shakes harder: instead of the random moves, it swaps out the
-$`k`$ subgraph vertices nearest a random one, each for the best replacement, and keeps them out
-for a while, rebuilding one part of the subgraph at a time. It helped on every kind of problem
-tried: hard edge-count targets in random graphs, the maximum diversity benchmark, where it turns
-occasional successes on the 400-item instances into most runs, the DIMACS clique graphs, and codes,
-where it finds the 72-word code of length 11 and distance 4 in every experiment instead of half.
-Kicks of about 4 vertices never made results worse in these tests. Larger ones often help much
-more but can rebuild too much at once and do worse than none, so compare a few sizes.
+A *region kick* (`--kick-size k`) shakes harder: instead of the random moves of each cycle after
+the first, it swaps out the $`k`$ subgraph vertices nearest a random one, each for the best
+replacement, and keeps them out for a while, rebuilding one part of the subgraph at a time. It
+helped on every kind of problem tried: hard edge-count targets in random graphs, the maximum
+diversity benchmark, where it turns occasional successes on the 400-item instances into most runs,
+the DIMACS clique graphs, and codes, where it finds the 72-word code of length 11 and distance 4
+in nearly every experiment instead of half. Kicks of 4 vertices never made results worse in these
+tests, so edge-count and weight searches use them by default; they take effect only in searches
+longer than `--div-freq` moves. Larger kicks often help much more but can rebuild too much at once
+and do worse than none, so compare a few sizes; `--kick-size 0` turns kicks off. Regular and path
+searches have no kicks, and `--rng legacy` has none by default, so that it still reproduces the
+original programs.
 
 ### Reading the results
 
@@ -463,12 +467,12 @@ maximum, determine the time.
 | Search | Settings | Moves&nbsp;made | Time | Successes |
 | --- | --- | --- | --- | --- |
 | 11-cliques in a random graph on 100 vertices, density 0.6 | 40 × 250 (defaults) | 1,652 | 0.4&nbsp;ms | 40 of 40 |
-| 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 81,539 | 14&nbsp;ms | 21 of 60 |
-| 13-cliques in a random graph on 1,000 vertices, density 0.5 | 200 × 2000 | 12,042 | 12&nbsp;ms | 200 of 200 |
-| 14-cliques in the same graph | 200 × 2000 | 134,267 | 135&nbsp;ms | 182 of 200 |
-| 15-cliques in the same graph | 200 × 2000 | 396,104 | 394&nbsp;ms | 4 of 200 |
+| 30 vertices spanning 346 edges in the same graph, near the limit | 60 × 2000 | 62,157 | 12&nbsp;ms | 41 of 60 |
+| 13-cliques in a random graph on 1,000 vertices, density 0.5 | 200 × 2000 | 11,994 | 13&nbsp;ms | 200 of 200 |
+| 14-cliques in the same graph | 200 × 2000 | 110,696 | 113&nbsp;ms | 195 of 200 |
+| 15-cliques in the same graph | 200 × 2000 | 395,650 | 418&nbsp;ms | 5 of 200 |
 | 8-regular subgraphs on 20 vertices of the [Paley graph](https://en.wikipedia.org/wiki/Paley_graph) on 61 vertices | 100 × 2000, two phases | 183,319 | 49&nbsp;ms | 11 of 100 |
-| 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 634 | 1&nbsp;ms | 40 of 40 |
+| 15 vertices of total weight 140 in a weighted graph on 1,000 vertices | 40 × 3000 | 399 | 1&nbsp;ms | 40 of 40 |
 | induced paths on 51 vertices in the 7-cube (the [snake-in-the-box](https://en.wikipedia.org/wiki/Snake-in-the-box) record) | 400 × 2000 | 409,366 | 0.51&nbsp;s | 313 of 400 |
 | induced paths on 99 vertices in the 8-cube (the record) | 400 × 20,000 | 7,951,718 | 21&nbsp;s | 3 of 400 |
 | induced paths on 180 vertices in the 9-cube (the record is 192) | 100 × 200,000 | 13,226,544 | 110&nbsp;s | 44 of 100 |

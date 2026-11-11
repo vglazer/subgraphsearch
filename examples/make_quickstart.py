@@ -109,8 +109,10 @@ viz.plot_search_summary(r);
     md("""
 The **run-time distribution** (left) is the fraction of experiments that succeeded within a given number of
 moves, the middle panel counts the best conflict each experiment reached, and the **traces** (right) show the
-conflict after each move for some of the experiments. Here 19 of the 21 successes came within 100 moves, and
-the rest of the 2000-move budget added only two: many short experiments usually beat a few long ones.
+conflict after each move for some of the experiments. Here 19 of the 41 successes came within 100 moves, and
+the rest in bursts just after moves 300, 600, 900 and so on, where each diversification cycle after the first
+starts with a region kick (see Tuning). Without kicks, the rest of the 2000-move budget adds only two successes
+to those first 19, so many short experiments beat a few long ones; with them, longer runs keep paying off.
 
 Success falls off sharply around the limit: one edge fewer is found by every experiment, and a few more by
 none.
@@ -276,8 +278,9 @@ The problem has a standard benchmark, MDPLIB (Martí, Gallego and Duarte, 2010),
 two-hour runs of a scatter search made for the problem. Its SOM-b instances have integer distances from 0 to 9
 between every two items. Eight of them, with 100 to 400 items, are in `examples/data/mdplib` (under their own
 license, Creative Commons Attribution). Below, subgraphsearch aims at each best known value with the same
-settings for every instance, once as it is and once with *region kicks* (`kick_size=16`), which at the start
-of each diversification cycle rebuild the part of the selection nearest a random item (more under Tuning).
+settings for every instance, once without *region kicks* (`kick_size=0`) and once with large ones
+(`kick_size=16`). A region kick starts each diversification cycle after the first by rebuilding the part of
+the selection nearest a random item; searches use small kicks of 4 by default (more under Tuning).
 Beside it is CP-SAT, maximizing the sum of the distances, from separately recorded runs stopped after 10
 seconds, with the best value it found and the upper bound it proved.
 """),
@@ -318,7 +321,7 @@ try:
 except OSError as error:
     print("could not read the benchmark instances, so this comparison is skipped:", error)
 
-lines = ["| Items | Chosen | Best known | subgraphsearch: found / 60 | with `kick_size=16` | CP-SAT after 10 s: best (upper bound) |",
+lines = ["| Items | Chosen | Best known | subgraphsearch, `kick_size=0`: found / 60 | `kick_size=16` | CP-SAT after 10 s: best (upper bound) |",
          "| --- | --- | --- | --- | --- | --- |"]
 for n, k, best_known, (plain_hits, plain_ms), (kick_hits, kick_ms), cp_best, cp_bound in mdp_rows:
     lines.append(f"| {n} | {k} | {best_known:,} | {plain_hits}/60 in {plain_ms:.0f} ms | {kick_hits}/60 in {kick_ms:.0f} ms "
@@ -330,7 +333,7 @@ if mdp_rows:
     labels = [f"{n} items, {k} chosen" for n, k, *_ in mdp_rows]
     ys = range(len(mdp_rows))
     fig, (mine_ax, cp_ax) = plt.subplots(1, 2, figsize=(13, 4), layout="constrained", sharey=True)
-    for offset, column, label, color in ((-0.2, 3, "as it is", "#f783ac"), (0.2, 4, "with kick_size=16", "#d6336c")):
+    for offset, column, label, color in ((-0.2, 3, "kick_size=0", "#f783ac"), (0.2, 4, "kick_size=16", "#d6336c")):
         hits = [row[column][0] for row in mdp_rows]
         mine_ax.barh([y + offset for y in ys], hits, height=0.4, color=color, label=label)
         for y, h in zip(ys, hits):
@@ -351,9 +354,9 @@ if mdp_rows:
     mine_ax.invert_yaxis()
 """),
     md("""
-As it is, subgraphsearch reaches every best known value up to 300 items but finds the larger instances harder,
-and on the 400-item ones a run rarely gets there, if ever. With region kicks, most runs reach the best known
-value on every instance, in about a second or less for 60 runs. CP-SAT, in 10 seconds, reaches one of them and
+Without kicks, subgraphsearch reaches every best known value up to 300 items but finds the larger instances
+harder, and on the 400-item ones a run rarely gets there, if ever. With large kicks, most runs reach the best
+known value on every instance, in about a second or less for 60 runs. CP-SAT, in 10 seconds, reaches one of them and
 falls further short as the instances grow, by about 8% on the largest; the upper bounds it proves are far above
 the best values, so it cannot show that any of them is optimal. The strongest methods for this problem include
 iterated tabu search (Palubeckis, 2007), which alternates a tabu search with perturbations. subgraphsearch, a
@@ -390,7 +393,7 @@ viz.plot_sweep(sweep, parameter="div_dur");
 """),
     md("""
 Aspiration is worth comparing the same way. On the hard 346-edge target from earlier it raises the number of
-successes; on many targets it makes little difference.
+successes a little; on many targets it makes little difference.
 """),
     code("""
 for aspiration in (False, True):
@@ -399,8 +402,10 @@ for aspiration in (False, True):
 """),
     md("""
 `kick_size` often matters more. A *region kick* replaces the random moves at the start of each diversification
-cycle: it swaps out the $k$ subgraph vertices nearest a random one, each for the best replacement, and keeps
-them out for a while (`kick_ban` moves), so it rebuilds one part of the subgraph at a time. On the same target:
+cycle after the first: it swaps out the $k$ subgraph vertices nearest a random one, each for the best
+replacement, and keeps them out for a while (`kick_ban` moves), so it rebuilds one part of the subgraph at a
+time. Edge-count and weight searches use kicks of 4 by default, which only take effect in searches longer than
+`div_freq` moves. On the same target:
 """),
     code("""
 for kick_size in (0, 4, 16):
@@ -409,9 +414,9 @@ for kick_size in (0, 4, 16):
 """),
     md("""
 In every problem tried, kicks of about 4 vertices helped or did no harm: this target, the maximum diversity
-benchmark above, the DIMACS clique graphs and error-correcting codes. Larger kicks often help much more, but on
-some problems they rebuild too much at once and do worse than none, as the codes below show, so compare a few
-sizes.
+benchmark above, the DIMACS clique graphs, error-correcting codes and random graphs of many sizes and densities,
+which is why 4 is the default. Larger kicks often help much more, but on some problems they rebuild too much
+at once and do worse than none, as the codes below show, so compare a few sizes; `kick_size=0` turns kicks off.
 """),
     md(f"""
 ## Regular subgraphs
@@ -441,8 +446,6 @@ vertices (with `fixed=`, use `degree=` alone: the two-phase edge target then cou
 vertices, so it rarely succeeds):
 """),
     code("""
-import time
-
 for two_phase in (False, True):
     start = time.perf_counter()
     res = ss.search(paley, 20, degree=8, two_phase=two_phase, experiments=100, max_moves=2000, div_freq=300, div_dur=8, seed=3)
@@ -1248,7 +1251,7 @@ for kick_size in (0, 4, 32):
 """),
     md("""
 Each code wants what the other cannot stand. The 72-word code gains from rebuilding large regions: kicks of 32
-codewords, nearly half the code, find it in every experiment with a seventh of the work. The constant-weight code
+codewords, nearly half the code, find it in nearly every experiment with about a sixth of the work. The constant-weight code
 is best with small kicks of 4 and is wrecked by large ones. So compare a few sizes on a problem, as for any
 setting, before relying on one.
 """),

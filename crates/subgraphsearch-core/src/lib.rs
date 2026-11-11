@@ -43,7 +43,8 @@ pub use graph::{Graph, GraphBuilder, WeightedGraph};
 pub use largest::{Largest, Shape, largest};
 pub use rng::RngKind;
 pub use search::{
-    Experiment, Regular, SearchGraph, SearchParams, SearchResult, search, search_sequential,
+    DEFAULT_KICK_SIZE, Experiment, Regular, SearchGraph, SearchParams, SearchResult, search,
+    search_sequential,
 };
 
 /// Errors reported by this crate.
