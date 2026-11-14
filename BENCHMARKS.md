@@ -113,7 +113,8 @@ of the distances as published, so it matches them; CP-SAT falls 0.8% and 6.9% sh
 
 ## Maximum cliques
 
-Maximum cliques have specialists. On eight graphs of the
+Maximum cliques, like maximum diversity, have specialist heuristics, and here they are ahead on the
+standard benchmark itself. On eight graphs of the
 [DIMACS benchmark](https://networkrepository.com/dimacs.php), subgraphsearch aims at each known
 clique number with 32 experiments of up to 20,000 moves. Beside it are DLS-MC, a local search made
 for maximum cliques, from its published results (W. Pullan and H. H. Hoos, *Journal of Artificial
@@ -152,8 +153,9 @@ of the 9-cube's.
 ## In short
 
 subgraphsearch is the tool for subgraphs with a prescribed number of vertices and edges or a
-prescribed total weight: there it is fast where general solvers stall, and on maximum diversity it
-matches the best published values. For maximum cliques, a dedicated clique solver is the better
-choice. The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+prescribed total weight: there it is fast where general solvers stall, and no specialized solver
+exists. Where one does, it is the better choice at scale: subgraphsearch matches the best published
+maximum diversity values up to 500 items, but a heuristic made for the problem is ahead at 2000,
+and a dedicated clique solver is faster on maximum cliques. The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
 runs several of these searches, and [examples/data](examples/data/README.md) holds the benchmark
 instances and their licenses.
