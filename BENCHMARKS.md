@@ -84,6 +84,17 @@ SOM-b instance above, in 52 to 60 of 60 experiments per instance (each of up to 
 `kick_size=16`). Nor did it find anything better: no experiment exceeded a best known value, on
 these instances or on the real-valued ones below, consistent with the values being optimal.
 
+These instances, of up to 500 items, are easy for the specialist heuristics: their papers test on
+2000 to 5000 items, and there they are clearly ahead. On MDG-a_21 (2000 items, 200 chosen, integer
+distances from 0 to 10, best known value 114271), OBMA, a memetic search made for the problem
+(Y. Zhou, J.-K. Hao and B. Duval, *IEEE Transactions on Evolutionary Computation* 21, 2017), reaches
+the best known value in 22 of 30 runs of 20 seconds, in 9.3 s on average, on one core of a 2.5 GHz
+Xeon E5-2670. `ss.densest` makes about 5,000 moves a second on this instance, on one core here.
+With 30 experiments of 50,000 moves (about 10 s each), at kick sizes from 4 to 64, its best
+experiment ends 79 to 186 short of the best known value (0.07% to 0.16%), and the median one about
+320 short. Four times as many moves narrow the median gap only to 240 to 270, and no experiment
+reached the best known value.
+
 The result does not depend on SOM-b's small integer distances. MDPLIB's GKD-c instances hold
 Euclidean distances between random points and its MDG-a instances random real distances from 0 to
 10. subgraphsearch's weights are integers, so for it and CP-SAT the distances were scaled (by 10

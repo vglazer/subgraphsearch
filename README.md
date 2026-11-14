@@ -13,8 +13,8 @@ algorithm. Many [graph formats](GRAPHS.md#formats) are supported.
 
 On these targets subgraphsearch finds solutions in milliseconds where general solvers take seconds
 or give out, and on the [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html),
-choosing items as different from each other as possible, it reaches the best published values in
-about a second (see [How it compares](#how-it-compares)).
+choosing items as different from each other as possible, it reaches the best published values for
+up to 500 items in about a second (see [How it compares](#how-it-compares)).
 
 The same search finds induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
 [paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
@@ -113,8 +113,9 @@ goes through all of these.
 - **Exact edge counts:** milliseconds, where general solvers (CP-SAT, and the MIP solvers SCIP,
   HiGHS and CBC) need seconds at a few dozen vertices and mostly find nothing within 10 seconds
   past 40.
-- **Maximum diversity:** the best published values on the MDPLIB benchmark in about a second, where
-  the best general solver, CP-SAT, falls up to 9% short and the MIP solvers up to 38%.
+- **Maximum diversity:** the best published values on MDPLIB instances of up to 500 items in about
+  a second, where the best general solver, CP-SAT, falls up to 9% short and the MIP solvers up to
+  38%. At 2000 items a heuristic made for the problem is ahead: subgraphsearch ends about 0.1% short.
 - **Snake-in-the-box:** the known records up to the 8-cube, and within 3 vertices of the 9-cube's.
 - **Maximum cliques:** far faster than a general exact search; a dedicated clique solver is faster
   still.
