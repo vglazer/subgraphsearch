@@ -36,7 +36,9 @@ The graphs are random, with density 0.6; the target is the most edges subgraphse
 | 50 vertices | 15 vertices, 91 edges | 0.83&nbsp;ms | 8.8&nbsp;s | nothing | nothing | nothing |
 | 59 vertices | 18 vertices, 129 edges | 0.31&nbsp;ms | nothing | nothing | nothing | nothing |
 
-"Nothing" means no solution within 10 seconds.
+"Nothing" means no solution within 10 seconds. Given 60 seconds instead, CP-SAT also solves the
+44-vertex graph, in 9.2 s, and two more of the figure's graphs, of 47 and 56 vertices, in 44 s and
+12.5 s, but still finds nothing at 53 or 59 vertices.
 
 subgraphsearch ran 60 experiments of up to 2,000 moves, and every one succeeded. What the general
 solvers can do and subgraphsearch cannot is prove a target impossible: one edge more on the 30-vertex graph of the
