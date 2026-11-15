@@ -61,6 +61,9 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   vertices. Sweep a few values from 1 up to about twice the default, or up to 8 on a small graph
   (`ss.sweep(g, k, m, "tabu_tenure", [1, 2, 3, 5, 8])`), and keep the best. Stay well below
   $`k/2`$ and below $`(n - k)/30`$: past that the search is too hemmed in, and successes drop.
+  Path, cycle and regular searches, such as those for snakes and coils in hypercubes, keep a
+  tenure of 1 and do not take this setting: their moves are so constrained that escaping a near
+  miss often means undoing a recent swap, which a longer tenure forbids.
 - **Expect no setting to help on graphs built to defeat local search,** such as the *brock*
   clique benchmarks, which hide the largest clique among many slightly smaller ones. There the
   search ends on a decoy whatever the settings; use a method made for the problem.
