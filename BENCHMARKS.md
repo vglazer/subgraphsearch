@@ -5,11 +5,14 @@
 subgraphsearch is one general search for vertex and edge counts, total weights, and induced paths,
 cycles, trees and cliques. Here it is set beside the methods one would otherwise use, on problems
 with public benchmarks or known records. Times are wall-clock on a 16-core Apple M3 Max laptop;
-subgraphsearch's are for all its experiments together, with default settings unless stated.
+subgraphsearch's are for all its experiments together, with default settings unless stated. The
+scripts in [benchmarks](benchmarks/README.md) reproduce every measurement.
 
 ![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](assets/comparison.png)
 
 ## Exact edge counts
+
+*Reproduce with [benchmarks/edge_counts.py](benchmarks/edge_counts.py).*
 
 No specialized solver finds $`k`$ vertices spanning exactly $`m`$ edges, so the alternatives are
 general solvers, each stopped after 10 seconds: OR-Tools'
@@ -38,6 +41,8 @@ subgraphsearch cannot is prove a target impossible: on a 30-vertex graph of the 
 proves in 0.9 s that no 9 vertices span one edge more than the most subgraphsearch finds.
 
 ## Maximum diversity
+
+*Reproduce with [benchmarks/diversity.py](benchmarks/diversity.py).*
 
 The [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html) picks $`k`$ of
 $`n`$ items so that the total distance between the chosen ones is as large as possible: a weighted
@@ -97,6 +102,8 @@ against 19 with it.
 
 ## Maximum cliques
 
+*Reproduce with [benchmarks/cliques.py](benchmarks/cliques.py).*
+
 Maximum cliques have specialists of their own. On eight graphs of the
 [DIMACS benchmark](https://networkrepository.com/dimacs.php), subgraphsearch aims at each known
 clique number with 32 experiments of up to 20,000 moves. Beside it are DLS-MC, a local search made
@@ -123,6 +130,8 @@ six on brock400_2.
 
 ## Steiner triple systems
 
+*Reproduce with [benchmarks/steiner.py](benchmarks/steiner.py).*
+
 A Steiner triple system on $`v`$ points is a set of triples containing every pair of points
 exactly once: an independent set of $`v(v-1)/6`$ vertices in the graph of all
 $`\binom{v}{3}`$ triples, joined when they share a pair. A method made for these designs,
@@ -145,6 +154,8 @@ longer fits in memory. Steiner triple systems show the general search finding a 
 knowing nothing about designs, not a way to build them in practice.
 
 ## Snake-in-the-box
+
+*Reproduce with [benchmarks/hypercubes.py](benchmarks/hypercubes.py).*
 
 The longest induced paths in the $`n`$-dimensional hypercube, *snakes*, are a long-studied search
 problem, with records set by specialized searches.

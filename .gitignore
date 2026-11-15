@@ -10,3 +10,4 @@ python/subgraphsearch/_core*.so
 .ipynb_checkpoints/
 /out/
 python/PYPI_README.md
+/benchmarks/data/

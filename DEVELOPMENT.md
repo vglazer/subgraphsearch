@@ -44,6 +44,7 @@ uv run python examples/snake_9cube.py             # reproduce the README's 189-v
 uv run python examples/hadamard.py                # Hadamard matrices of orders 8 to 20 as cliques
 uv run python examples/codes.py                   # the largest binary codes of lengths 9 to 12 as cliques
 uv run python examples/steiner.py                 # Steiner triple systems on up to 81 points as independent sets
+uv run python benchmarks/cliques.py               # one of the scripts behind BENCHMARKS.md (see benchmarks/README.md)
 ```
 
 - **The quickstart notebook** is generated from `examples/make_quickstart.py`, in two copies: the
