@@ -94,7 +94,7 @@ jobs:
           subgraphsearch --version
           subgraphsearch generate exponential -n 100 -d 0.6 -s 1 -o g.g6
           subgraphsearch search g.g6 -k 11 -m 55 -q
-      - name: Install an Intel Python, which runs under Rosetta
+      - name: Install a Python that can run as Intel, under Rosetta
         if: matrix.rosetta
         id: intel
         uses: actions/setup-python@v7
@@ -106,19 +106,20 @@ jobs:
         shell: bash
         env:
           PY: ${{ steps.intel.outputs.python-path }}
+        # the runner's Python builds are universal2: arch -x86_64 makes them run as Intel, under Rosetta
         run: |
-          "$PY" -c "import platform; assert platform.machine() == 'x86_64', platform.machine()"
-          "$PY" -m pip install --pre --find-links dist subgraphsearch
-          "$PY" - <<'PY'
+          arch -x86_64 "$PY" -c "import platform; assert platform.machine() == 'x86_64', platform.machine()"
+          arch -x86_64 "$PY" -m pip install --pre --find-links dist subgraphsearch
+          arch -x86_64 "$PY" - <<'PY'
           import subgraphsearch as ss
           g = ss.generate("exponential", 100, 0.6, seed=1, rng="legacy")
           r = ss.search(g, 11, 55, experiments=5, max_moves=100, div_freq=25, div_dur=4, seed=72, rng="legacy")
           assert r.successes == 5, r
           print(ss.__version__, r)
           PY
-          "$PY" -m subgraphsearch._cli --version
-          "$PY" -m subgraphsearch._cli generate exponential -n 100 -d 0.6 -s 1 -o g.g6
-          "$PY" -m subgraphsearch._cli search g.g6 -k 11 -m 55 -q
+          arch -x86_64 "$PY" -m subgraphsearch._cli --version
+          arch -x86_64 "$PY" -m subgraphsearch._cli generate exponential -n 100 -d 0.6 -s 1 -o g.g6
+          arch -x86_64 "$PY" -m subgraphsearch._cli search g.g6 -k 11 -m 55 -q
       - name: Smoke-test the wheel on Alpine
         if: matrix.alpine
         run: |
