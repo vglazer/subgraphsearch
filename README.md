@@ -42,8 +42,17 @@ pipx install subgraphsearch          # just the command, in its own environment
 pipx run subgraphsearch info g.g6    # or run the command without installing it
 ```
 
-Prebuilt wheels cover Linux (including Alpine), macOS and Windows (including ARM), so installing
-needs no compiler.
+Prebuilt wheels need no compiler, and each one serves every Python from 3.10 on:
+
+| Platform | Architectures | Requires |
+| --- | --- | --- |
+| Linux with glibc (most distributions) | x86-64, ARM64 | glibc 2.17 or later |
+| Linux with musl (Alpine, slim Docker images) | x86-64, ARM64 | musl 1.2 or later |
+| macOS | Intel, Apple silicon | macOS 10.12 (Intel) or 11 (Apple silicon) or later |
+| Windows | x64, ARM64 | — |
+
+Every wheel is installed and smoke-tested on its own platform before each release. Elsewhere, pip
+builds the package from source, which needs a [Rust](https://rustup.rs) toolchain, 1.87 or later.
 
 To copy the quickstart notebook into the current directory and open it in JupyterLab:
 
