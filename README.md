@@ -17,7 +17,9 @@ The same search finds induced [cycles](https://en.wikipedia.org/wiki/Cycle_(grap
 and [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)), regular subgraphs of a given
 degree, and subgraphs through given vertices. Searches are reproducible from a seed, report near
 misses alongside exact solutions, and come with diagnostics for tuning; many
-[graph formats](GRAPHS.md#formats) are supported.
+[graph formats](GRAPHS.md#formats) are supported. The
+[quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+tours every kind of search and its applications.
 
 ![One random graph with 36 vertices and 156 edges, searched four times and drawn with viz.plot_graph: an induced 12-cycle, an induced path on 15 vertices, an induced tree on 16 vertices and a 5-clique, each drawn in its own shape with the rest of the graph around it](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
 
