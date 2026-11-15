@@ -317,17 +317,18 @@ def search(
     it, at whatever distance) are swapped out, one per move, each for the best vertex to swap in, and
     the vertices removed may not return for ``kick_ban`` moves. It rebuilds one part of the subgraph
     at a time, like the large-neighborhood moves of searches for codes. Edge-count and weight
-    searches use kicks of :data:`DEFAULT_KICK_SIZE` (4) by default, which helped or did no harm on
-    every problem tried; they only take effect in searches longer than ``div_freq`` moves. Larger
+    searches use kicks of :data:`DEFAULT_KICK_SIZE` (4) unless told otherwise, a safe size; they only
+    take effect in searches longer than ``div_freq`` moves. Larger
     sizes can help much more on some problems and hurt on others, so compare several, for example
     with :func:`sweep`; ``kick_size=0`` turns kicks off. Regular and path searches have no kicks, and
     neither, by default, does ``rng="legacy"``, so that it still reproduces the original programs.
     ``tabu_tenure=t`` keeps each vertex swapped out from returning, and each vertex swapped in from
     leaving, for ``t`` moves. By default (``"auto"``), edge-count and weight searches use
     :func:`auto_tabu_tenure`: a tenth of ``size`` or an eightieth of the vertices left outside
-    the subgraph, whichever is smaller, so 1 below 20 vertices or in graphs of fewer than 160. Longer tenures
-    help most on large subgraphs of large graphs; 1 is the original programs' tenure, which regular
-    and path searches and ``rng="legacy"`` keep.
+    the subgraph, whichever is smaller, so 1 below 20 vertices or in graphs of fewer than 160. This
+    errs on the short side, so compare a few longer tenures with :func:`sweep`, especially on small
+    graphs; 1 is the original programs' tenure, which regular and path searches and
+    ``rng="legacy"`` keep.
     """
     if (edges is not None) + (degree is not None) + bool(path) != 1:
         raise ValueError(

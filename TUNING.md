@@ -27,7 +27,7 @@ Some reformulations make a search easier:
 - **Restrict to a neighborhood.** A subgraph whose vertices must all be adjacent to some vertices
   $`F`$ (a clique through $`F`$, for example) lies in their common neighborhood. Searching
   `g.induced(nbrs)`, with `nbrs = g.common_neighborhood(F)`, for $`k - |F|`$ vertices, instead of
-  fixing $`F`$ in the whole graph, is typically about 3 times faster for cliques through a given
+  fixing $`F`$ in the whole graph, is faster, often several times so for cliques through a given
   vertex. Vertex `i` of the result is `nbrs[i]` of the original graph.
 - **Search the complement of a dense graph.** $`k`$ vertices with $`m`$ edges become $`k`$ vertices
   with $`k(k-1)/2 - m`$ in the complement, which is sparse when the graph is dense.
@@ -52,18 +52,18 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   size of the subgraph, since a random start may need about $`k`$ swaps to reach a solution.
 - **Give hard targets longer runs, and compare kick sizes.** Runs longer than `div_freq`
   (`--div-freq`) moves make [region kicks](ALGORITHM.md#perturbations), of 4 vertices by default.
-  Larger kicks (`kick_size`, `--kick-size`) help much more on some problems and hurt on others;
-  `kick_size=0` turns them off.
-- **Compare a few tabu tenures.** The default [tabu tenure](ALGORITHM.md#objective-and-moves)
-  (`tabu_tenure`, `--tabu-tenure`), $`\min(k/10, (n - k)/80)`$, was never worse than the
-  original tenure of 1, but it is cautious: in graphs of fewer than 160 vertices it is 1, and
-  longer tenures often help there. On the quickstart's 100-vertex graph, a tenure of 5 raises the
-  successes on its hardest target from 41 to 60 of 60. Much longer tenures hurt, so sweep a few
-  small values (`ss.sweep(g, k, m, "tabu_tenure", [1, 2, 3, 5, 8])`). The best seen were 3 to 10
-  for 150 to 200 of 500 items, 5 for the MANN_a27 clique graph's 126-clique, 7 to 10 for a 72-word
-  code among 2048 words, and 15 to 25 for 200 of 2000 items; 12 already hurt cliques of a dozen
-  vertices, and 40 hurt everywhere. No tenure helps on graphs built to trap local search, such as
-  the *brock* clique graphs.
+  Try a few larger sizes (`kick_size`, `--kick-size`), such as 8, 16 and 32, and keep the best:
+  some problems gain much from rebuilding large regions and others lose. `kick_size=0` turns kicks
+  off.
+- **Try longer tabu tenures, especially on small graphs.** The default
+  [tabu tenure](ALGORITHM.md#objective-and-moves) (`tabu_tenure`, `--tabu-tenure`),
+  $`\min(k/10, (n - k)/80)`$, is safe but cautious, and it is 1 in any graph of fewer than 160
+  vertices. Sweep a few values from 1 up to about twice the default, or up to 8 on a small graph
+  (`ss.sweep(g, k, m, "tabu_tenure", [1, 2, 3, 5, 8])`), and keep the best. Stay well below
+  $`k/2`$ and below $`(n - k)/30`$: past that the search is too hemmed in, and successes drop.
+- **Expect no setting to help on graphs built to defeat local search,** such as the *brock*
+  clique benchmarks, which hide the largest clique among many slightly smaller ones. There the
+  search ends on a decoy whatever the settings; use a method made for the problem.
 - **Use more experiments to find more solutions.** The success rate estimates how hard a target is,
   and more experiments find more distinct solutions, although many repeat (`r.solutions()` lists
   each once).

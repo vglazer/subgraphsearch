@@ -177,9 +177,9 @@ pub struct SearchParams {
     /// it, at whatever distance) are swapped out, one per move, each for the best vertex to swap in,
     /// and the vertices removed may not return for `kick_ban` moves. It rebuilds one part of the
     /// subgraph at a time, as large-neighborhood moves in searches for codes do. The first cycle
-    /// keeps its random moves. [`SearchParams::new`] sets [`DEFAULT_KICK_SIZE`], which helped or did
-    /// no harm on every problem tried; larger sizes can help much more on some problems and hurt on
-    /// others, so compare a few, as with `div_dur`. 0 keeps the random moves throughout, and is what
+    /// keeps its random moves. [`SearchParams::new`] sets [`DEFAULT_KICK_SIZE`], a safe default;
+    /// larger sizes can help much more on some problems and hurt on others, so compare a few, as
+    /// with `div_dur`. 0 keeps the random moves throughout, and is what
     /// results saved before kicks existed used. Edge-count and weight searches only: regular and
     /// path searches ignore it. To reproduce the original programs' runs with
     /// [`RngKind::Legacy`], set it to 0.
@@ -244,8 +244,8 @@ fn default_kick_ban() -> usize {
     20
 }
 
-/// The region kick size [`SearchParams::new`] sets: small kicks helped or did no harm on every
-/// problem tried.
+/// The region kick size [`SearchParams::new`] sets: small enough to be a safe default; compare
+/// larger sizes on hard problems.
 pub const DEFAULT_KICK_SIZE: usize = 4;
 
 fn default_tabu_tenure() -> usize {
@@ -257,9 +257,9 @@ pub const AUTO_TABU_TENURE: usize = 0;
 
 /// The tabu tenure [`AUTO_TABU_TENURE`] chooses for a subgraph of `size` of the graph's `vertices`:
 /// a tenth of the size or an eightieth of the vertices left outside it, whichever is smaller,
-/// and at least 1. Fitted on random weighted and unweighted graphs of 200 to 2000 vertices, the
-/// maximum diversity benchmark, cliques and codes: the best tenure grows with both, and much longer
-/// ones hurt everywhere. Small graphs get 1, the original programs' tenure.
+/// and at least 1. The best tenure grows with both, and too long a tenure hems the search in, so
+/// this errs on the short side: small graphs get 1, the original programs' tenure. Compare longer
+/// ones with [`SearchParams::tabu_tenure`].
 pub fn auto_tabu_tenure(size: usize, vertices: usize) -> usize {
     (size / 10).min(vertices.saturating_sub(size) / 80).max(1)
 }

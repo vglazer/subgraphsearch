@@ -289,9 +289,8 @@ for kick_size in (0, 4, 16):
     print(f"kick_size={kick_size:<2}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
 """),
     md("""
-Kicks of 4 helped or did no harm on every problem tried, which is why 4 is the default. Larger kicks often
-help much more, but on some problems they rebuild too much at once and do worse than none, as the codes below
-show, so compare a few sizes; `kick_size=0` turns kicks off.
+Small kicks are a safe default. Larger ones can help much more, but on some problems they rebuild too much at
+once and do worse than none, as the codes below show, so compare a few sizes; `kick_size=0` turns kicks off.
 """),
     md("""
 `tabu_tenure` is how many moves a vertex just swapped out must stay out, and one just swapped in must stay in.
@@ -304,9 +303,9 @@ for tenure, res in ss.sweep(g, 30, 346, "tabu_tenure", [1, 2, 3, 5, 8], **settin
     print(f"tabu_tenure={tenure}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
 """),
     md("""
-Every tenure above 1 helps here, and 5 or more finds the target in every experiment with a tenth of the
-moves. On other problems much longer tenures hurt (in the maximum diversity benchmark, 20 instead of 10 cost
-most of the successes on 200 of 500 items), so compare a few small values rather than taking the longest.
+Here every tenure above 1 helps, and 5 or more finds the target in every experiment with a tenth of the
+moves. Too long a tenure hems the search in, so compare a few small values, up to about twice the default or
+8 on a small graph, and keep the best rather than the longest.
 """),
     md(f"""
 ## Regular subgraphs

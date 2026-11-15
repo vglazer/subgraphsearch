@@ -62,10 +62,9 @@ distances or similarities, become weights with `ss.WeightedGraph.from_scores(sco
 symmetric matrix or from `(u, v, score)` triples with `n=` given. It scales the scores so that the
 largest becomes 255 and rounds them; a positive score too small to survive rounding keeps weight 1,
 and a score of 0 is no edge. It returns the graph and the scale factor, so a total weight $`t`$
-stands for scores totalling about $`t`$ divided by the factor. 255 levels are usually enough: on
-the maximum diversity benchmark's real-valued instances, the heaviest selections found this way
-match or come within 0.002% of the best known values; rounding can make nearly equal selections
-tie.
+stands for scores totalling about $`t`$ divided by the factor. 255 levels are enough for most
+uses, but rounding can make nearly equal selections tie, so when exact totals matter, score the
+selections found with the original scores and keep the best.
 
 ## Incidence structures
 
