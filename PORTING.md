@@ -79,10 +79,13 @@ other than Unix, the final timing line reports elapsed time and the `COMPUTERNAM
 By default experiments run in parallel, which makes a search roughly 10 times faster than the C
 programs on a multi-core machine.
 
-Legacy mode is single-threaded. There, `sub_search`, `asub_search` and `wsub_search` run about 1.5
-to 2 times slower than the C programs compiled with `-O2`, while `reg_search` and `ereg_search` run
-faster. Most of the time goes to the loop that scans candidate swaps; the C programs read a byte
-adjacency matrix with 32-bit indices, where subgraphsearch reads a bitset with 64-bit indices.
+Legacy mode is single-threaded, and still faster than the C programs compiled with `-O2`, with
+the same output. Edge-count and weight searches skip candidate swaps that cannot be best (*bounded
+rows* in [ALGORITHM.md](ALGORITHM.md#objective-and-moves)), which the C programs evaluate one by
+one: `sub_search` ran 1.5 times faster on a hard exact target (30 vertices with 346 edges in a
+100-vertex graph) and 4.5 times faster on an unreachable clique target in a 1000-vertex graph, and
+`wsub_search` 3.7 times faster on a 400-item maximum diversity instance. `reg_search` and
+`ereg_search`, whose moves bounded rows do not change, were already faster than the C programs.
 
 ## Tests against the original programs
 

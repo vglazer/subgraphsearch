@@ -64,7 +64,21 @@ pub trait SearchGraph: Sync {
     /// The initial "best value so far" of an experiment: the sum of the degrees in
     /// `sub_search`, the total weight in `wsub_search`.
     fn objective_bound(&self) -> i64;
+    /// An upper bound on [`AdjacencyRow::value`] in `u`'s row: 1 in an unweighted graph, the
+    /// largest weight at `u` in a weighted one. The search uses it to skip rows that cannot hold a
+    /// best move; the default, a bound too large to skip any, is always correct.
+    fn max_row_value(&self, _u: usize) -> i64 {
+        NO_ROW_BOUND
+    }
 }
+
+/// [`SearchGraph::max_row_value`]'s default: large enough to bound any row, small enough that the
+/// search's arithmetic with it cannot overflow.
+const NO_ROW_BOUND: i64 = i64::MAX / 4;
+
+/// In tests, makes every row's bound 0, so the search scans every row, as a reference.
+#[cfg(test)]
+static NO_ROW_SKIPPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Constant-time access to one row of an adjacency or weight matrix.
 pub trait AdjacencyRow: Copy {
@@ -107,6 +121,10 @@ impl SearchGraph for Graph {
     fn objective_bound(&self) -> i64 {
         2 * self.num_edges() as i64
     }
+    #[inline(always)]
+    fn max_row_value(&self, _u: usize) -> i64 {
+        1
+    }
     fn as_graph(&self) -> Option<&Graph> {
         Some(self)
     }
@@ -129,6 +147,10 @@ impl SearchGraph for WeightedGraph {
     }
     fn objective_bound(&self) -> i64 {
         self.total_weight() as i64
+    }
+    #[inline(always)]
+    fn max_row_value(&self, u: usize) -> i64 {
+        i64::from(self.max_weight_at(u))
     }
 }
 
@@ -530,9 +552,33 @@ where
     Ok(())
 }
 
-/// Evaluates swapping `vert` out for each of `cols` in, appending the best swaps to
-/// `sub_opt`/`rest_opt` (whose length caps how many are kept, as in `sub_search.c`). This is the
-/// search's hot loop; taking separate slices lets the compiler keep everything in registers.
+/// The smaller of `best` and the best value of swapping a subgraph vertex, whose row of the
+/// adjacency matrix is `row`, for each of `cols`, stopping early at `bound`, below which the row
+/// cannot go. With [`scan_row`], this is the search's hot loop.
+#[inline(always)]
+fn row_min<R: AdjacencyRow>(
+    row: R,
+    cols: &[usize],
+    sub_degs: &[i32],
+    degree: i64,
+    bound: i64,
+    best: i64,
+) -> i64 {
+    let mut best = best;
+    for &t in cols {
+        let val = (degree - row.value(t) + i64::from(sub_degs[t])).abs();
+        if val < best {
+            best = val;
+            if best <= bound {
+                break;
+            }
+        }
+    }
+    best
+}
+
+/// Appends to `sub_opt`/`rest_opt` every swap of `vert` for one of `cols` with value `best`, up
+/// to their length, which caps how many are kept, as in `sub_search.c`.
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
 fn scan_row<R: AdjacencyRow>(
@@ -541,28 +587,24 @@ fn scan_row<R: AdjacencyRow>(
     sub_degs: &[i32],
     degree: i64,
     vert: usize,
-    opt_val: &mut i64,
+    best: i64,
     opt_mov: &mut usize,
     sub_opt: &mut [usize],
     rest_opt: &mut [usize],
 ) {
     let cap = sub_opt.len().min(rest_opt.len());
-    let (mut best, mut count) = (*opt_val, *opt_mov);
+    let mut count = *opt_mov;
     for &t in cols {
+        if count >= cap {
+            break;
+        }
         let val = (degree - row.value(t) + i64::from(sub_degs[t])).abs();
-        if val <= best {
-            if val < best {
-                best = val;
-                count = 0;
-            }
-            if count < cap {
-                sub_opt[count] = vert;
-                rest_opt[count] = t;
-                count += 1;
-            }
+        if val == best {
+            sub_opt[count] = vert;
+            rest_opt[count] = t;
+            count += 1;
         }
     }
-    *opt_val = best;
     *opt_mov = count;
 }
 
@@ -614,6 +656,9 @@ struct Workspace {
     tenure: usize,
     tabu_in: Vec<usize>,
     tabu_out: Vec<usize>,
+    /// The rows to scan in a move: vertex, candidate columns, row constant and a lower bound on
+    /// the row's best value.
+    rows: Vec<(usize, usize, i64, i64)>,
 }
 
 impl Workspace {
@@ -663,6 +708,7 @@ impl Workspace {
             tenure: params.resolved_tabu_tenure(v),
             tabu_in: Vec::new(),
             tabu_out: Vec::new(),
+            rows: Vec::with_capacity(params.size),
         };
         if ws.tenure > 1 {
             ws.tabu_in = vec![0; v];
@@ -967,6 +1013,9 @@ impl Workspace {
             } else {
                 v_rest - 1
             };
+            // ... noting the range of subgraph degrees among the active and among all of them
+            let (mut act_lo, mut act_hi) = (i64::MAX, i64::MIN);
+            let (mut all_lo, mut all_hi) = (i64::MAX, i64::MIN);
             let mut temp = m;
             for k in 0..v_rest {
                 if k == rest_col || banned(self.rest_verts[k]) {
@@ -976,10 +1025,15 @@ impl Workspace {
                     continue;
                 }
                 let vert = self.rest_verts[k];
+                let d = i64::from(self.sub_degs[vert]);
+                all_lo = all_lo.min(d);
+                all_hi = all_hi.max(d);
                 if self.u_ch[vert] != 0 {
                     self.u_list[u_cols] = vert;
                     u_cols += 1;
                     self.u_ch[vert] = 0;
+                    act_lo = act_lo.min(d);
+                    act_hi = act_hi.max(d);
                 } else {
                     temp -= 1;
                     self.u_list[temp] = vert;
@@ -993,10 +1047,11 @@ impl Workspace {
                 }
             }
 
-            // collect the optimal moves (at most v of them)
-            let mut opt_val = e;
-            opt_mov = 0;
+            // The rows to scan, each with a lower bound on its best value: swapping `vert` for
+            // `t` has value |degree - w + d| with d = sub_degs[t] in the columns' range and w, the
+            // edge's value, from 0 to the row's largest.
             self.u_ch[rest_vert] = 0;
+            self.rows.clear();
             for k in 0..v_sub {
                 let vert = self.sub_verts[k];
                 if vert == rest_vert {
@@ -1006,24 +1061,69 @@ impl Workspace {
                     self.u_ch[vert] = 0;
                     continue;
                 }
-                let w_cols = if self.u_ch[vert] != 0 {
+                let (w_cols, lo, hi) = if self.u_ch[vert] != 0 {
                     self.u_ch[vert] = 0;
-                    m
+                    (m, all_lo, all_hi)
                 } else {
-                    u_cols
+                    (u_cols, act_lo, act_hi)
                 };
+                if w_cols == 0 {
+                    continue;
+                }
                 let degree = new_min_val - i64::from(self.sub_degs[vert]);
-                scan_row(
-                    graph.adjacency_row(vert),
-                    &self.u_list[..w_cols],
-                    &self.sub_degs,
-                    degree,
-                    vert,
-                    &mut opt_val,
-                    &mut opt_mov,
-                    &mut self.sub_opt,
-                    &mut self.rest_opt,
-                );
+                let (low, high) = (degree + lo - graph.max_row_value(vert), degree + hi);
+                let bound = if high < 0 {
+                    -high
+                } else if low > 0 {
+                    low
+                } else {
+                    0
+                };
+                #[cfg(test)]
+                let bound = if NO_ROW_SKIPPING.load(std::sync::atomic::Ordering::Relaxed) {
+                    0
+                } else {
+                    bound
+                };
+                self.rows.push((vert, w_cols, degree, bound));
+            }
+
+            // Collect the optimal moves (at most v of them), exactly the ones a scan of every row
+            // in order would: first find the best value, scanning the most promising row first and
+            // skipping rows that cannot beat it, then list the moves that reach it, in row order.
+            let mut opt_val = e;
+            if let Some(first) = (0..self.rows.len()).min_by_key(|&i| self.rows[i].3) {
+                for i in std::iter::once(first).chain((0..self.rows.len()).filter(|&i| i != first))
+                {
+                    let (vert, w_cols, degree, bound) = self.rows[i];
+                    if bound < opt_val {
+                        opt_val = row_min(
+                            graph.adjacency_row(vert),
+                            &self.u_list[..w_cols],
+                            &self.sub_degs,
+                            degree,
+                            bound,
+                            opt_val,
+                        );
+                    }
+                }
+            }
+            opt_mov = 0;
+            for i in 0..self.rows.len() {
+                let (vert, w_cols, degree, bound) = self.rows[i];
+                if bound <= opt_val {
+                    scan_row(
+                        graph.adjacency_row(vert),
+                        &self.u_list[..w_cols],
+                        &self.sub_degs,
+                        degree,
+                        vert,
+                        opt_val,
+                        &mut opt_mov,
+                        &mut self.sub_opt,
+                        &mut self.rest_opt,
+                    );
+                }
             }
 
             if params.aspiration {
@@ -1151,6 +1251,57 @@ mod tests {
                 .iter()
                 .all(|e| e.trace.as_ref().unwrap().len() == e.moves + usize::from(e.success))
         );
+    }
+
+    #[test]
+    fn skipping_rows_changes_no_result() {
+        // every search makes the same moves whether or not it skips the rows the bounds rule out
+        // (other tests running meanwhile may also scan every row, which changes nothing either)
+        let n = 150;
+        let pairs = (0..n).flat_map(|i| (i + 1..n).map(move |j| (i, j)));
+        let g = Graph::from_edges(n, pairs.clone().filter(|&(i, j)| (i * 31 + j * 17) % 5 < 2))
+            .unwrap();
+        let w = WeightedGraph::from_weighted_edges(
+            n,
+            pairs
+                .filter(|&(i, j)| (i * 13 + j * 7) % 3 != 0)
+                .map(|(i, j)| (i, j, ((i * j) % 9 + 1) as u32)),
+        )
+        .unwrap();
+        for (size, edges, kick, tenure, rng) in [
+            (
+                20,
+                1_000_000,
+                DEFAULT_KICK_SIZE,
+                AUTO_TABU_TENURE,
+                RngKind::Xoshiro,
+            ), // densest
+            (20, 0, DEFAULT_KICK_SIZE, AUTO_TABU_TENURE, RngKind::Xoshiro), // sparsest
+            (30, 180, 0, 1, RngKind::Xoshiro),
+            (30, 180, 16, 5, RngKind::Xoshiro),
+            (40, 600, 0, 1, RngKind::Legacy),
+        ] {
+            let mut p = SearchParams::new(size, edges);
+            p.experiments = 8;
+            p.max_moves = 1500;
+            p.div_freq = 300;
+            p.div_dur = 8;
+            p.kick_size = kick;
+            p.tabu_tenure = tenure;
+            p.rng = rng;
+            p.record_trace = true;
+            let run = || {
+                (
+                    search(&g, &p).unwrap().experiments,
+                    search(&w, &p).unwrap().experiments,
+                )
+            };
+            let skipping = run();
+            NO_ROW_SKIPPING.store(true, std::sync::atomic::Ordering::Relaxed);
+            let full = run();
+            NO_ROW_SKIPPING.store(false, std::sync::atomic::Ordering::Relaxed);
+            assert_eq!(skipping, full, "size {size}, edges {edges}");
+        }
     }
 
     #[test]

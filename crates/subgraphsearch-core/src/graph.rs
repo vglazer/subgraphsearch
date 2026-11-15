@@ -338,6 +338,8 @@ pub struct WeightedGraph {
     n: usize,
     weights: Vec<u8>,
     neighbors: Vec<Vec<u32>>,
+    /// The largest weight in each row.
+    row_max: Vec<u8>,
     num_edges: usize,
     total_weight: u64,
 }
@@ -391,18 +393,21 @@ impl WeightedGraph {
 
     pub(crate) fn from_matrix(n: usize, weights: Vec<u8>) -> WeightedGraph {
         let mut neighbors = Vec::with_capacity(n);
+        let mut row_max = Vec::with_capacity(n);
         let (mut twice_edges, mut twice_weight) = (0usize, 0u64);
         for u in 0..n {
             let row = &weights[u * n..(u + 1) * n];
             let list: Vec<u32> = (0..n).filter(|&v| row[v] != 0).map(|v| v as u32).collect();
             twice_edges += list.len();
             twice_weight += row.iter().map(|&w| u64::from(w)).sum::<u64>();
+            row_max.push(row.iter().copied().max().unwrap_or(0));
             neighbors.push(list);
         }
         WeightedGraph {
             n,
             weights,
             neighbors,
+            row_max,
             num_edges: twice_edges / 2,
             total_weight: twice_weight / 2,
         }
@@ -424,6 +429,12 @@ impl WeightedGraph {
     #[inline]
     pub fn total_weight(&self) -> u64 {
         self.total_weight
+    }
+
+    /// The largest weight of an edge at `u`, or 0 if it has none.
+    #[inline]
+    pub fn max_weight_at(&self, u: usize) -> u8 {
+        self.row_max[u]
     }
 
     /// The weight of `{u, v}`, or 0 if it is not an edge.

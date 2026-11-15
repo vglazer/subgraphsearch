@@ -10,7 +10,7 @@ vertices and edges** in a graph, or with a prescribed total weight in a weighted
 them in milliseconds where general solvers take seconds or give out, and on the
 [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), choosing items as
 different from each other as possible, it reaches the best published values for up to 500 items in
-about a second ([How it compares](#how-it-compares)).
+well under a second ([How it compares](#how-it-compares)).
 
 The same search finds induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
 [paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
@@ -112,7 +112,8 @@ goes through all of these.
   seconds at a few dozen vertices and mostly find nothing within 10 seconds past 40.
 - **Maximum diversity:** the best published MDPLIB values up to 500 items in under a second, where
   CP-SAT ends up to 9% short and the MIP solvers up to 38%. At 2000 items a heuristic made for the
-  problem is ahead; subgraphsearch comes within 0.02%.
+  problem is ahead: in the same 20 s per run, it reaches the best known value in 22 of 30 runs,
+  subgraphsearch in 6.
 - **Maximum cliques:** far faster than an exact search, but a dedicated clique solver is faster
   still and solves graphs built to trap local search.
 - **Snake-in-the-box:** the records up to the 8-cube, and within 3 vertices of the 9-cube's.
@@ -131,7 +132,7 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
 - **Error-correcting codes.** A binary code of minimum distance $`d`$ is a clique in the graph of
   words joined when they differ in at least $`d`$ places.
   [examples/codes.py](examples/codes.py) finds codes of the largest possible size for lengths 9 to
-  12, among them the 72-word code of length 11 and distance 4 in about 5 seconds.
+  12, among them the 72-word code of length 11 and distance 4 in under 3 seconds.
 - **Strongly regular graphs.** Switching a strongly regular graph with respect to a regular
   subgraph the search finds can give a new one with the same parameters: the Shrikhande graph from
   the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.

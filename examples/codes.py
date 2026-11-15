@@ -6,7 +6,7 @@ differ in at least d places, `ss.Graph.from_words(words, range(d, n + 1))`, a co
 
 `ss.largest` grows the code size until the search fails. For every length and distance here it reaches
 A(n, d), which is known exactly for these: 20, 40, 72 and 144 words at distance 4, and 6, 12 and 24 at
-distance 6. Each code found is checked pair by pair. The whole script takes about half a minute.
+distance 6. Each code found is checked pair by pair. The whole script takes about 15 seconds.
 
     uv run python examples/codes.py
 """

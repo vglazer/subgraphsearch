@@ -34,13 +34,21 @@ if $`u`$ and $`w`$ are adjacent and 0 otherwise. Removing $`u`$ loses its $`d_S(
 adding $`w`$ gains its $`d_S(w)`$, but an edge between them is counted in $`d_S(w)`$ and leaves
 with $`u`$. Each move takes one of the best swaps at random.
 
-Two refinements make this fast and effective:
+Three refinements make this fast and effective:
 
 - **Restricted neighborhood.** If the last move left the edge count unchanged, only swaps
   involving a vertex adjacent to exactly one of the two vertices just swapped are examined. Every
   other swap has the same value it had before the move, so the search concentrates on the swaps
   the move changed. This improves the search as well as its speed, and on large dense graphs it
   skips most of the work.
+- **Bounded rows.** Swapping $`u`$ out changes the edge count by $`d_S(w) - d_S(u) - [u \sim w]`$,
+  and the outside vertices' $`d_S(w)`$ lie in a range known before the scan, so each $`u`$ gets a
+  lower bound on the conflict of its best swap (in a weighted graph, using the largest weight at
+  $`u`$). The search first finds the best conflict, starting with the most promising $`u`$ and
+  skipping every $`u`$ whose bound cannot beat it, then lists the swaps that reach it. The list,
+  and so every move, is exactly what scanning every swap would give, but far fewer swaps are
+  evaluated when the target is far from typical subgraphs, as for the densest or heaviest
+  subgraphs and large cliques: about 3 to 10 times fewer on maximum diversity instances.
 - **Tabu moves.** A vertex just swapped out may not return, and one just swapped in may not leave,
   for `tabu_tenure` (`--tabu-tenure`) moves, the *tabu tenure*, so the search does not circle back
   to the subgraphs it just left. The original programs' tenure was 1. A longer one helps large
@@ -168,9 +176,9 @@ vertices, and a weighted graph's byte per pair about 10 GB. Each thread keeps it
 array and move lists, so the memory of a search beyond the graph grows with the number of vertices
 times the number of threads.
 
-The cost of a move grows in proportion to the number of vertices, and a little less than in
-proportion to the size of the subgraph; a search that misses its target makes every move it is
-allowed. Experiments are independent, so the time divides almost evenly among cores.
+The cost of a move grows in proportion to the number of vertices, and at most in proportion to the
+size of the subgraph, less where bounded rows skip most of it; a search that misses its target makes
+every move it is allowed. Experiments are independent, so the time divides almost evenly among cores.
 
 Regular, cycle and path searches also keep, in every thread, where each vertex's neighbors are in
 its neighbor list: a table with an entry per pair of vertices on graphs of up to 2,048 vertices, as

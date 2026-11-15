@@ -455,7 +455,7 @@ join strings that differ in one bit, the longest induced paths are the [snake-in
 problem, and the longest induced cycles the coil-in-the-box problem. Their known records make a good test:
 the longest snake in the 7-cube has 51 vertices, and the path search finds one in under a second. In the
 9-cube, the lowest dimension where the longest snake is unknown, the same search finds snakes of 185 vertices
-in under three minutes, 7 short of the record of 192 vertices (191 edges), reported in 2026. Splitting the
+in two and a half minutes, 7 short of the record of 192 vertices (191 edges), reported in 2026. Splitting the
 9-cube into two 8-cubes gets closer: fixing a 95-vertex 8-cube snake in one half with `fixed=` leaves the
 search only the rest to place, and it then finds snakes of 189 vertices in most experiments, 3 short of the
 record, though only some 8-cube snakes work as the half. The script
@@ -902,7 +902,7 @@ pseudo-random graph, is an expander too, and in it the points come close to both
 Many objects in linear algebra are sets of vectors with prescribed inner products, and so are cliques in a
 graph on the candidate vectors. `ss.Graph.from_vectors(vectors, inner_products)` builds that graph: one vertex
 per row, two joined when their inner product is one of `inner_products`. It computes the inner products in
-parallel straight into the adjacency matrix, so even graphs with hundreds of millions of edges take seconds.
+parallel straight into the adjacency matrix, so even graphs with hundreds of millions of edges take about a second.
 
 A [Hadamard matrix]({W}Hadamard_matrix) of order $n$ is an $n \\times n$ matrix of $\\pm 1$ entries with pairwise
 orthogonal rows, $H H^T = n I$. Negating columns and then rows makes its first row and column all $+1$, and
