@@ -157,9 +157,11 @@ The quickstart notebook works through each of these.
 
 ## How the search works
 
-subgraphsearch is a randomized tabu search with perturbations. Each move swaps one subgraph vertex
-for one outside vertex, chosen among the swaps that bring the edge count (or total weight) closest
-to the target. Vertices just swapped stay tabu for a few moves, longer for larger subgraphs of larger
+subgraphsearch is a randomized tabu search with perturbations, in two forms: a *counting search*
+that aims at a number of edges or a total weight (exact counts, cliques, independent sets, trees,
+the densest subgraphs) and a *degree search* that aims at every vertex's number of neighbors in the
+subgraph (regular subgraphs, cycles, paths). Each move swaps one subgraph vertex for one outside
+vertex, chosen among the swaps that bring the subgraph closest to the target. Vertices just swapped stay tabu for a few moves, longer for larger subgraphs of larger
 graphs, so the search does not circle back; and every few hundred moves a perturbation, random moves
 or a *region kick* that rebuilds the part of the subgraph nearest a random vertex, moves it out of
 local minima. Experiments run in parallel, and results depend only on the seed. Memory is the only

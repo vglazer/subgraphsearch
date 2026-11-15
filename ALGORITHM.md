@@ -23,6 +23,24 @@ This page describes the method. [TUNING.md](TUNING.md) covers choosing its setti
 [BENCHMARKS.md](BENCHMARKS.md) shows how it compares with other methods. Parameters are given by their
 Python names, with the command-line options in parentheses on first mention.
 
+## Two searches
+
+subgraphsearch has two searches with the same structure, swaps chosen by a tabu search and
+interrupted by perturbations, but different targets. Every kind of search uses one of them.
+
+| | The counting search | The degree search |
+| --- | --- | --- |
+| Aims at | the number of edges among the $`k`$ vertices, or their total weight | every chosen vertex's number of neighbors among them |
+| Finds | exact edge counts and weights, cliques and independent sets, trees (with `connected=True`), the densest and sparsest subgraphs | regular subgraphs (`degree=`), induced cycles (degree 2, connected), induced paths (`path=True`) |
+| Graphs | unweighted or weighted | unweighted |
+| Perturbations | random moves in the first cycle, then [region kicks](#perturbations) | random moves |
+| [Tabu tenure](#objective-and-moves) | grows with the subgraph and the graph | 1 |
+| [Aspiration](#variants) | available | no |
+| Skipping work | restricted neighborhood, bounded rows, degree buckets | restricted neighborhood |
+
+The next section describes the counting search; the degree search's conflict and moves are under
+[Variants](#variants). `ss.largest` uses whichever its shape needs.
+
 ## Objective and moves
 
 Write $`S`$ for the current set of $`k`$ vertices, $`e`$ for the number of edges they induce, and
@@ -59,7 +77,7 @@ Three refinements make this fast and effective:
   grows with both the subgraph size $`k`$ and the $`n - k`$ vertices outside it. The default is
   $`\min(k/10, (n - k)/80)`$, rounded down and at least 1: on 200 of 2000 weighted vertices it is
   20, in graphs of fewer than 160 vertices 1 (see [TUNING.md](TUNING.md#settings) for other
-  values). Regular and path searches, and the legacy random number generator by default, keep a
+  values). The degree search, and the legacy random number generator by default, keep a
   tenure of 1.
 
 ## Perturbations
@@ -73,8 +91,8 @@ swapped out one per move, each for the best vertex to swap in, and may not retur
 like the large-neighborhood moves of searches for codes, where random moves would scatter changes
 across it.
 
-Edge-count and weight searches kick 4 vertices by default; larger kicks suit some problems and not
-others, and `kick_size=0` keeps random moves throughout. Regular and path searches, and the legacy
+The counting search kicks 4 vertices by default; larger kicks suit some problems and not
+others, and `kick_size=0` keeps random moves throughout. The degree search, and the legacy
 random number generator by default, use random moves only. A search of at most `div_freq` moves,
 such as one with the default settings, never reaches a second cycle and so is the same with or
 without kicks.
@@ -110,7 +128,7 @@ original programs, and reproduce their results exactly (see [PORTING.md](PORTING
   succeeds there; use the one-phase search with fixed vertices.
 - **Aspiration** (`aspiration=True`, `--aspiration`). The tabu search's *aspiration criterion* lifts the tabu on a move that would beat
   the best conflict so far: after each move the search also considers the swaps involving the two
-  vertices just swapped, and takes one of them whenever it would. Edge-count and weight searches
+  vertices just swapped, and takes one of them whenever it would. The counting search
   only.
 - **Connected subgraphs** (`connected=True`, `--connected`). Each component of the subgraph beyond the first adds 1 to the conflict,
   so only connected subgraphs that hit the target count as successes. Swaps are still chosen by the
@@ -183,11 +201,11 @@ The cost of a move grows in proportion to the number of vertices, and at most in
 size of the subgraph, less where bounded rows skip most of it; a search that misses its target makes
 every move it is allowed. Experiments are independent, so the time divides almost evenly among cores.
 
-Regular, cycle and path searches also keep, in every thread, where each vertex's neighbors are in
-its neighbor list: a table with an entry per pair of vertices on graphs of up to 2,048 vertices, as
+The degree search, for regular subgraphs, cycles and paths, also keeps in every thread where each
+vertex's neighbors are in its neighbor list: a table with an entry per pair of vertices on graphs of up to 2,048 vertices, as
 in the original programs, and an entry per edge end (4 bytes) on larger ones. That adds up in dense
 graphs, about 200 MB per thread for 10,000 vertices and 25 million edges, so use fewer threads
-(`--threads`) when memory is short. Edge-count and weight searches keep no such table. The original
+(`--threads`) when memory is short. The counting search keeps no such table. The original
 programs' 16-bit positions limited these searches to 32,767 vertices; subgraphsearch has no fixed
 limit on any search, so a path search runs in the 16-cube, with 65,536 vertices. Memory is the
 limit.

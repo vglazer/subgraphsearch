@@ -22,6 +22,9 @@ are given by their Python names, with the command-line options in parentheses.
 | a total weight in a weighted graph | `ss.search(w, k, total)` on a `WeightedGraph` (`--weighted -m total`); from real-valued scores, `ss.WeightedGraph.from_scores` |
 | the largest path, cycle, tree, clique or independent set | `ss.largest(g, shape)` (`subgraphsearch largest --shape shape`) |
 
+Regular subgraphs, cycles and paths use the [degree search](ALGORITHM.md#two-searches); everything
+else uses the counting search. The settings below that apply to only one of them say so.
+
 Some reformulations make a search easier:
 
 - **Restrict to a neighborhood.** A subgraph whose vertices must all be adjacent to some vertices
@@ -51,7 +54,8 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   three times the median, using the rest of the time for more experiments. Do not go far below the
   size of the subgraph, since a random start may need about $`k`$ swaps to reach a solution.
 - **Give hard targets longer runs, and compare kick sizes.** Runs longer than `div_freq`
-  (`--div-freq`) moves make [region kicks](ALGORITHM.md#perturbations), of 4 vertices by default.
+  (`--div-freq`) moves of the counting search make [region kicks](ALGORITHM.md#perturbations), of
+  4 vertices by default.
   Try a few larger sizes (`kick_size`, `--kick-size`), such as 8, 16 and 32, and keep the best:
   some problems gain much from rebuilding large regions and others lose. `kick_size=0` turns kicks
   off.
@@ -61,8 +65,8 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   vertices. Sweep a few values from 1 up to about twice the default, or up to 8 on a small graph
   (`ss.sweep(g, k, m, "tabu_tenure", [1, 2, 3, 5, 8])`), and keep the best. Stay well below
   $`k/2`$ and below $`(n - k)/30`$: past that the search is too hemmed in, and successes drop.
-  Path, cycle and regular searches, such as those for snakes and coils in hypercubes, keep a
-  tenure of 1 and do not take this setting: their moves are so constrained that escaping a near
+  The degree search, for regular subgraphs, cycles and paths such as snakes and coils in
+  hypercubes, keeps a tenure of 1 and does not take this setting: their moves are so constrained that escaping a near
   miss often means undoing a recent swap, which a longer tenure forbids.
 - **Expect no setting to help on graphs built to defeat local search,** such as the *brock*
   clique benchmarks, which hide the largest clique among many slightly smaller ones. There the
@@ -72,8 +76,8 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   each once).
 - **Random moves** (`div_dur`, `--div-dur`): the defaults, 4 every 250 moves, rarely need
   changing; `div_dur=0` gives a pure local search.
-- **Aspiration** (`aspiration=True`, `--aspiration`) rarely makes a difference; try it on searches
-  that stall.
+- **Aspiration** (`aspiration=True`, `--aspiration`, counting search only) rarely makes a
+  difference; try it on searches that stall.
 - **Seeds** (`seed`, `-s`): results depend only on the seed and the settings
   ([ALGORITHM.md](ALGORITHM.md#experiments-threads-and-seeds)); change the seed for independent
   runs.

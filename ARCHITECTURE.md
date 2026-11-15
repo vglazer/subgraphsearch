@@ -26,7 +26,9 @@ The Cargo workspace in `crates/` has three members that share one version number
 
 - **`subgraphsearch-core`** is everything that computes, with only `rayon`, `serde` and `thiserror`
   as dependencies. It is published to crates.io for use from Rust.
-  - `search.rs`: the edge-count and weight search; `regular.rs`: the regular and path searches;
+  - `search.rs`: the counting search, for edge counts and weights; `regular.rs`: the degree
+    search, for regular subgraphs, cycles and paths (see
+    [ALGORITHM.md](ALGORITHM.md#two-searches));
     `largest.rs`: the search for the largest size of a shape.
   - `graph.rs`: `Graph` (a bit matrix and adjacency lists) and `WeightedGraph` (a byte matrix).
     Searches are generic over the `SearchGraph` trait, which both implement.
