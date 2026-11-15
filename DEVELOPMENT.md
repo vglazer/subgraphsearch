@@ -2,6 +2,8 @@
 
 *Part of the [subgraphsearch documentation](README.md#documentation).*
 
+[ARCHITECTURE.md](ARCHITECTURE.md) describes how the code is organized.
+
 ## Setup
 
 You need [Rust](https://rustup.rs) and [uv](https://docs.astral.sh/uv/getting-started/installation/).

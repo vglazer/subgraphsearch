@@ -61,6 +61,7 @@ pip install "subgraphsearch[all]" jupyterlab && python -m subgraphsearch quickst
 | [ALGORITHM.md](ALGORITHM.md) | How the search works: moves, perturbations, variants, data structures |
 | [TUNING.md](TUNING.md) | Which search to use for a goal, and how to set its parameters |
 | [GRAPHS.md](GRAPHS.md) | Random graphs, operations, graphs from vectors and designs, file formats |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the Rust core, the command line and the Python package fit together |
 | [PORTING.md](PORTING.md) | The original C programs, and how to reproduce their runs exactly |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Building, testing and releasing |
 
