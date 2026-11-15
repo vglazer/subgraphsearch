@@ -875,9 +875,9 @@ def test_results_saved_before_the_tabu_tenure_load_with_tenure_one(tmp_path, g10
     r = ss.search(g100, 10, 20, experiments=4)
     path = tmp_path / "old.json"
     r.save(path)
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     data["params"].pop("tabu_tenure")
-    path.write_text(json.dumps(data))
+    path.write_text(json.dumps(data), encoding="utf-8")
     assert ss.SearchResult.load(path, g100).params.tabu_tenure == 1
 
 
