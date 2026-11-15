@@ -1172,13 +1172,6 @@ for name, h in [("g", g), ("two 4-cycles", two_cycles)]:
     print(f"{name}: {sum(abs(eigenvalues) < 1e-9)} zero eigenvalue(s), algebraic connectivity "
           f"{viz.spectral_summary(h)['algebraic_connectivity']:.1f}")
 """),
-    md(f"""
-Despite its name, the `"power"` model has no heavy tail, so its graphs are not
-[scale-free]({W}Scale-free_network); the comparison makes that plain:
-"""),
-    code("""
-viz.plot_degree_distribution(ss.generate("power", 1500, 0.2, seed=52));
-"""),
     md("""
 ## Formats and other libraries
 
