@@ -4,7 +4,7 @@ subgraphsearch finds a Steiner triple system on v points as an independent set o
 in the graph of all triples joined when they share a pair: one experiment with tabu_tenure=2,
 median of 3, timing the graph and the search separately. Stinson's hill-climbing (D. R. Stinson,
 Annals of Discrete Mathematics 26, 1985), written here in plain Python on one core, builds one
-directly: median of 5. Every system from either method is checked pair by pair. Stinson's method
+directly: median over 5 seeds. Every system from either method is checked pair by pair. Stinson's method
 alone also runs on --large point counts, beyond what subgraphsearch's graph can hold.
 
     uv run python benchmarks/steiner.py
@@ -74,6 +74,16 @@ def stinson(v: int, rng: random.Random) -> list[tuple[int, int, int]]:
     return sorted({tuple(sorted((x, y, other[x][y]))) for x in range(v) for y in range(x + 1, v)})
 
 
+def hill_climbing_time(v: int) -> float:
+    """The median time of Stinson's method on v points over five seeds, each system checked."""
+    times = []
+    for seed in range(5):
+        start = time.perf_counter()
+        check(v, stinson(v, random.Random(seed)))
+        times.append(time.perf_counter() - start)
+    return statistics.median(times)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--points", default="31,49,61,81", help="point counts for both methods")
@@ -90,11 +100,11 @@ def main() -> None:
             times.append(time.perf_counter() - start)
             assert r.successes, f"no system on {v} points with seed {seed}"
             check(v, [triples[i] for i in r.best.vertices])
-        _, hill = timed(lambda v=v: check(v, stinson(v, random.Random(0))), repeats=5)
+        hill = hill_climbing_time(v)
         print(f"{v} points, {k:,} triples: subgraphsearch {build:.2f} s for the graph, then "
               f"{statistics.median(times):.2f} s; Stinson's hill-climbing {hill * 1000:.1f} ms", flush=True)
     for v in map(int, args.large.split(",")):
-        _, hill = timed(lambda v=v: check(v, stinson(v, random.Random(0))), repeats=5)
+        hill = hill_climbing_time(v)
         print(f"{v} points, {v * (v - 1) // 6:,} triples: Stinson's hill-climbing {hill:.2f} s", flush=True)
 
 

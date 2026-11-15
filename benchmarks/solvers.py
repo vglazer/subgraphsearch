@@ -97,10 +97,10 @@ def mip(name: str, n: int, triples, k: int, limit: float, exact_edges: int | Non
 
 def mip_in_process(name: str, n: int, triples, k: int, limit: float, exact_edges: int | None = None):
     """A mixed-integer solver through PuLP, with the standard formulation: a yes-or-no variable per
-    vertex and per edge, the edge's 1 exactly when both its ends are chosen. With ``exact_edges``
-    it looks for that many edges (``triples`` all of weight 1) and returns whether it found them;
-    otherwise it maximizes the total weight and returns the best total (``None`` if none).
-    Returns ``(value, seconds)``."""
+    vertex and per edge, the edge's at most each end's. With ``exact_edges`` it looks for that many
+    edges (``triples`` all of weight 1), the edge's variable also forced to 1 when both ends are
+    chosen, and returns whether it found them; otherwise it maximizes the total weight, which needs
+    no such constraint, and returns the best total (``None`` if none). Returns ``(value, seconds)``."""
     import pulp
 
     prob = pulp.LpProblem("subgraph", pulp.LpMaximize)
@@ -110,7 +110,10 @@ def mip_in_process(name: str, n: int, triples, k: int, limit: float, exact_edges
         e = pulp.LpVariable(f"z{i}", cat="Binary")
         prob += e <= x[int(u)]
         prob += e <= x[int(v)]
-        prob += e >= x[int(u)] + x[int(v)] - 1
+        if exact_edges is not None:
+            # maximizing pushes an edge's variable to 1 whenever both ends are chosen, so only an
+            # exact count needs it forced there; the extra constraints stop CBC finding anything
+            prob += e >= x[int(u)] + x[int(v)] - 1
         z.append(e)
         total.append(float(w) * e)
     prob += pulp.lpSum(x) == k

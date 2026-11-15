@@ -27,6 +27,14 @@ SOM_B = [("SOM-b_1_n100_m10", 333), ("SOM-b_2_n100_m20", 1195), ("SOM-b_3_n100_m
          ("SOM-b_18_n500_m100", 26258), ("SOM-b_19_n500_m150", 56572), ("SOM-b_20_n500_m200", 97344)]
 REAL = [("GKD-c_1_n500_m50", 19485.1875), ("MDG-a_1_n500_m50", 7833.83252)]
 SETTINGS = {"div_freq": 300, "div_dur": 10, "kick_size": 16}
+# HiGHS and CBC find nothing at 300 and 400 items, and on larger instances take minutes just to set up
+# (CBC's time limit does not cover that), so like BENCHMARKS.md they are run only up to here
+SMALL = {name for name, _ in SOM_B[:7]}
+
+
+def solvers_for(name, solvers):
+    """The solvers to run on an instance: all those asked for on the smaller ones, else CP-SAT and SCIP."""
+    return [s for s in solvers if name in SMALL or s in ("cpsat", "scip")]
 
 
 def som_b(solvers, limit):
@@ -37,7 +45,7 @@ def som_b(solvers, limit):
         reached = sum(d._value(e.vertices) == best for e in d.result.experiments)
         row = [f"{name} (best known {best:,}): {r.successes} of 60 in {t * 1000:.0f} ms; densest {reached} of 60"]
         n, _, triples = read_mdplib(name)
-        for solver in solvers:
+        for solver in solvers_for(name, solvers):
             total, seconds = (cpsat_max_weight(n, triples, k, limit) if solver == "cpsat"
                               else mip(solver, n, triples, k, limit))
             row.append(f"{solver} {total} ({seconds:.0f} s)")
@@ -56,7 +64,7 @@ def real_valued(solvers, limit):
         matched = sum(total > best - 0.003 for total in totals)
         row = [(f"{name} (best known {best:,.2f}, weights x{factor:.3g}): {matched} of 60 match, the worst "
                 f"{best - min(totals):.2f} short, in {t:.1f} s")]
-        for solver in solvers:
+        for solver in solvers_for(name, solvers):
             scaled = triples.copy()
             scaled[:, 2] = np.rint(scaled[:, 2] * (10 if name.startswith("GKD") else 25))
             total, seconds = (cpsat_max_weight(n, scaled, k, limit, score=triples) if solver == "cpsat"
