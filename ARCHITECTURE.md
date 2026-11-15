@@ -55,17 +55,20 @@ flowchart TB
 
 ## The crates
 
-The Cargo workspace in `crates/` has three members that share one version number.
+Rust code comes in *crates*, Rust's packages. The three in `crates/` form one Cargo *workspace*:
+they are built together and share one version number.
 
-- **`subgraphsearch-core`** is everything that computes, with only `rayon`, `serde` and `thiserror`
-  as dependencies. It is published to crates.io for use from Rust.
+- **`subgraphsearch-core`** is everything that computes. Its only dependencies are `rayon`, which
+  spreads loops across cores, `serde`, which saves and loads data, and `thiserror`, which defines
+  error types. It is published to crates.io, Rust's package index, for use from Rust.
   - `search.rs`: the counting search, for edge counts and weights, whose move loop `Workspace::run`
     drives named steps (`start_experiment`, `choose_move`, `apply_swap`, `list_candidates`,
     `bound_rows`, `collect_best_moves`); `regular.rs`: the degree search, for regular
     subgraphs, cycles and paths (see [ALGORITHM.md](ALGORITHM.md#two-searches));
     `largest.rs`: the search for the largest size of a shape.
   - `graph.rs`: `Graph` (a bit matrix and adjacency lists) and `WeightedGraph` (a byte matrix).
-    Searches are generic over the `SearchGraph` trait, which both implement.
+    Searches are written once for any type that implements the `SearchGraph` *trait*, Rust's
+    form of an interface (much like an abstract base class in Python), and both graph types do.
   - `generate.rs`, `ops.rs`, `layout.rs`: random graphs, operations and products, and the
     force-directed layout behind the drawings.
   - `formats.rs`: every file format. `rng.rs`: xoshiro256++ and the original programs' RANDU
@@ -82,33 +85,47 @@ The extension involves two tools with separate jobs: PyO3 decides what Python ca
 maturin turns the result into something pip can install.
 
 **[PyO3](https://pyo3.rs) is a Rust library: the bindings are Rust code** in
-`crates/subgraphsearch-py/src/lib.rs`, written with its attributes.
-- `#[pyclass(frozen)]` makes `Graph` and `WeightedGraph` Python types holding an `Arc` of the Rust
-  graph. Frozen means immutable, so they need no locking and can be shared across threads.
+`crates/subgraphsearch-py/src/lib.rs`. Its *attributes*, the `#[...]` lines above a type or
+function, generate the code Python needs to create Rust objects and call Rust functions.
+- `#[pyclass(frozen)]` makes `Graph` and `WeightedGraph` Python types, each holding an `Arc` of the
+  Rust graph: a reference-counted pointer, so that copies share one graph, which is freed when the
+  last copy goes. Frozen means immutable, so they need no locking and can be shared across
+  threads.
 - `#[pyfunction]`, with `#[pyo3(signature = ...)]` for keyword arguments and defaults, exposes each
   function. PyO3 converts the arguments (integers, strings, lists, bytes) and the results (tuples
   and lists) on its own, and the `err` helper maps the core's errors to `IOError` and `ValueError`.
 - `#[pymodule] mod _core` lists what the module exports.
-- `py.detach(...)` releases the GIL around every long Rust call.
-- Two Cargo features of PyO3 shape the build: `abi3-py310` compiles against Python's stable ABI, so
-  one compiled module serves every Python from 3.10 on, and `extension-module` leaves Python's own
-  library unlinked, since the interpreter that imports the module provides it. Plain `cargo` cannot
-  link such a module, which is why the crate is not a default workspace member.
+- `py.detach(...)` releases the GIL around every long Rust call. The GIL, Python's global
+  interpreter lock, lets only one thread at a time run Python code, which is why pure Python cannot
+  spread a computation over several cores. A search in Rust touches no Python objects while it runs,
+  so it can give the lock up: other Python threads keep running meanwhile, and the search itself
+  runs on every core through rayon, as Python threads could not.
+- Two Cargo *features*, build options, of PyO3 shape the build. `abi3-py310` compiles against
+  Python's *stable ABI*, the part of Python's C interface that stays compatible from one version to
+  the next, so one compiled module serves every Python from 3.10 on instead of one module per
+  version. `extension-module` leaves Python's own library out of the module, since the interpreter
+  that imports the module already provides it. A module built that way cannot be linked into a
+  standalone program, so plain `cargo build` and `cargo test` skip this crate: it is not one of the
+  workspace's *default members*.
 
 **[maturin](https://www.maturin.rs) is the build tool: the packaging is configuration**, in
 `pyproject.toml` and the release workflow.
-- It is the package's build backend (`[build-system]`), so `uv sync`, `pip install` from source and
-  the release workflow all build through it, calling `cargo` with the right linker flags.
+- It is the package's *build backend* (`[build-system]`), the tool that pip and uv call to build
+  the package from source, so `uv sync`, `pip install` from source and the release workflow all
+  build through it. It calls `cargo` with the options a Python extension needs.
 - `[tool.maturin]` points it at the crate (`manifest-path`) and at the pure-Python package
   (`python-source = "python"`), and names the compiled module `subgraphsearch._core`. maturin puts
   the compiled module inside `python/subgraphsearch`, so a wheel holds a single package with both.
 - The package takes its version from the crate (`dynamic = ["version"]`), so
   `scripts/bump_version.py` changes only the Cargo manifests.
-- In `.github/workflows/release.yml`, `PyO3/maturin-action` builds a wheel per platform: manylinux
-  and musllinux for Linux on x86-64 and ARM, macOS on Intel and Apple silicon, and Windows on x64
-  and ARM, each built on a machine of its own architecture and smoke-tested there (the macOS Intel
-  wheel under Rosetta, the musl wheels in an Alpine container), plus a source distribution that
-  needs a Rust toolchain to install.
+- In `.github/workflows/release.yml`, `PyO3/maturin-action` builds a *wheel*, a ready-to-install
+  package with the compiled module inside, per platform. For Linux there are two kinds, on x86-64
+  and ARM: *manylinux* wheels, built against an old version of glibc, the C library of most
+  distributions, so that they run on any newer one, and *musllinux* wheels for distributions built
+  on the musl C library instead, such as Alpine. Then macOS on Intel and Apple silicon, and Windows
+  on x64 and ARM. Each wheel is built on a machine of its own architecture and smoke-tested there
+  (the macOS Intel wheel under Rosetta, the musl wheels in an Alpine container). A source
+  distribution covers other platforms, and needs a Rust toolchain to install.
 
 To change what Python can call, edit `lib.rs`; to change how the package is built or shipped, edit
 `pyproject.toml` or the release workflow.
@@ -139,10 +156,11 @@ To change what Python can call, edit `lib.rs`; to change how the package is buil
 
 1. `_search.search` checks the arguments, has the core's `search_settings` resolve the kick size
    and tabu tenure for the kind of search, and passes its `SearchParams` to `_core.search`.
-2. The binding reads that object field by field (the `Params` struct, with PyO3's
-   `FromPyObject`) into the core's `SearchParams`, and runs `subgraphsearch_core::search` inside
+2. The binding reads that object field by field into the core's `SearchParams` (the `Params`
+   struct, with PyO3's `FromPyObject`, which copies a Python object's attributes into a Rust
+   struct of the same field names), and runs `subgraphsearch_core::search` inside
    `py.detach`, releasing the GIL, so other Python threads keep running meanwhile.
-3. The core runs the experiments in parallel on rayon's thread pool, each with its own random
+3. The core runs the experiments in parallel on rayon's threads, one per core, each with its own random
    stream derived from the seed, so results depend only on the seed and the settings.
 4. The binding returns the parameters the core used, with the automatic tenure resolved, and each
    experiment as a plain tuple; Python builds the `SearchParams`, `Experiment` and
@@ -158,20 +176,23 @@ form of a result, and `SearchResult.load` reads it as well as Python's own saved
 ## Performance
 
 The time goes into each move's search for the best swaps (`collect_best_moves` and the functions
-it calls), and that work is bound by indirection, not arithmetic: every candidate is reached
+it calls), and that work is bound by memory access, not arithmetic: every candidate is reached
 through `u_list`, then its degree in `sub_degs` and its entry in the adjacency row, at scattered
-positions. Those are gathers, which ARM's vector instructions lack and x86's AVX2 does slowly, so
-wider vectors have little to speed up; and since bounded rows and buckets, most swaps are never
-evaluated at all. A build for the newest instructions of the CPU it runs on
+positions in memory. *SIMD* instructions, which process several values at once, help when the
+values lie side by side; loading scattered ones in one instruction, a *gather*, is something ARM's
+vector instructions cannot do and x86's AVX2 does slowly, so wider vectors have little to speed
+up. And since bounded rows and buckets, most swaps are never evaluated at all. A build for the newest instructions of the CPU it runs on
 (`RUSTFLAGS="-C target-cpu=native"`) ran 0.98 to 1.05 times as fast as the portable build on six
 workloads on an Apple M3, so the wheels lose nothing by targeting baseline CPUs there. Gains come
 from evaluating fewer swaps, not from evaluating them faster; when changing the scan, compare
 builds with alternating runs, since single timings vary by 5% to 10%.
 
-One place could still gain on x86-64. Its baseline target lacks the POPCNT instruction, so
-`count_ones` becomes a sequence of bit operations, in `Graph::from_words` (all pairs of binary
-words, for codes) and `induced_edge_count`. That has not been measured: an x86-64 runner timing
-those against a build for x86-64-v3 would show whether runtime dispatch to POPCNT is worth adding.
+One place could still gain on x86-64. Portable builds target the baseline x86-64 processor, which
+lacks POPCNT, the instruction that counts the 1 bits in a word, so `count_ones` becomes a sequence
+of bit operations. It is used in `Graph::from_words` (all pairs of binary words, for codes) and
+`induced_edge_count`. That has not been measured: an x86-64 runner timing those against a build
+for x86-64-v3, a later baseline that has POPCNT and AVX2, would show whether it is worth adding
+*runtime dispatch*, which chooses the faster code while running, on processors that have it.
 
 ## Conventions
 
@@ -179,12 +200,16 @@ those against a build for x86-64-v3 would show whether runtime dispatch to POPCN
   kick size and tabu tenure (none and 1 for the degree search and the legacy generator) and
   rejects settings a search cannot take; Python and the CLI both call it, so they cannot
   disagree. `SearchParams::new` gives Rust users the counting search's defaults.
-- **Saved results stay loadable.** A new `SearchParams` field needs a serde default equal to the
-  old behavior, and the Python `SearchParams` dataclass a matching default, so older results load
-  as they ran.
+- **Saved results stay loadable.** Results are saved as JSON through
+  [serde](https://serde.rs), Rust's serialization library, and files saved before a field existed
+  lack it, which serde rejects unless the field has a default. So a new `SearchParams` field
+  needs one (`#[serde(default = ...)]`) equal to what searches did before it existed, and the
+  Python `SearchParams` dataclass a matching default, so older results load as they ran. For
+  example, `tabu_tenure` loads as 1, the tenure every search used before it was a setting, though
+  new searches choose theirs automatically.
 - **The legacy generator reproduces the C programs exactly.** Changes to the search must keep
-  `rng="legacy"` byte-identical; the golden tests in `crates/subgraphsearch-cli/tests/golden.rs`
-  check it against recorded output ([PORTING.md](PORTING.md)).
+  `rng="legacy"` byte-identical; the *golden tests* in `crates/subgraphsearch-cli/tests/golden.rs`
+  compare its output with output recorded from the original programs ([PORTING.md](PORTING.md)).
 - **Speed-ups must not change results.** The same seed gives the same experiments, so an
   optimization must make exactly the same moves. The move scan in `search.rs` has three layers
   that skip work without changing it: bounds that rule out whole rows, buckets of columns by
@@ -196,8 +221,8 @@ those against a build for x86-64-v3 would show whether runtime dispatch to POPCN
 
 A new setting touches every layer, in this order:
 
-1. The core: a `SearchParams` field with a serde default, used by the search, and unit tests; if
-   its default depends on the kind of search, decide it in `search_settings`.
+1. The core: a `SearchParams` field with a serde default (see Conventions), used by the search,
+   and unit tests; if its default depends on the kind of search, decide it in `search_settings`.
 2. The binding: a field of the `Params` struct and an entry in `params_dict`, in
    `crates/subgraphsearch-py/src/lib.rs`.
 3. Python: a field of the `SearchParams` dataclass with the same name and default, the argument of
