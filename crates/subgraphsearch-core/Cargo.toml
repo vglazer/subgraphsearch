@@ -7,7 +7,6 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 documentation = "https://docs.rs/subgraphsearch-core"
 keywords = ["graph", "subgraph", "clique", "tabu-search", "combinatorics"]
 categories = ["algorithms", "mathematics", "science"]

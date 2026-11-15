@@ -182,8 +182,8 @@ impl Incidence {
         let mut b = GraphBuilder::new(n);
         for i in 0..n {
             let members: Vec<usize> = (0..self.symbols).filter(|&s| self.sets[i][s]).collect();
-            for j in i + 1..n {
-                if members.iter().filter(|&&s| self.sets[j][s]).count() == k {
+            for (j, other) in self.sets.iter().enumerate().skip(i + 1) {
+                if members.iter().filter(|&&s| other[s]).count() == k {
                     b.set(i, j, true);
                 }
             }

@@ -349,9 +349,9 @@ impl Workspace {
     /// [`Workspace::partition`], which every experiment starts with.)
     fn reset(&mut self, graph: &Graph, params: &SearchParams) {
         let v = self.v;
-        for i in 0..v {
-            self.adj_list[i].clear();
-            self.adj_list[i].extend_from_slice(graph.neighbors(i));
+        for (i, list) in self.adj_list.iter_mut().enumerate().take(v) {
+            list.clear();
+            list.extend_from_slice(graph.neighbors(i));
         }
         self.sub_ch.fill(0);
         self.opt_ch.fill(0);
