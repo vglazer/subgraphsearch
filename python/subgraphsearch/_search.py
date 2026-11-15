@@ -219,11 +219,24 @@ class SearchResult:
 DEFAULT_KICK_SIZE = 4
 
 
+def _params(used: dict) -> SearchParams:
+    """The parameters the core reports a search used, as a :class:`SearchParams`."""
+    return SearchParams(**used)
+
+
+def _experiments(raw) -> list[Experiment]:
+    """The core's (best_conflict, moves, success, vertices, trace) tuples as :class:`Experiment` objects."""
+    return [
+        Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))
+        for i, (c, m, s, v, t) in enumerate(raw)
+    ]
+
+
 def auto_tabu_tenure(size: int, vertices: int) -> int:
     """The tabu tenure edge-count and weight searches of ``size`` of a graph's ``vertices`` use unless
     ``tabu_tenure`` is given: a tenth of the size or an eightieth of the vertices left outside it, whichever is
     smaller, from 1 to 20. Small graphs and small subgraphs get 1, the original programs' tenure."""
-    return max(1, min(int(size) // 10, max(0, int(vertices) - int(size)) // 80, 20))
+    return _core.auto_tabu_tenure(int(size), int(vertices))
 
 
 def _settings(kick_size: int | None, tabu_tenure: int | str | None, degree_search: bool, rng: str) -> tuple[int, int]:
@@ -333,20 +346,10 @@ def search(
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
         int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
-        bool(connected), bool(path), endpoints, int(kick_size), int(kick_ban),
-        auto_tabu_tenure(size, graph.n) if tabu_tenure == 0 else tabu_tenure,
+        bool(connected), bool(path), endpoints, kick_size, int(kick_ban), tabu_tenure,
     )
-    raw = _core.search(
-        graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq,
-        params.div_dur, params.seed, rng, params.trace, params.aspiration, params.degree, params.two_phase,
-        params.connected, params.path, None if endpoints is None else list(endpoints), params.kick_size,
-        params.kick_ban, tabu_tenure,
-    )
-    exps = [
-        Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))
-        for i, (c, m, s, v, t) in enumerate(raw)
-    ]
-    return SearchResult(graph, params, exps)
+    used, raw = _core.search(graph._g, params)
+    return SearchResult(graph, _params(used), _experiments(raw))
 
 
 def sweep(graph: Graph | WeightedGraph, size: int, edges: int | None, parameter: str, values: Sequence, **kwargs) -> dict:
@@ -446,24 +449,12 @@ def largest(
         endpoints = tuple(int(v) for v in endpoints)
         if len(endpoints) != 2:
             raise ValueError("endpoints takes two vertices, the ends of the path")
-    _, sizes = _core.largest(
-        graph._g, shape, None if start is None else int(start), int(lookahead), list(fixed),
-        None if endpoints is None else list(endpoints), int(experiments), int(max_moves), int(div_freq),
-        int(div_dur), int(seed), rng, bool(trace), bool(aspiration), int(kick_size), int(kick_ban), tabu_tenure,
+    base = SearchParams(
+        2, 0, fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng, bool(trace),
+        bool(aspiration), endpoints=endpoints, kick_size=kick_size, kick_ban=int(kick_ban), tabu_tenure=tabu_tenure,
     )
-    results = {}
-    for size, edges, raw in sizes:
-        params = SearchParams(
-            size, edges, fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng,
-            bool(trace), bool(aspiration), 2 if shape == "cycle" else None, False, shape in ("cycle", "tree"),
-            shape == "path", endpoints if shape == "path" else None, int(kick_size), int(kick_ban),
-            auto_tabu_tenure(size, graph.n) if tabu_tenure == 0 else tabu_tenure,
-        )
-        exps = [
-            Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))
-            for i, (c, m, s, v, t) in enumerate(raw)
-        ]
-        results[size] = SearchResult(graph, params, exps)
+    _, sizes = _core.largest(graph._g, shape, None if start is None else int(start), int(lookahead), base)
+    results = {size: SearchResult(graph, _params(used), _experiments(raw)) for size, used, raw in sizes}
     return LargestResult(graph, shape, results)
 
 

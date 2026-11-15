@@ -649,6 +649,28 @@ fn scan_row<R: AdjacencyRow>(
     *opt_mov = count;
 }
 
+/// The candidate columns for a move, as `Workspace::list_candidates` lists them in `u_list`: how
+/// many are active (they come first) and how many in all, and the range of their degrees into the
+/// subgraph.
+struct Columns {
+    active: usize,
+    all: usize,
+    active_range: (i64, i64),
+    all_range: (i64, i64),
+}
+
+impl Columns {
+    /// The range of degrees among the first `w_cols` columns: all of them, or the active ones.
+    #[inline]
+    fn range(&self, w_cols: usize) -> (i64, i64) {
+        if w_cols == self.all {
+            self.all_range
+        } else {
+            self.active_range
+        }
+    }
+}
+
 /// The candidate columns bucketed by their degree into the subgraph, so that a row can visit only
 /// the columns whose degree lets a swap reach a given value. Results are exactly those of scanning
 /// the columns in order: buckets keep the columns' order, and ties are listed by position.
@@ -1112,25 +1134,100 @@ impl Workspace {
 
     /// One experiment. Mirrors the body of the experiment loop in `sub_search.c` (or, with
     /// `params.aspiration`, `asub_search.c`) statement by statement, so that random numbers are
-    /// drawn in exactly the same order.
+    /// drawn in exactly the same order. Each move chooses a swap, makes it, and then finds the
+    /// best swaps for the next move: listing the candidate columns, bounding the rows, and
+    /// collecting the swaps of least conflict.
     fn run<G: SearchGraph, R: SearchRng>(
         &mut self,
         graph: &G,
         params: &SearchParams,
         rng: &mut R,
     ) -> Experiment {
-        let v = graph.num_vertices();
-        let (v_sub, v_rest, e) = (self.v_sub, self.v_rest, self.e);
         let mut trace = params
             .record_trace
             .then(|| Vec::with_capacity(params.max_moves));
+        // signed difference between the subgraph's edge count (or weight) and the target
+        let mut new_min_val = self.start_experiment(graph, params, rng);
+        let mut g_opt_val = self.e;
+        let mut old_min_val = self.e;
+        let (mut opt_mov, mut asp_mov) = (0usize, 0usize);
+        let mut success = false;
+        let mut j = 0;
+        while j < params.max_moves {
+            let (sub_vert, rest_vert) =
+                self.choose_move(graph, params, j, new_min_val, opt_mov, asp_mov, rng);
+            let rest_col = self.vert_inds[rest_vert];
+            new_min_val += self.apply_swap(graph, sub_vert, rest_vert, j);
 
+            let mut obj_val = new_min_val.abs();
+            if let Some(c) = self.components.as_mut() {
+                let members = params.fixed.iter().chain(&self.sub_verts).copied();
+                obj_val += c.extra(members, &self.sub_ch, |u| graph.neighbors(u));
+            }
+            if let Some(t) = trace.as_mut() {
+                t.push(obj_val.min(u32::MAX as i64) as u32);
+            }
+            if obj_val < g_opt_val {
+                g_opt_val = obj_val;
+                self.opt_ch.copy_from_slice(&self.sub_ch);
+            }
+            if obj_val == 0 {
+                success = true;
+                break;
+            }
+
+            let cols = self.list_candidates(params, j, sub_vert, rest_col);
+            // if the edge count changed, every row gets a full scan
+            if new_min_val != old_min_val {
+                for k in 0..self.v_sub {
+                    self.u_ch[self.sub_verts[k]] = 1;
+                }
+            }
+            self.bound_rows(graph, new_min_val, j, rest_vert, &cols);
+            opt_mov = self.collect_best_moves(graph, j, &cols);
+            if params.aspiration {
+                asp_mov = self.aspiration_moves(graph, new_min_val, g_opt_val, sub_vert, rest_vert);
+            }
+            for k in 0..cols.active {
+                self.u_ch[self.u_list[k]] = 0;
+            }
+            old_min_val = new_min_val;
+            j += 1;
+        }
+
+        let vertices = (0..graph.num_vertices())
+            .filter(|&k| self.opt_ch[k] != 0)
+            .collect();
+        // return the free subgraph vertices to the outside for the next experiment
+        for k in 0..self.v_sub {
+            self.sub_ch[self.sub_verts[k]] = 0;
+        }
+        Experiment {
+            best_conflict: g_opt_val,
+            moves: j,
+            success,
+            vertices,
+            trace,
+        }
+    }
+
+    /// Starts an experiment: a random subgraph, every vertex's degree into it, the outside
+    /// vertices listed, and the kick, tabu and bucket state cleared. Returns the signed difference
+    /// between the subgraph's edge count (or weight) and the target.
+    #[inline]
+    fn start_experiment<G: SearchGraph, R: SearchRng>(
+        &mut self,
+        graph: &G,
+        params: &SearchParams,
+        rng: &mut R,
+    ) -> i64 {
+        let v = graph.num_vertices();
         self.sub_degs.fill(0);
         self.u_ch.fill(0);
 
         // generate a new random subgraph
         let mut j = self.rand_perm.len();
-        for k in 0..v_sub {
+        for k in 0..self.v_sub {
             let index = rng.below(j as u32) as usize;
             let vert = self.rand_perm[index];
             j -= 1;
@@ -1155,317 +1252,306 @@ impl Workspace {
             }
         }
 
-        // signed difference between the subgraph's edge count and the target
-        let mut new_min_val: i64 = (0..v)
-            .filter(|&j| self.sub_ch[j] != 0)
-            .map(|j| i64::from(self.sub_degs[j]))
-            .sum::<i64>()
-            / 2
-            - params.edges;
-
-        let mut g_opt_val = e;
-        let mut old_min_val = e;
-        let mut opt_mov = 0usize;
-        let mut asp_mov = 0usize;
-        let mut success = false;
-        let kick = params.kick_size > 0;
-        if kick {
+        if params.kick_size > 0 {
             self.banned_until.fill(0);
             self.kick_queue.clear();
         }
-        let tenure = self.tenure;
-        if tenure > 1 {
+        if self.tenure > 1 {
             self.tabu_in.fill(0);
             self.tabu_out.fill(0);
         }
         self.buckets.reset();
-        let mut j = 0;
-        while j < params.max_moves {
-            // with kicks on, a region kick starts each diversification cycle after the first, whose
-            // random moves are kept (so a search shorter than div_freq moves is the same either way)
-            if kick && j > 0 && params.div_dur > 0 && j % params.div_freq == 0 {
-                self.kick_queue = self.region(graph, params.kick_size, rng);
-            }
-            let mut kicked = None;
-            while let Some(s) = self.kick_queue.pop() {
-                if self.sub_ch[s] != 0 {
-                    if let Some(r) = self.best_swap_in(graph, new_min_val, s, j, rng) {
-                        self.banned_until[s] = j + params.kick_ban;
-                        kicked = Some((s, r));
-                    }
-                    break;
+
+        (0..v)
+            .filter(|&j| self.sub_ch[j] != 0)
+            .map(|j| i64::from(self.sub_degs[j]))
+            .sum::<i64>()
+            / 2
+            - params.edges
+    }
+
+    /// Chooses the swap for move `j`: a region kick's next move, a random (diversifying) move, an
+    /// aspiration move, or one of the `opt_mov` best moves.
+    #[inline]
+    #[allow(clippy::too_many_arguments)]
+    fn choose_move<G: SearchGraph, R: SearchRng>(
+        &mut self,
+        graph: &G,
+        params: &SearchParams,
+        j: usize,
+        new_min_val: i64,
+        opt_mov: usize,
+        asp_mov: usize,
+        rng: &mut R,
+    ) -> (usize, usize) {
+        let kick = params.kick_size > 0;
+        // with kicks on, a region kick starts each diversification cycle after the first, whose
+        // random moves are kept (so a search shorter than div_freq moves is the same either way)
+        if kick && j > 0 && params.div_dur > 0 && j.is_multiple_of(params.div_freq) {
+            self.kick_queue = self.region(graph, params.kick_size, rng);
+        }
+        while let Some(s) = self.kick_queue.pop() {
+            if self.sub_ch[s] != 0 {
+                if let Some(r) = self.best_swap_in(graph, new_min_val, s, j, rng) {
+                    self.banned_until[s] = j + params.kick_ban;
+                    return (s, r);
                 }
-            }
-            // choose a kick move, a random (diversifying) move, an aspiration move, or a locally
-            // optimal one
-            let (sub_vert, rest_vert) = if let Some(swap) = kicked {
-                swap
-            } else if ((!kick || j < params.div_freq) && j % params.div_freq < params.div_dur)
-                || opt_mov == 0
-            {
-                let s = self.sub_verts[rng.below(v_sub as u32) as usize];
-                let r = self.rest_verts[rng.below(v_rest as u32) as usize];
-                (s, r)
-            } else if asp_mov > 0 {
-                let index = rng.below(asp_mov as u32) as usize;
-                (self.sub_asp[index], self.rest_asp[index])
-            } else {
-                let index = rng.below(opt_mov as u32) as usize;
-                (self.sub_opt[index], self.rest_opt[index])
-            };
-            let sub_row = self.vert_inds[sub_vert];
-            let rest_col = self.vert_inds[rest_vert];
-
-            new_min_val += i64::from(self.sub_degs[rest_vert])
-                - i64::from(self.sub_degs[sub_vert])
-                - graph.edge_value(sub_vert, rest_vert);
-            let mut obj_val = new_min_val.abs();
-
-            // update subgraph degrees; mark vertices adjacent to exactly one of the two swapped
-            for &x in graph.neighbors(sub_vert) {
-                let x = x as usize;
-                self.sub_degs[x] -= graph.neighbor_value(sub_vert, x) as i32;
-                self.u_ch[x] = 1;
-            }
-            for &x in graph.neighbors(rest_vert) {
-                let x = x as usize;
-                self.sub_degs[x] += graph.neighbor_value(rest_vert, x) as i32;
-                self.u_ch[x] = 1 - self.u_ch[x];
-            }
-
-            self.sub_ch[sub_vert] = 0;
-            self.sub_ch[rest_vert] = 1;
-            if tenure > 1 {
-                self.tabu_in[sub_vert] = j + tenure;
-                self.tabu_out[rest_vert] = j + tenure;
-            }
-
-            self.sub_verts[sub_row] = rest_vert;
-            self.vert_inds[rest_vert] = sub_row;
-            self.rest_verts[rest_col] = sub_vert;
-            self.vert_inds[sub_vert] = rest_col;
-
-            if let Some(c) = self.components.as_mut() {
-                let members = params.fixed.iter().chain(&self.sub_verts).copied();
-                obj_val += c.extra(members, &self.sub_ch, |u| graph.neighbors(u));
-            }
-            if let Some(t) = trace.as_mut() {
-                t.push(obj_val.min(u32::MAX as i64) as u32);
-            }
-
-            if obj_val < g_opt_val {
-                g_opt_val = obj_val;
-                self.opt_ch.copy_from_slice(&self.sub_ch);
-            }
-
-            if obj_val == 0 {
-                success = true;
                 break;
             }
+        }
+        if ((!kick || j < params.div_freq) && j % params.div_freq < params.div_dur) || opt_mov == 0
+        {
+            let s = self.sub_verts[rng.below(self.v_sub as u32) as usize];
+            let r = self.rest_verts[rng.below(self.v_rest as u32) as usize];
+            (s, r)
+        } else if asp_mov > 0 {
+            let index = rng.below(asp_mov as u32) as usize;
+            (self.sub_asp[index], self.rest_asp[index])
+        } else {
+            let index = rng.below(opt_mov as u32) as usize;
+            (self.sub_opt[index], self.rest_opt[index])
+        }
+    }
 
-            // list candidate columns: active ones from the front, inactive ones from the back (and,
-            // with a region kick, none that are banned)
-            let mut u_cols = 0;
-            self.u_ch[sub_vert] = 0;
-            let banned = |w: usize| {
-                (kick && self.banned_until[w] > j) || (tenure > 1 && self.tabu_in[w] > j)
+    /// Swaps `sub_vert` out of the subgraph and `rest_vert` in at move `j`: degrees, the marks of
+    /// vertices adjacent to exactly one of the two, membership, tabu stamps and the vertex lists.
+    /// Returns the change in the edge count (or weight).
+    #[inline]
+    fn apply_swap<G: SearchGraph>(
+        &mut self,
+        graph: &G,
+        sub_vert: usize,
+        rest_vert: usize,
+        j: usize,
+    ) -> i64 {
+        let sub_row = self.vert_inds[sub_vert];
+        let rest_col = self.vert_inds[rest_vert];
+        let change = i64::from(self.sub_degs[rest_vert])
+            - i64::from(self.sub_degs[sub_vert])
+            - graph.edge_value(sub_vert, rest_vert);
+
+        // update subgraph degrees; mark vertices adjacent to exactly one of the two swapped
+        for &x in graph.neighbors(sub_vert) {
+            let x = x as usize;
+            self.sub_degs[x] -= graph.neighbor_value(sub_vert, x) as i32;
+            self.u_ch[x] = 1;
+        }
+        for &x in graph.neighbors(rest_vert) {
+            let x = x as usize;
+            self.sub_degs[x] += graph.neighbor_value(rest_vert, x) as i32;
+            self.u_ch[x] = 1 - self.u_ch[x];
+        }
+
+        self.sub_ch[sub_vert] = 0;
+        self.sub_ch[rest_vert] = 1;
+        if self.tenure > 1 {
+            self.tabu_in[sub_vert] = j + self.tenure;
+            self.tabu_out[rest_vert] = j + self.tenure;
+        }
+
+        self.sub_verts[sub_row] = rest_vert;
+        self.vert_inds[rest_vert] = sub_row;
+        self.rest_verts[rest_col] = sub_vert;
+        self.vert_inds[sub_vert] = rest_col;
+        change
+    }
+
+    /// Lists the candidate columns for the next move in `u_list`: the active ones (adjacent to
+    /// exactly one of the two vertices just swapped) first, then the others, leaving out the vertex
+    /// just swapped out (at `rest_col`) and any a region kick or the tabu tenure bans, and notes
+    /// the range of their subgraph degrees. The inactive ones fill the buffer from its end, then
+    /// move up to follow the active ones, in the same order as if they had been counted first.
+    #[inline]
+    fn list_candidates(
+        &mut self,
+        params: &SearchParams,
+        j: usize,
+        sub_vert: usize,
+        rest_col: usize,
+    ) -> Columns {
+        let (kick, tenure) = (params.kick_size > 0, self.tenure);
+        let v_rest = self.v_rest;
+        let mut cols = Columns {
+            active: 0,
+            all: 0,
+            active_range: (i64::MAX, i64::MIN),
+            all_range: (i64::MAX, i64::MIN),
+        };
+        self.u_ch[sub_vert] = 0;
+        let mut temp = v_rest;
+        for k in 0..v_rest {
+            let vert = self.rest_verts[k];
+            if k == rest_col
+                || (kick && self.banned_until[vert] > j)
+                || (tenure > 1 && self.tabu_in[vert] > j)
+            {
+                if tenure > 1 {
+                    self.u_ch[vert] = 0;
+                }
+                continue;
+            }
+            let d = i64::from(self.sub_degs[vert]);
+            cols.all_range = (cols.all_range.0.min(d), cols.all_range.1.max(d));
+            if self.u_ch[vert] != 0 {
+                self.u_list[cols.active] = vert;
+                cols.active += 1;
+                self.u_ch[vert] = 0;
+                cols.active_range = (cols.active_range.0.min(d), cols.active_range.1.max(d));
+            } else {
+                temp -= 1;
+                self.u_list[temp] = vert;
+            }
+        }
+        cols.all = cols.active + (v_rest - temp);
+        self.u_list.copy_within(temp..v_rest, cols.active);
+        cols
+    }
+
+    /// Lists in `rows` the subgraph vertices whose swaps the next move may make, other than the
+    /// one just swapped in and any the tabu tenure holds: each with its candidate columns (all of
+    /// them for rows marked for a full scan, else the active ones), the constant of its swaps'
+    /// values, and a lower bound on its best value. Swapping `vert` for `t` has value
+    /// |degree - w + d|, with d = sub_degs[t] in the columns' range and w, the edge's value, from 0
+    /// to the row's largest.
+    #[inline]
+    fn bound_rows<G: SearchGraph>(
+        &mut self,
+        graph: &G,
+        new_min_val: i64,
+        j: usize,
+        rest_vert: usize,
+        cols: &Columns,
+    ) {
+        self.u_ch[rest_vert] = 0;
+        self.rows.clear();
+        for k in 0..self.v_sub {
+            let vert = self.sub_verts[k];
+            if vert == rest_vert {
+                continue;
+            }
+            if self.tenure > 1 && self.tabu_out[vert] > j {
+                self.u_ch[vert] = 0;
+                continue;
+            }
+            let w_cols = if self.u_ch[vert] != 0 {
+                self.u_ch[vert] = 0;
+                cols.all
+            } else {
+                cols.active
             };
-            // ... noting the range of subgraph degrees among the active and among all of them. The
-            // inactive ones fill the buffer from its end, then move up to follow the active ones,
-            // in the same order as if their number had been counted first.
-            let (mut act_lo, mut act_hi) = (i64::MAX, i64::MIN);
-            let (mut all_lo, mut all_hi) = (i64::MAX, i64::MIN);
-            let mut temp = v_rest;
-            for k in 0..v_rest {
-                if k == rest_col || banned(self.rest_verts[k]) {
-                    if tenure > 1 {
-                        self.u_ch[self.rest_verts[k]] = 0;
-                    }
-                    continue;
-                }
-                let vert = self.rest_verts[k];
-                let d = i64::from(self.sub_degs[vert]);
-                all_lo = all_lo.min(d);
-                all_hi = all_hi.max(d);
-                if self.u_ch[vert] != 0 {
-                    self.u_list[u_cols] = vert;
-                    u_cols += 1;
-                    self.u_ch[vert] = 0;
-                    act_lo = act_lo.min(d);
-                    act_hi = act_hi.max(d);
-                } else {
-                    temp -= 1;
-                    self.u_list[temp] = vert;
-                }
+            if w_cols == 0 {
+                continue;
             }
-            let m = u_cols + (v_rest - temp);
-            self.u_list.copy_within(temp..v_rest, u_cols);
-
-            // if the edge count changed, every row gets a full scan
-            if new_min_val != old_min_val {
-                for k in 0..v_sub {
-                    self.u_ch[self.sub_verts[k]] = 1;
-                }
-            }
-
-            // The rows to scan, each with a lower bound on its best value: swapping `vert` for
-            // `t` has value |degree - w + d| with d = sub_degs[t] in the columns' range and w, the
-            // edge's value, from 0 to the row's largest.
-            self.u_ch[rest_vert] = 0;
-            self.rows.clear();
-            for k in 0..v_sub {
-                let vert = self.sub_verts[k];
-                if vert == rest_vert {
-                    continue;
-                }
-                if tenure > 1 && self.tabu_out[vert] > j {
-                    self.u_ch[vert] = 0;
-                    continue;
-                }
-                let (w_cols, lo, hi) = if self.u_ch[vert] != 0 {
-                    self.u_ch[vert] = 0;
-                    (m, all_lo, all_hi)
-                } else {
-                    (u_cols, act_lo, act_hi)
-                };
-                if w_cols == 0 {
-                    continue;
-                }
-                let degree = new_min_val - i64::from(self.sub_degs[vert]);
-                let (low, high) = (degree + lo - graph.max_row_value(vert), degree + hi);
-                let bound = if high < 0 {
-                    -high
-                } else if low > 0 {
-                    low
-                } else {
-                    0
-                };
-                #[cfg(test)]
-                let bound = if NO_ROW_SKIPPING.load(std::sync::atomic::Ordering::Relaxed) {
-                    0
-                } else {
-                    bound
-                };
-                self.rows.push((vert, w_cols, degree, bound));
-            }
-
-            // Collect the optimal moves (at most v of them), exactly the ones a scan of every row
-            // in order would: first find the best value, scanning the most promising row first and
-            // skipping rows that cannot beat it, then list the moves that reach it, in row order.
-            // When the columns' degrees span a narrow enough range, they are bucketed by degree,
-            // and each row visits only the buckets that can hold its best moves.
-            let bucketed = m > 0
-                && j >= self.buckets.paused_until
-                && self
-                    .buckets
-                    .build(&self.u_list[..m], &self.sub_degs, all_lo, all_hi);
+            let (lo, hi) = cols.range(w_cols);
+            let degree = new_min_val - i64::from(self.sub_degs[vert]);
+            let (low, high) = (degree + lo - graph.max_row_value(vert), degree + hi);
+            let bound = if high < 0 {
+                -high
+            } else if low > 0 {
+                low
+            } else {
+                0
+            };
             #[cfg(test)]
-            let bucketed = bucketed && !NO_ROW_SKIPPING.load(std::sync::atomic::Ordering::Relaxed);
-            let mut opt_val = e;
-            if let Some(first) = (0..self.rows.len()).min_by_key(|&i| self.rows[i].3) {
-                for i in std::iter::once(first).chain((0..self.rows.len()).filter(|&i| i != first))
-                {
-                    let (vert, w_cols, degree, bound) = self.rows[i];
-                    if bound < opt_val {
-                        let row = graph.adjacency_row(vert);
-                        opt_val = if bucketed {
-                            let (lo, hi) = if w_cols == m {
-                                (all_lo, all_hi)
-                            } else {
-                                (act_lo, act_hi)
-                            };
-                            self.buckets.row_min(
-                                row,
-                                &self.u_list,
-                                w_cols,
-                                (lo, hi),
-                                degree,
-                                graph.max_row_value(vert),
-                                bound,
-                                opt_val,
-                            )
-                        } else {
-                            row_min(
-                                row,
-                                &self.u_list[..w_cols],
-                                &self.sub_degs,
-                                degree,
-                                bound,
-                                opt_val,
-                            )
-                        };
-                    }
-                }
-            }
-            opt_mov = 0;
-            for i in 0..self.rows.len() {
+            let bound = if NO_ROW_SKIPPING.load(std::sync::atomic::Ordering::Relaxed) {
+                0
+            } else {
+                bound
+            };
+            self.rows.push((vert, w_cols, degree, bound));
+        }
+    }
+
+    /// Collects the optimal moves (at most v of them) into `sub_opt`/`rest_opt` and returns how
+    /// many: exactly the ones a scan of every row in order would. It first finds the best value,
+    /// scanning the most promising row first and skipping rows that cannot beat it, then lists the
+    /// moves that reach it, in row order. When the columns' degrees span a narrow enough range,
+    /// they are bucketed by degree, and each row visits only the buckets that can hold its best
+    /// moves.
+    #[inline]
+    fn collect_best_moves<G: SearchGraph>(&mut self, graph: &G, j: usize, cols: &Columns) -> usize {
+        let m = cols.all;
+        let bucketed = m > 0
+            && j >= self.buckets.paused_until
+            && self.buckets.build(
+                &self.u_list[..m],
+                &self.sub_degs,
+                cols.all_range.0,
+                cols.all_range.1,
+            );
+        #[cfg(test)]
+        let bucketed = bucketed && !NO_ROW_SKIPPING.load(std::sync::atomic::Ordering::Relaxed);
+
+        let mut opt_val = self.e;
+        if let Some(first) = (0..self.rows.len()).min_by_key(|&i| self.rows[i].3) {
+            for i in std::iter::once(first).chain((0..self.rows.len()).filter(|&i| i != first)) {
                 let (vert, w_cols, degree, bound) = self.rows[i];
-                if bound <= opt_val {
+                if bound < opt_val {
                     let row = graph.adjacency_row(vert);
-                    let (lo, hi) = if w_cols == m {
-                        (all_lo, all_hi)
-                    } else {
-                        (act_lo, act_hi)
-                    };
-                    if !(bucketed
-                        && self.buckets.collect_row(
+                    opt_val = if bucketed {
+                        self.buckets.row_min(
                             row,
                             &self.u_list,
                             w_cols,
-                            (lo, hi),
+                            cols.range(w_cols),
                             degree,
                             graph.max_row_value(vert),
+                            bound,
                             opt_val,
-                            vert,
-                            &mut opt_mov,
-                            &mut self.sub_opt,
-                            &mut self.rest_opt,
-                        ))
-                    {
-                        scan_row(
+                        )
+                    } else {
+                        row_min(
                             row,
                             &self.u_list[..w_cols],
                             &self.sub_degs,
                             degree,
-                            vert,
+                            bound,
                             opt_val,
-                            &mut opt_mov,
-                            &mut self.sub_opt,
-                            &mut self.rest_opt,
-                        );
-                    }
+                        )
+                    };
                 }
             }
-
-            if bucketed {
-                self.buckets.review(j);
-            }
-
-            if params.aspiration {
-                asp_mov = self.aspiration_moves(graph, new_min_val, g_opt_val, sub_vert, rest_vert);
-            }
-
-            for k in 0..u_cols {
-                self.u_ch[self.u_list[k]] = 0;
-            }
-            old_min_val = new_min_val;
-            j += 1;
         }
 
-        let vertices = (0..v).filter(|&k| self.opt_ch[k] != 0).collect();
-
-        // return the free subgraph vertices to the outside for the next experiment
-        for k in 0..v_sub {
-            self.sub_ch[self.sub_verts[k]] = 0;
+        let mut opt_mov = 0;
+        for i in 0..self.rows.len() {
+            let (vert, w_cols, degree, bound) = self.rows[i];
+            if bound > opt_val {
+                continue;
+            }
+            let row = graph.adjacency_row(vert);
+            let collected = bucketed
+                && self.buckets.collect_row(
+                    row,
+                    &self.u_list,
+                    w_cols,
+                    cols.range(w_cols),
+                    degree,
+                    graph.max_row_value(vert),
+                    opt_val,
+                    vert,
+                    &mut opt_mov,
+                    &mut self.sub_opt,
+                    &mut self.rest_opt,
+                );
+            if !collected {
+                scan_row(
+                    row,
+                    &self.u_list[..w_cols],
+                    &self.sub_degs,
+                    degree,
+                    vert,
+                    opt_val,
+                    &mut opt_mov,
+                    &mut self.sub_opt,
+                    &mut self.rest_opt,
+                );
+            }
         }
-
-        Experiment {
-            best_conflict: g_opt_val,
-            moves: j,
-            success,
-            vertices,
-            trace,
+        if bucketed {
+            self.buckets.review(j);
         }
+        opt_mov
     }
 }
 

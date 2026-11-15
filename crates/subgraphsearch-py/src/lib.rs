@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyDict, PyTuple};
 use subgraphsearch_core::formats::{self, Format, WriteOptions};
 use subgraphsearch_core::rng::{Randu, RngKind, Xoshiro};
 use subgraphsearch_core::{
@@ -497,13 +497,10 @@ fn incidence_graph(
 
 type ExperimentTuple = (i64, usize, bool, Vec<usize>, Option<Vec<u32>>);
 
-/// Runs a search; returns one (best_conflict, moves, success, vertices, trace) per experiment.
-#[pyfunction]
-#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration = false, degree = None, two_phase = false, connected = false, path = false, endpoints = None, kick_size = 0, kick_ban = 20, tabu_tenure = 1))]
-#[allow(clippy::too_many_arguments)]
-fn search(
-    py: Python<'_>,
-    graph: &Bound<'_, PyAny>,
+/// The Python package's `SearchParams`, read attribute by attribute. A `tabu_tenure` of 0 asks for
+/// the automatic tenure.
+#[derive(FromPyObject)]
+struct Params {
     size: usize,
     edges: i64,
     fixed: Vec<usize>,
@@ -512,7 +509,7 @@ fn search(
     div_freq: usize,
     div_dur: usize,
     seed: i64,
-    rng: &str,
+    rng: String,
     trace: bool,
     aspiration: bool,
     degree: Option<i64>,
@@ -523,27 +520,84 @@ fn search(
     kick_size: usize,
     kick_ban: usize,
     tabu_tenure: usize,
-) -> PyResult<Vec<ExperimentTuple>> {
-    let params = SearchParams {
-        size,
-        edges,
-        fixed,
-        experiments,
-        max_moves,
-        div_freq,
-        div_dur,
-        kick_size,
-        kick_ban,
-        tabu_tenure,
-        seed,
-        rng: parse(rng)?,
-        record_trace: trace,
-        aspiration,
-        connected,
-        path,
-        endpoints,
-        regular: degree.map(|degree| subgraphsearch_core::Regular { degree, two_phase }),
-    };
+}
+
+impl Params {
+    fn core(self) -> PyResult<SearchParams> {
+        Ok(SearchParams {
+            size: self.size,
+            edges: self.edges,
+            fixed: self.fixed,
+            experiments: self.experiments,
+            max_moves: self.max_moves,
+            div_freq: self.div_freq,
+            div_dur: self.div_dur,
+            kick_size: self.kick_size,
+            kick_ban: self.kick_ban,
+            tabu_tenure: self.tabu_tenure,
+            seed: self.seed,
+            rng: parse(&self.rng)?,
+            record_trace: self.trace,
+            aspiration: self.aspiration,
+            connected: self.connected,
+            path: self.path,
+            endpoints: self.endpoints,
+            regular: self.degree.map(|degree| subgraphsearch_core::Regular {
+                degree,
+                two_phase: self.two_phase,
+            }),
+        })
+    }
+}
+
+/// The parameters a search used, as keyword arguments of the Python package's `SearchParams`.
+fn params_dict<'py>(py: Python<'py>, p: &SearchParams) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("size", p.size)?;
+    d.set_item("edges", p.edges)?;
+    d.set_item("fixed", PyTuple::new(py, &p.fixed)?)?;
+    d.set_item("experiments", p.experiments)?;
+    d.set_item("max_moves", p.max_moves)?;
+    d.set_item("div_freq", p.div_freq)?;
+    d.set_item("div_dur", p.div_dur)?;
+    d.set_item("seed", p.seed)?;
+    d.set_item(
+        "rng",
+        match p.rng {
+            RngKind::Legacy => "legacy",
+            RngKind::Xoshiro => "xoshiro",
+        },
+    )?;
+    d.set_item("trace", p.record_trace)?;
+    d.set_item("aspiration", p.aspiration)?;
+    d.set_item("degree", p.regular.map(|r| r.degree))?;
+    d.set_item("two_phase", p.regular.is_some_and(|r| r.two_phase))?;
+    d.set_item("connected", p.connected)?;
+    d.set_item("path", p.path)?;
+    d.set_item("endpoints", p.endpoints.map(|[s, t]| (s, t)))?;
+    d.set_item("kick_size", p.kick_size)?;
+    d.set_item("kick_ban", p.kick_ban)?;
+    d.set_item("tabu_tenure", p.tabu_tenure)?;
+    Ok(d)
+}
+
+fn experiment_tuples(experiments: Vec<subgraphsearch_core::Experiment>) -> Vec<ExperimentTuple> {
+    experiments
+        .into_iter()
+        .map(|e| (e.best_conflict, e.moves, e.success, e.vertices, e.trace))
+        .collect()
+}
+
+/// Runs a search with the Python package's `SearchParams`; returns the parameters it used (as
+/// `SearchParams` keyword arguments) and one (best_conflict, moves, success, vertices, trace) per
+/// experiment.
+#[pyfunction]
+fn search<'py>(
+    py: Python<'py>,
+    graph: &Bound<'py, PyAny>,
+    params: Params,
+) -> PyResult<(Bound<'py, PyDict>, Vec<ExperimentTuple>)> {
+    let params = params.core()?;
     let result = if let Ok(g) = graph.extract::<PyRef<'_, PyGraph>>() {
         run_search(py, Arc::clone(&g.inner), params)?
     } else if let Ok(g) = graph.extract::<PyRef<'_, PyWeightedGraph>>() {
@@ -553,56 +607,29 @@ fn search(
             "graph must be a Graph or a WeightedGraph",
         ));
     };
-    Ok(result
-        .experiments
-        .into_iter()
-        .map(|e| (e.best_conflict, e.moves, e.success, e.vertices, e.trace))
-        .collect())
+    Ok((
+        params_dict(py, &result.params)?,
+        experiment_tuples(result.experiments),
+    ))
 }
 
-/// One size searched by `largest`: (size, edge target, experiments as `search` returns them).
-type SizeTuple = (usize, i64, Vec<ExperimentTuple>);
+/// One size searched by `largest`: (size, the parameters used, experiments as `search` returns them).
+type SizeTuple<'py> = (usize, Bound<'py, PyDict>, Vec<ExperimentTuple>);
 
-/// Searches for the largest induced path, cycle, tree or clique; returns (the largest size found,
-/// one `SizeTuple` per size searched, in increasing order).
+/// Searches for the largest induced path, cycle, tree or clique, with everything but the shape's
+/// own settings from the `SearchParams` given; returns (the largest size found, one `SizeTuple`
+/// per size searched, in increasing order).
 #[pyfunction]
-#[pyo3(signature = (graph, shape, start, lookahead, fixed, endpoints, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration, kick_size = 0, kick_ban = 20, tabu_tenure = 1))]
-#[allow(clippy::too_many_arguments)]
-fn largest(
-    py: Python<'_>,
-    graph: PyRef<'_, PyGraph>,
+fn largest<'py>(
+    py: Python<'py>,
+    graph: PyRef<'py, PyGraph>,
     shape: &str,
     start: Option<usize>,
     lookahead: usize,
-    fixed: Vec<usize>,
-    endpoints: Option<[usize; 2]>,
-    experiments: usize,
-    max_moves: usize,
-    div_freq: usize,
-    div_dur: usize,
-    seed: i64,
-    rng: &str,
-    trace: bool,
-    aspiration: bool,
-    kick_size: usize,
-    kick_ban: usize,
-    tabu_tenure: usize,
-) -> PyResult<(Option<usize>, Vec<SizeTuple>)> {
+    params: Params,
+) -> PyResult<(Option<usize>, Vec<SizeTuple<'py>>)> {
     let shape: subgraphsearch_core::Shape = shape.parse().map_err(err)?;
-    let mut base = SearchParams::new(2, 0);
-    base.fixed = fixed;
-    base.endpoints = endpoints;
-    base.experiments = experiments;
-    base.max_moves = max_moves;
-    base.div_freq = div_freq;
-    base.div_dur = div_dur;
-    base.seed = seed;
-    base.rng = parse(rng)?;
-    base.record_trace = trace;
-    base.aspiration = aspiration;
-    base.kick_size = kick_size;
-    base.kick_ban = kick_ban;
-    base.tabu_tenure = tabu_tenure;
+    let base = params.core()?;
     let g = Arc::clone(&graph.inner);
     let found = py
         .detach(move || subgraphsearch_core::largest(&g, shape, &base, start, lookahead))
@@ -611,15 +638,20 @@ fn largest(
         .results
         .into_iter()
         .map(|r| {
-            let experiments = r
-                .experiments
-                .into_iter()
-                .map(|e| (e.best_conflict, e.moves, e.success, e.vertices, e.trace))
-                .collect();
-            (r.params.size, r.params.edges, experiments)
+            Ok((
+                r.params.size,
+                params_dict(py, &r.params)?,
+                experiment_tuples(r.experiments),
+            ))
         })
-        .collect();
+        .collect::<PyResult<_>>()?;
     Ok((found.size, sizes))
+}
+
+/// The automatic tabu tenure: see `subgraphsearch_core::auto_tabu_tenure`.
+#[pyfunction]
+fn auto_tabu_tenure(size: usize, vertices: usize) -> usize {
+    subgraphsearch_core::auto_tabu_tenure(size, vertices)
 }
 
 fn run_search<G: SearchGraph + Send + 'static>(
@@ -741,8 +773,8 @@ fn cli_main(py: Python<'_>, argv: Vec<String>) -> u8 {
 mod _core {
     #[pymodule_export]
     use super::{
-        PyGraph, PyWeightedGraph, cli_main, dumps_all, formats_list, generate_graph,
-        generate_weighted, grid_graph, hypercube_graph, incidence_graph, largest,
+        PyGraph, PyWeightedGraph, auto_tabu_tenure, cli_main, dumps_all, formats_list,
+        generate_graph, generate_weighted, grid_graph, hypercube_graph, incidence_graph, largest,
         legacy_asub_search, legacy_ereg_search, legacy_ggen, legacy_reg_search, legacy_sub_search,
         legacy_wggen, legacy_wsub_search, random_regular_graph, search, search_settings,
         sparse_random_graph,
