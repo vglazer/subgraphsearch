@@ -72,10 +72,44 @@ The Cargo workspace in `crates/` has three members that share one version number
 - **`subgraphsearch`** (`crates/subgraphsearch-cli`) is the command-line program. Its `lib.rs`
   holds the whole program behind `run(argv) -> exit code`, and `main.rs` only calls it, so the
   Python package can embed the same program.
-- **`subgraphsearch-py`** builds the extension module `subgraphsearch._core` with
-  [PyO3](https://pyo3.rs), using the stable ABI for Python 3.10 and later, so one wheel per platform
-  serves every Python version. It is not a default workspace member: [maturin](https://www.maturin.rs)
-  builds it, since it needs Python's linker flags.
+- **`subgraphsearch-py`** builds the extension module `subgraphsearch._core`, with PyO3 for the
+  bindings and maturin for the packaging (see the next section).
+
+## PyO3 and maturin
+
+The extension involves two tools with separate jobs: PyO3 decides what Python can call, and
+maturin turns the result into something pip can install.
+
+**[PyO3](https://pyo3.rs) is a Rust library: the bindings are Rust code** in
+`crates/subgraphsearch-py/src/lib.rs`, written with its attributes.
+- `#[pyclass(frozen)]` makes `Graph` and `WeightedGraph` Python types holding an `Arc` of the Rust
+  graph. Frozen means immutable, so they need no locking and can be shared across threads.
+- `#[pyfunction]`, with `#[pyo3(signature = ...)]` for keyword arguments and defaults, exposes each
+  function. PyO3 converts the arguments (integers, strings, lists, bytes) and the results (tuples
+  and lists) on its own, and the `err` helper maps the core's errors to `IOError` and `ValueError`.
+- `#[pymodule] mod _core` lists what the module exports.
+- `py.detach(...)` releases the GIL around every long Rust call.
+- Two Cargo features of PyO3 shape the build: `abi3-py310` compiles against Python's stable ABI, so
+  one compiled module serves every Python from 3.10 on, and `extension-module` leaves Python's own
+  library unlinked, since the interpreter that imports the module provides it. Plain `cargo` cannot
+  link such a module, which is why the crate is not a default workspace member.
+
+**[maturin](https://www.maturin.rs) is the build tool: the packaging is configuration**, in
+`pyproject.toml` and the release workflow.
+- It is the package's build backend (`[build-system]`), so `uv sync`, `pip install` from source and
+  the release workflow all build through it, calling `cargo` with the right linker flags.
+- `[tool.maturin]` points it at the crate (`manifest-path`) and at the pure-Python package
+  (`python-source = "python"`), and names the compiled module `subgraphsearch._core`. maturin puts
+  the compiled module inside `python/subgraphsearch`, so a wheel holds a single package with both.
+- The package takes its version from the crate (`dynamic = ["version"]`), so
+  `scripts/bump_version.py` changes only the Cargo manifests.
+- In `.github/workflows/release.yml`, `PyO3/maturin-action` builds a wheel per platform: manylinux
+  and musllinux for Linux on x86-64 and ARM, macOS on Intel and Apple silicon, and Windows on x64
+  and ARM, smoke-testing those that can run on the build machine, plus a source distribution that
+  needs a Rust toolchain to install.
+
+To change what Python can call, edit `lib.rs`; to change how the package is built or shipped, edit
+`pyproject.toml` or the release workflow.
 
 ## The Python package
 
