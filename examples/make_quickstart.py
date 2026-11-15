@@ -107,10 +107,10 @@ viz.plot_search_summary(r);
 """),
     md("""
 The left panel, the **run-time distribution**, is the fraction of experiments that succeeded within a given
-number of moves. The middle panel shows how close each experiment came: a hit, or the number of edges it fell
-short by. The right panel traces the conflict after every move for two experiments, the slowest success and
-one that fell short. Dotted lines mark each diversification cycle after the first, which starts with a
-region kick (see Tuning).
+number of moves; its title also says how far the others ended from the target (here, all 19 one edge short).
+The right panel traces the conflict for two experiments, the slowest success (top) and one that fell short
+(bottom): the shading spans the conflicts in each short stretch of moves and the line follows the lowest.
+Dotted lines mark each diversification cycle after the first, which starts with a region kick (see Tuning).
 
 Here 19 of the 41 successes came within 100 moves, and the rest in bursts just after the kicks. The traces show
 why: between kicks the search keeps moving, one to three edges from the target, and each kick throws it
