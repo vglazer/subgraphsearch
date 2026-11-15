@@ -105,7 +105,8 @@ maturin turns the result into something pip can install.
   `scripts/bump_version.py` changes only the Cargo manifests.
 - In `.github/workflows/release.yml`, `PyO3/maturin-action` builds a wheel per platform: manylinux
   and musllinux for Linux on x86-64 and ARM, macOS on Intel and Apple silicon, and Windows on x64
-  and ARM, smoke-testing those that can run on the build machine, plus a source distribution that
+  and ARM, each built on a machine of its own architecture and smoke-tested there (the macOS Intel
+  wheel under Rosetta, the musl wheels in an Alpine container), plus a source distribution that
   needs a Rust toolchain to install.
 
 To change what Python can call, edit `lib.rs`; to change how the package is built or shipped, edit
