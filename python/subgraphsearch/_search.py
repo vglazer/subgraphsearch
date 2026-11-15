@@ -231,8 +231,8 @@ def _kick_size(kick_size: int | None, regular_or_path: bool, rng: str) -> int:
 def auto_tabu_tenure(size: int, vertices: int) -> int:
     """The tabu tenure edge-count and weight searches of ``size`` of a graph's ``vertices`` use unless
     ``tabu_tenure`` is given: a tenth of the size or an eightieth of the vertices left outside it, whichever is
-    smaller, and at least 1. Small graphs and small subgraphs get 1, the original programs' tenure."""
-    return max(1, min(int(size) // 10, max(0, int(vertices) - int(size)) // 80))
+    smaller, from 1 to 20. Small graphs and small subgraphs get 1, the original programs' tenure."""
+    return max(1, min(int(size) // 10, max(0, int(vertices) - int(size)) // 80, 20))
 
 
 def _tabu_tenure(tabu_tenure: int | str | None, regular_or_path: bool, rng: str) -> int:
@@ -325,7 +325,8 @@ def search(
     ``tabu_tenure=t`` keeps each vertex swapped out from returning, and each vertex swapped in from
     leaving, for ``t`` moves. By default (``"auto"``), edge-count and weight searches use
     :func:`auto_tabu_tenure`: a tenth of ``size`` or an eightieth of the vertices left outside
-    the subgraph, whichever is smaller, so 1 below 20 vertices or in graphs of fewer than 160. This
+    the subgraph, whichever is smaller, at most 20, so 1 below 20 vertices or in graphs of fewer
+    than 160. This
     errs on the short side, so compare a few longer tenures with :func:`sweep`, especially on small
     graphs; 1 is the original programs' tenure, which regular and path searches and
     ``rng="legacy"`` keep.

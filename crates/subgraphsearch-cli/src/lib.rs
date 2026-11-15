@@ -196,8 +196,9 @@ struct SearchArgs {
     #[arg(long, default_value_t = 20)]
     kick_ban: usize,
     /// Moves a vertex just swapped out stays out, and one just swapped in stays in (0 = automatic:
-    /// a tenth of the subgraph size, at least 1). Default: automatic, except 1, the original
-    /// programs' tenure, with --rng legacy.
+    /// a tenth of the subgraph size or an eightieth of the vertices outside it, whichever is
+    /// smaller, from 1 to 20). Default: automatic, except 1, the original programs' tenure, with
+    /// --rng legacy.
     #[arg(long)]
     tabu_tenure: Option<usize>,
     /// Random seed.
@@ -301,8 +302,9 @@ struct LargestArgs {
     #[arg(long, default_value_t = 20)]
     kick_ban: usize,
     /// Moves a vertex just swapped out stays out, and one just swapped in stays in (0 = automatic:
-    /// a tenth of the subgraph size, at least 1). Default: automatic, except 1, the original
-    /// programs' tenure, with --rng legacy.
+    /// a tenth of the subgraph size or an eightieth of the vertices outside it, whichever is
+    /// smaller, from 1 to 20). Default: automatic, except 1, the original programs' tenure, with
+    /// --rng legacy.
     #[arg(long)]
     tabu_tenure: Option<usize>,
     /// Random seed.

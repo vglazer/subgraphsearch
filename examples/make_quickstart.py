@@ -657,6 +657,31 @@ are complete:
 print("point graph:", ss.Graph.point_graph(fano), "| block graph:", ss.Graph.block_graph(fano))
 """),
     md(f"""
+### Steiner triple systems
+
+The Fano plane is the smallest [Steiner triple system]({W}Steiner_system): triples of points that contain every
+pair of points exactly once. One on $v$ points has $v(v-1)/6$ triples, and one exists exactly when $v$
+leaves remainder 1 or 3 on division by 6. That many triples with no pair in common cover every pair, so in the graph on
+all triples of points, joined when they share two, a Steiner triple system is an independent set. Here is one
+on 31 points, 155 triples among 4,495, found with a short tabu tenure (see Tuning), which suits this problem:
+"""),
+    code("""
+from itertools import combinations
+
+v = 31
+triples = list(combinations(range(v), 3))
+found = ss.search(ss.Graph.block_graph(triples, 2), v * (v - 1) // 6, 0, experiments=8, max_moves=20000,
+                  div_freq=300, div_dur=8, tabu_tenure=2)
+system = [triples[i] for i in found.best.vertices]
+pairs = [pair for triple in system for pair in combinations(triple, 2)]
+print(f"{found.successes} of 8 experiments found {len(system)} triples;",
+      "every pair exactly once:", len(pairs) == len(set(pairs)) == v * (v - 1) // 2)
+"""),
+    md("""
+`examples/steiner.py` goes up to 81 points, 1,080 triples among 85,320 candidates, which takes about 25
+seconds.
+"""),
+    md(f"""
 ### From a design to strongly regular graphs
 
 Designs, regular subgraph searches and switching combine into a way to construct

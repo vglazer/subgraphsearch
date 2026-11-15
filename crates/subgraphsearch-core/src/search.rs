@@ -258,12 +258,18 @@ pub const AUTO_TABU_TENURE: usize = 0;
 
 /// The tabu tenure [`AUTO_TABU_TENURE`] chooses for a subgraph of `size` of the graph's `vertices`:
 /// a tenth of the size or an eightieth of the vertices left outside it, whichever is smaller,
-/// and at least 1. The best tenure grows with both, and too long a tenure hems the search in, so
-/// this errs on the short side: small graphs get 1, the original programs' tenure. Compare longer
-/// ones with [`SearchParams::tabu_tenure`].
+/// at least 1 and at most [`MAX_AUTO_TABU_TENURE`]. The best tenure grows with both, and too long a
+/// tenure hems the search in, so this errs on the short side: small graphs get 1, the original
+/// programs' tenure. Compare others with [`SearchParams::tabu_tenure`].
 pub fn auto_tabu_tenure(size: usize, vertices: usize) -> usize {
-    (size / 10).min(vertices.saturating_sub(size) / 80).max(1)
+    (size / 10)
+        .min(vertices.saturating_sub(size) / 80)
+        .clamp(1, MAX_AUTO_TABU_TENURE)
 }
+
+/// The longest tenure [`auto_tabu_tenure`] chooses: longer tenures rarely help, and on large
+/// subgraphs of structured graphs they stop the search from finding anything.
+pub const MAX_AUTO_TABU_TENURE: usize = 20;
 
 impl SearchParams {
     /// The tabu tenure a search of a graph on `vertices` vertices uses: `tabu_tenure`, or
@@ -1471,8 +1477,12 @@ mod tests {
     #[test]
     fn tabu_tenure_defaults_and_resolution() {
         assert_eq!(SearchParams::new(30, 0).tabu_tenure, AUTO_TABU_TENURE);
-        // a tenth of the size or an eightieth of the rest, whichever is smaller, at least 1
+        // a tenth of the size or an eightieth of the rest, whichever is smaller, from 1 to 20
         assert_eq!(SearchParams::new(200, 0).resolved_tabu_tenure(2000), 20);
+        assert_eq!(
+            SearchParams::new(1080, 0).resolved_tabu_tenure(85320),
+            MAX_AUTO_TABU_TENURE
+        );
         assert_eq!(SearchParams::new(200, 0).resolved_tabu_tenure(500), 3);
         assert_eq!(SearchParams::new(72, 0).resolved_tabu_tenure(2048), 7);
         assert_eq!(SearchParams::new(15, 0).resolved_tabu_tenure(2000), 1);

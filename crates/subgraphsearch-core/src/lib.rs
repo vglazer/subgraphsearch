@@ -43,8 +43,8 @@ pub use graph::{Graph, GraphBuilder, WeightedGraph};
 pub use largest::{Largest, Shape, largest};
 pub use rng::RngKind;
 pub use search::{
-    AUTO_TABU_TENURE, DEFAULT_KICK_SIZE, Experiment, Regular, SearchGraph, SearchParams,
-    SearchResult, auto_tabu_tenure, search, search_sequential,
+    AUTO_TABU_TENURE, DEFAULT_KICK_SIZE, Experiment, MAX_AUTO_TABU_TENURE, Regular, SearchGraph,
+    SearchParams, SearchResult, auto_tabu_tenure, search, search_sequential,
 };
 
 /// Errors reported by this crate.

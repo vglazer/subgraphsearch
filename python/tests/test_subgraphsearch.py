@@ -844,6 +844,7 @@ def test_tabu_tenure_default():
     # a tenth of the size or an eightieth of the vertices left outside, at least 1
     assert ss.auto_tabu_tenure(200, 2000) == 20 and ss.auto_tabu_tenure(200, 500) == 3
     assert ss.auto_tabu_tenure(72, 2048) == 7 and ss.auto_tabu_tenure(30, 100) == 1
+    assert ss.auto_tabu_tenure(1080, 85320) == 20   # never longer than 20
     # edge-count and weight searches use it; path, regular and legacy searches 1
     assert ss.search(g, 60, 900).params.tabu_tenure == ss.auto_tabu_tenure(60, 400) == 4
     assert ss.search(g, 8, 20).params.tabu_tenure == 1

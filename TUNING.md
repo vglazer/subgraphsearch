@@ -61,13 +61,15 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   off.
 - **Try longer tabu tenures, especially on small graphs.** The default
   [tabu tenure](ALGORITHM.md#objective-and-moves) (`tabu_tenure`, `--tabu-tenure`),
-  $`\min(k/10, (n - k)/80)`$, is safe but cautious, and it is 1 in any graph of fewer than 160
-  vertices. Sweep a few values from 1 up to about twice the default, or up to 8 on a small graph
-  (`ss.sweep(g, k, m, "tabu_tenure", [1, 2, 3, 5, 8])`), and keep the best. Stay well below
-  $`k/2`$ and below $`(n - k)/30`$: past that the search is too hemmed in, and successes drop.
-  The degree search, for regular subgraphs, cycles and paths such as snakes and coils in
-  hypercubes, keeps a tenure of 1 and does not take this setting: their moves are so constrained that escaping a near
-  miss often means undoing a recent swap, which a longer tenure forbids.
+  $`\min(k/10, (n - k)/80, 20)`$, is safe but cautious, and it is 1 in any graph of fewer than
+  160 vertices. Sweep a few values, from 1 up to about twice the default or up to 8 on a small
+  graph (`ss.sweep(g, k, m, "tabu_tenure", [1, 2, 3, 5, 8])`), and keep the best. Stay at or
+  below 20, well below $`k/2`$ and below $`(n - k)/30`$: past that the search is too hemmed in,
+  and successes drop. Large subgraphs of highly structured graphs, such as Steiner triple
+  systems, can do best with tenures as short as 2 or 3, so include those even when the default is
+  long. The degree search, for regular subgraphs, cycles and paths such as snakes and coils in
+  hypercubes, keeps a tenure of 1 and does not take this setting: its moves are so constrained
+  that escaping a near miss often means undoing a recent swap, which a longer tenure forbids.
 - **Expect no setting to help on graphs built to defeat local search,** such as the *brock*
   clique benchmarks, which hide the largest clique among many slightly smaller ones. There the
   search ends on a decoy whatever the settings; use a method made for the problem.

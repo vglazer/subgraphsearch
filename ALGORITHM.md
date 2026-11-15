@@ -34,7 +34,7 @@ interrupted by perturbations, but different targets. Every kind of search uses o
 | Finds | exact edge counts and weights, cliques and independent sets, trees (with `connected=True`), the densest and sparsest subgraphs | regular subgraphs (`degree=`), induced cycles (degree 2, connected), induced paths (`path=True`) |
 | Graphs | unweighted or weighted | unweighted |
 | Perturbations | random moves in the first cycle, then [region kicks](#perturbations) | random moves |
-| [Tabu tenure](#objective-and-moves) | grows with the subgraph and the graph | 1 |
+| [Tabu tenure](#objective-and-moves) | grows with the subgraph and the graph, up to 20 | 1 |
 | [Aspiration](#variants) | available | no |
 | Skipping work | restricted neighborhood, bounded rows, degree buckets | restricted neighborhood |
 
@@ -75,9 +75,10 @@ Three refinements make this fast and effective:
   to the subgraphs it just left. The original programs' tenure was 1. A longer one helps large
   subgraphs escape a local optimum, but too long a tenure hems the search in, and the best length
   grows with both the subgraph size $`k`$ and the $`n - k`$ vertices outside it. The default is
-  $`\min(k/10, (n - k)/80)`$, rounded down and at least 1: on 200 of 2000 weighted vertices it is
-  20, in graphs of fewer than 160 vertices 1 (see [TUNING.md](TUNING.md#settings) for other
-  values). The degree search, and the legacy random number generator by default, keep a
+  $`\min(k/10, (n - k)/80, 20)`$, rounded down and at least 1: on 200 of 2000 weighted vertices
+  it is 20, in graphs of fewer than 160 vertices 1. It never exceeds 20, since longer tenures
+  rarely help and on large subgraphs of structured graphs stop the search altogether (see
+  [TUNING.md](TUNING.md#settings)). The degree search, and the legacy random number generator by default, keep a
   tenure of 1.
 
 ## Perturbations

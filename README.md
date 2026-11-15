@@ -134,6 +134,10 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
   words joined when they differ in at least $`d`$ places.
   [examples/codes.py](examples/codes.py) finds codes of the largest possible size for lengths 9 to
   12, among them the 72-word code of length 11 and distance 4 in about a second.
+- **Steiner triple systems.** Triples of points containing every pair exactly once are an
+  independent set in the graph of triples joined when they share a pair.
+  [examples/steiner.py](examples/steiner.py) finds them on up to 81 points, 1,080 triples among
+  85,320, with a short tabu tenure.
 - **Strongly regular graphs.** Switching a strongly regular graph with respect to a regular
   subgraph the search finds can give a new one with the same parameters: the Shrikhande graph from
   the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.
@@ -216,7 +220,7 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 | `--moves` | maximum moves per experiment | 250 |
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
 | `--kick-size`, `--kick-ban` | region kicks in place of the random moves of every cycle after the first: vertices rebuilt per kick, and moves they stay out (0 turns kicks off) | 4, 20 (no kicks with `--degree`, `--path`, `--rng legacy`) |
-| `--tabu-tenure` | moves a vertex just swapped stays tabu (0 = automatic) | `min(k/10, (n-k)/80)`, at least 1 (1 with `--degree`, `--path`, `--rng legacy`) |
+| `--tabu-tenure` | moves a vertex just swapped stays tabu (0 = automatic) | `min(k/10, (n-k)/80, 20)`, at least 1 (1 with `--degree`, `--path`, `--rng legacy`) |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
 
