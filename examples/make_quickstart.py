@@ -106,12 +106,17 @@ print(r.summary())
 viz.plot_search_summary(r);
 """),
     md("""
-The **run-time distribution** (left) is the fraction of experiments that succeeded within a given number of
-moves, the middle panel counts the best conflict each experiment reached, and the **traces** (right) show the
-conflict after each move for some of the experiments. Here 19 of the 41 successes came within 100 moves, and
-the rest in bursts just after moves 300, 600, 900 and so on, where each diversification cycle after the first
-starts with a region kick (see Tuning). Without kicks the rest of the 2000-move budget adds only two successes,
-so short experiments would do as well; with kicks, longer runs keep paying off.
+The left panel, the **run-time distribution**, is the fraction of experiments that succeeded within a given
+number of moves. The middle panel shows how close each experiment came: a hit, or the number of edges it fell
+short by. The right panel traces the conflict after every move for two experiments, the slowest success and
+one that fell short. Dotted lines mark each diversification cycle after the first, which starts with a
+region kick (see Tuning).
+
+Here 19 of the 41 successes came within 100 moves, and the rest in bursts just after the kicks. The traces show
+why: between kicks the search keeps moving, one to three edges from the target, and each kick throws it
+further off, into a new region where it sometimes lands on the target. Without kicks the rest of the
+2000-move budget adds only two successes, so short experiments would do as well; with kicks, longer runs keep
+paying off.
 
 Success falls off sharply around the limit: one edge fewer is found by every experiment, and a few more by
 none.

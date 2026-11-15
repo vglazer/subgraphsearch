@@ -1,4 +1,4 @@
-"""Plots of search behavior: objective traces, run-time distributions, conflicts, sweeps.
+"""Plots of search behavior: conflict traces, run-time distributions, conflicts, sweeps.
 
 All functions take an optional matplotlib ``ax`` and return it, so they compose into figures.
 """
@@ -13,35 +13,68 @@ from .._search import SearchResult
 from ._style import ACCENT, NEUTRAL, SECONDARY, axes, finish
 
 
-def plot_traces(result: SearchResult, ax=None, max_experiments: int = 12, show_diversification: bool = True):
-    """The objective ``|edges - target|`` after every move, one line per experiment.
+def _cycle_marks(ax, result: SearchResult, until: int) -> None:
+    """Dotted lines where each diversification cycle after the first starts: with a region kick, or
+    with random moves when kicks are off."""
+    p = result.params
+    if p.div_dur == 0 or p.div_freq == 0:
+        return
+    label = "region kick" if p.kick_size > 0 else "random moves"
+    for i, start in enumerate(range(p.div_freq, until, p.div_freq)):
+        ax.axvline(start, color=NEUTRAL, lw=0.8, ls=":", label=label if i == 0 else None)
 
-    Needs a search run with ``trace=True``. Shaded bands mark the random (diversification)
-    moves at the start of each ``div_freq`` cycle; a dot marks each success.
+
+def _conflict_label(result: SearchResult) -> str:
+    p = result.params
+    if p.path:
+        label = "conflict (0 for a path)"
+    elif p.degree is not None:
+        label = "deviation from regular"
+    else:
+        label = "distance from the target"
+    return f"{label} + extra components" if p.connected else label
+
+
+def plot_traces(result: SearchResult, ax=None, max_experiments: int = 2, show_diversification: bool = True):
+    """The conflict (0 when the target is reached) after every move, for a few experiments.
+
+    Needs a search run with ``trace=True``. Up to ``max_experiments`` experiments are drawn, half
+    of them ones that fell short and half the slowest successes, since experiments that succeed
+    within a few moves show little; by default, one of each. The y-axis is cut off above the conflicts reached after the
+    initial descent, and dotted lines mark the start of each diversification cycle after the first.
     """
     traces = result.traces()
     ax = axes(ax)
-    p = result.params
-    longest = max((len(t) for t in traces), default=0)
-    if show_diversification and p.div_dur > 0:
-        for start in range(0, longest, p.div_freq):
-            ax.axvspan(start, start + p.div_dur, color=NEUTRAL, alpha=0.12, lw=0)
-    shown = traces[:max_experiments]
-    for e, t in zip(result.experiments, shown):
+    pairs = list(zip(result.experiments, traces))
+    misses = [(e, t) for e, t in pairs if not e.success]
+    hits = sorted(((e, t) for e, t in pairs if e.success), key=lambda et: -len(et[1]))
+    hits = hits[: max(max_experiments - min(len(misses), max_experiments // 2), 0)]
+    misses = misses[: max_experiments - len(hits)]
+    shown = sorted(hits + misses, key=lambda et: et[0].index)
+    longest = max((len(t) for _, t in shown), default=0)
+    if show_diversification:
+        _cycle_marks(ax, result, longest)
+    labelled = set()
+    for e, t in shown:
         color = ACCENT if e.success else SECONDARY
-        ax.plot(np.arange(len(t)), t, color=color, lw=0.9, alpha=0.75)
+        label = "reached the target" if e.success else "fell short"
+        ax.plot(np.arange(len(t)), t, color=color, lw=0.9, alpha=0.8, label=None if label in labelled else label)
+        labelled.add(label)
         if e.success:
             ax.plot(len(t) - 1, 0, "o", color=ACCENT, ms=4)
-    ax.set_yscale("symlog", linthresh=1)
+    # cut off the initial descent, so the moves near the target are visible
+    tails = [np.asarray(t[len(t) // 10 :]) for _, t in shown if len(t) > 10]
+    if tails:
+        top = max(float(np.percentile(np.concatenate(tails), 99)), 3.0)
+        ax.set_ylim(-0.04 * top, top * 1.08)
+    from matplotlib.ticker import MaxNLocator
+
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xlabel("move")
-    if p.path:
-        ax.set_ylabel("conflict (0 for a path)")
-    else:
-        label = "deviation from regular" if p.degree is not None else "|edges − target|"
-        ax.set_ylabel(f"{label} + extra components" if p.connected else label)
-    hidden = len(traces) - len(shown)
-    title = f"objective per move ({len(shown)} of {len(traces)} experiments)" if hidden else "objective per move"
-    return finish(ax, title)
+    ax.set_ylabel(_conflict_label(result))
+    if shown:
+        ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3, frameon=False)
+    return finish(ax, f"conflict after every move ({len(shown)} of {len(traces)} experiments)")
 
 
 def plot_run_time_distribution(result: SearchResult, ax=None):
@@ -49,7 +82,8 @@ def plot_run_time_distribution(result: SearchResult, ax=None):
 
     Its height at ``max_moves`` is the success rate; a curve still rising at ``max_moves``
     suggests allowing more moves, a curve that flattens early suggests more, shorter
-    experiments instead.
+    experiments instead. Dotted lines mark the start of each diversification cycle after the
+    first, where successes often come in bursts.
     """
     ax = axes(ax)
     p = result.params
@@ -57,15 +91,18 @@ def plot_run_time_distribution(result: SearchResult, ax=None):
     total = len(result.experiments)
     # when every experiment succeeded the move budget is irrelevant: zoom to the moves used
     xmax = max(p.max_moves, 1) if len(moves) < total or not len(moves) else max(int(moves[-1] * 1.15), 10)
+    _cycle_marks(ax, result, xmax)
     if len(moves):
         x = np.concatenate([[0], moves, [xmax]])
         y = np.concatenate([[0], np.arange(1, len(moves) + 1) / total, [len(moves) / total]])
         ax.step(x, y, where="post", color=ACCENT, lw=1.6)
     ax.set_xlim(0, xmax)
     ax.set_ylim(0, 1.02)
-    ax.set_xlabel("moves")
-    ax.set_ylabel("P(success within moves)")
-    return finish(ax, f"run-time distribution ({result.successes}/{total} successes)")
+    ax.set_xlabel("move")
+    ax.set_ylabel("fraction of experiments that succeeded")
+    if ax.get_legend_handles_labels()[0]:
+        ax.legend(frameon=False, fontsize=8, loc="lower right")
+    return finish(ax, f"successes by move ({result.successes} of {total})")
 
 
 def plot_success_times(result: SearchResult, ax=None, bins: int | None = None):
@@ -87,20 +124,29 @@ def plot_success_times(result: SearchResult, ax=None, bins: int | None = None):
 
 
 def plot_conflicts(result: SearchResult, ax=None):
-    """Histogram of each experiment's best conflict (0 = success)."""
+    """How close each experiment came to the target: the number of experiments by best conflict,
+    from "hit" (conflict 0, a success) up."""
     ax = axes(ax)
     c = np.bincount([e.best_conflict for e in result.experiments]) if result.experiments else np.zeros(1, int)
-    colors = [ACCENT] + [SECONDARY] * (len(c) - 1)
-    ax.bar(np.arange(len(c)), c, color=colors, edgecolor="white", lw=0.5)
-    p = result.params
-    ax.set_xlabel("best conflict" if p.connected or p.path or p.degree is not None else "best |edges − target|")
+    x = np.arange(len(c))
+    ax.bar(x, c, color=[ACCENT] + [SECONDARY] * (len(c) - 1), edgecolor="white", lw=0.5)
+    if len(c) <= 20:
+        for xi, n in zip(x, c):
+            if n:
+                ax.text(xi, n, str(n), ha="center", va="bottom", fontsize=8)
+        ax.set_ylim(top=max(c.max(), 1) * 1.15)
+    if len(c) <= 8:
+        ax.set_xticks(x, ["hit"] + [f"{d} off" for d in x[1:]])
+        ax.set_xlabel("closest each experiment came to the target")
+    else:
+        ax.set_xlabel("closest each experiment came to the target (0 = hit)")
     ax.set_ylabel("experiments")
-    ax.set_xticks(np.arange(len(c)) if len(c) <= 15 else ax.get_xticks())
-    return finish(ax, f"best conflict (mean {result.average_conflict:.2f})")
+    return finish(ax, "how close each experiment got")
 
 
 def plot_search_summary(result: SearchResult, figsize=None):
-    """A figure with the run-time distribution, the conflict histogram and, if recorded, traces."""
+    """A figure with successes by move, how close each experiment got and, if the search ran with
+    ``trace=True``, the conflict after every move for a few experiments."""
     import matplotlib.pyplot as plt
 
     has_traces = result.params.trace
