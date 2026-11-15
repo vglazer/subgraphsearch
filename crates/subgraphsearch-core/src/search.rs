@@ -1006,17 +1006,12 @@ impl Workspace {
             let banned = |w: usize| {
                 (kick && self.banned_until[w] > j) || (tenure > 1 && self.tabu_in[w] > j)
             };
-            let m = if kick || tenure > 1 {
-                (0..v_rest)
-                    .filter(|&k| k != rest_col && !banned(self.rest_verts[k]))
-                    .count()
-            } else {
-                v_rest - 1
-            };
-            // ... noting the range of subgraph degrees among the active and among all of them
+            // ... noting the range of subgraph degrees among the active and among all of them. The
+            // inactive ones fill the buffer from its end, then move up to follow the active ones,
+            // in the same order as if their number had been counted first.
             let (mut act_lo, mut act_hi) = (i64::MAX, i64::MIN);
             let (mut all_lo, mut all_hi) = (i64::MAX, i64::MIN);
-            let mut temp = m;
+            let mut temp = v_rest;
             for k in 0..v_rest {
                 if k == rest_col || banned(self.rest_verts[k]) {
                     if tenure > 1 {
@@ -1039,6 +1034,8 @@ impl Workspace {
                     self.u_list[temp] = vert;
                 }
             }
+            let m = u_cols + (v_rest - temp);
+            self.u_list.copy_within(temp..v_rest, u_cols);
 
             // if the edge count changed, every row gets a full scan
             if new_min_val != old_min_val {
