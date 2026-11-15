@@ -9,15 +9,48 @@ other libraries. This page describes how the pieces fit together, for anyone cha
 [DEVELOPMENT.md](DEVELOPMENT.md) covers building, testing and releasing.
 
 ```mermaid
-flowchart TD
-    core["subgraphsearch-core (Rust library)<br/>search, graphs, formats, generators, legacy"]
-    cli["subgraphsearch (Rust crate)<br/>the command-line program, also a library"]
-    py["subgraphsearch-py (Rust, PyO3)<br/>the extension module subgraphsearch._core"]
-    pkg["python/subgraphsearch (Python)<br/>ss.search, ss.Graph, viz, convert, ..."]
-    core --> cli
-    core --> py
-    cli --> py
-    py --> pkg
+flowchart TB
+    pyuser(["Python: import subgraphsearch as ss"])
+    cmd(["the subgraphsearch command"])
+    rustuser(["Rust: subgraphsearch-core"])
+
+    subgraph pkg["python/subgraphsearch"]
+        api["_search.py, _graph.py<br/>search, largest, densest, Graph<br/>resolve defaults, build results"]
+        extras["viz/, _html.py, convert.py, vectors.py, designs.py<br/>pure Python: drawing, notebooks, other libraries"]
+        clipy["_cli.py"]
+    end
+
+    ext["subgraphsearch._core (crates/subgraphsearch-py)<br/>PyO3 bindings; releases the GIL"]
+    cli["crates/subgraphsearch-cli: run(argv)<br/>parses options, resolves defaults"]
+    bin["main.rs"]
+
+    subgraph core["crates/subgraphsearch-core"]
+        entry["search(graph, params)"]
+        counting["search.rs<br/>the counting search"]
+        degree["regular.rs<br/>the degree search"]
+        largest["largest.rs<br/>size after size"]
+        support["graph.rs, formats.rs, generate.rs, ops.rs,<br/>layout.rs, rng.rs, legacy.rs"]
+    end
+
+    pyuser --> api
+    pyuser --> extras
+    extras -. "graphs, layouts" .-> ext
+    api --> ext
+    cmd -- "pip install" --> clipy --> ext
+    cmd -- "cargo install" --> bin --> cli
+    ext -- "cli_main" --> cli
+    ext --> entry
+    ext --> largest
+    ext --> support
+    cli --> entry
+    cli --> largest
+    cli --> support
+    rustuser --> entry
+    rustuser --> largest
+    rustuser --> support
+    largest --> entry
+    entry -- "edges or weight" --> counting
+    entry -- "degree= or path=True" --> degree
 ```
 
 ## The crates
