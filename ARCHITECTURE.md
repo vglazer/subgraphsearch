@@ -151,6 +151,24 @@ The command line follows the same path from step 2, resolving the same defaults 
 form of a result, and `SearchResult.load` reads it as well as Python's own saved results, so
 `python -m subgraphsearch explore` can show a search run from the command line.
 
+## Performance
+
+The time goes into each move's search for the best swaps (`collect_best_moves` and the functions
+it calls), and that work is bound by indirection, not arithmetic: every candidate is reached
+through `u_list`, then its degree in `sub_degs` and its entry in the adjacency row, at scattered
+positions. Those are gathers, which ARM's vector instructions lack and x86's AVX2 does slowly, so
+wider vectors have little to speed up; and since bounded rows and buckets, most swaps are never
+evaluated at all. A build for the newest instructions of the CPU it runs on
+(`RUSTFLAGS="-C target-cpu=native"`) ran 0.98 to 1.05 times as fast as the portable build on six
+workloads on an Apple M3, so the wheels lose nothing by targeting baseline CPUs there. Gains come
+from evaluating fewer swaps, not from evaluating them faster; when changing the scan, compare
+builds with alternating runs, since single timings vary by 5% to 10%.
+
+One place could still gain on x86-64. Its baseline target lacks the POPCNT instruction, so
+`count_ones` becomes a sequence of bit operations, in `Graph::from_words` (all pairs of binary
+words, for codes) and `induced_edge_count`. That has not been measured: an x86-64 runner timing
+those against a build for x86-64-v3 would show whether runtime dispatch to POPCNT is worth adding.
+
 ## Conventions
 
 - **Defaults live in the front ends.** The core takes every setting explicitly
