@@ -133,7 +133,7 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
 - **Error-correcting codes.** A binary code of minimum distance $`d`$ is a clique in the graph of
   words joined when they differ in at least $`d`$ places.
   [examples/codes.py](examples/codes.py) finds codes of the largest possible size for lengths 9 to
-  12, among them the 72-word code of length 11 and distance 4 in under 3 seconds.
+  12, among them the 72-word code of length 11 and distance 4 in about a second.
 - **Strongly regular graphs.** Switching a strongly regular graph with respect to a regular
   subgraph the search finds can give a new one with the same parameters: the Shrikhande graph from
   the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.

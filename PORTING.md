@@ -82,9 +82,9 @@ programs on a multi-core machine.
 Legacy mode is single-threaded, and still faster than the C programs compiled with `-O2`, with
 the same output. Edge-count and weight searches skip candidate swaps that cannot be best (*bounded
 rows* in [ALGORITHM.md](ALGORITHM.md#objective-and-moves)), which the C programs evaluate one by
-one: `sub_search` ran 1.5 times faster on a hard exact target (30 vertices with 346 edges in a
-100-vertex graph) and 4.5 times faster on an unreachable clique target in a 1000-vertex graph, and
-`wsub_search` 3.7 times faster on a 400-item maximum diversity instance. `reg_search` and
+one: `sub_search` ran 1.3 times faster on a hard exact target (30 vertices with 346 edges in a
+100-vertex graph) and 5 times faster on an unreachable clique target in a 1000-vertex graph, and
+`wsub_search` 4 times faster on a 400-item maximum diversity instance. `reg_search` and
 `ereg_search`, whose moves bounded rows do not change, were already faster than the C programs.
 
 ## Tests against the original programs

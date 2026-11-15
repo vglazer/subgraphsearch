@@ -107,12 +107,12 @@ def main(out: Path = OUT) -> None:
     comparison(out)
 
 
-# Recorded for the README's comparison (CP-SAT 9.15 on 16 cores, stopped after 10 s; subgraphsearch 4.1 with
+# Recorded for the README's comparison (CP-SAT 9.15 on 16 cores, stopped after 10 s; subgraphsearch 4.1.1 with
 # 60 experiments of up to 2,000 moves). Random graphs of density 0.6 with seed n; the target is the most edges
 # subgraphsearch finds among 30% of the vertices: vertices, subgraphsearch ms, CP-SAT ms (None: nothing in 10 s).
-EDGE_SCALING = [(20, 0.14, 25), (23, 0.12, 18), (26, 0.12, 23), (29, 0.20, 414), (32, 0.19, 650), (35, 0.22, 1125),
-                (38, 0.23, 4490), (41, 0.16, 85), (44, 0.22, None), (47, 0.40, None), (50, 0.77, 8814),
-                (53, 1.01, None), (56, 0.52, None), (59, 0.35, None)]
+EDGE_SCALING = [(20, 0.15, 25), (23, 0.18, 18), (26, 0.18, 23), (29, 0.19, 414), (32, 0.20, 650), (35, 0.21, 1125),
+                (38, 0.21, 4490), (41, 0.23, 85), (44, 0.16, None), (47, 0.38, None), (50, 0.77, 8814),
+                (53, 0.94, None), (56, 0.57, None), (59, 0.38, None)]
 # MDPLIB SOM-b instances: items, chosen, best known value, CP-SAT's best after 10 s. subgraphsearch reaches every
 # best known value (with kick_size=16, 60 experiments of up to 20,000 moves).
 DIVERSITY = [(100, 10, 333, 329), (100, 20, 1195, 1171), (100, 30, 2457, 2457), (100, 40, 4142, 4127),

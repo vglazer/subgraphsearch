@@ -12,7 +12,7 @@ the generators and operations and the file formats.
   each pair of vertices is an edge independently with probability equal to the density. With
   `mean_degree=d` (`--mean-degree d`) instead of a density, the probability is $`d / (n - 1)`$ for
   any $`d`$, and the graph is generated in time proportional to its edges rather than to the pairs
-  of vertices: 100,000 vertices with 3 neighbors each take 0.15 s. Densities, in steps of 0.001,
+  of vertices: 100,000 vertices with 3 neighbors each take 0.16 s. Densities, in steps of 0.001,
   cannot make such sparse graphs.
 - **geometric**: a [random geometric graph](https://en.wikipedia.org/wiki/Random_geometric_graph):
   random points in the unit square, joined when within a distance chosen so that the disc around a
