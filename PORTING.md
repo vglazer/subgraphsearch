@@ -76,16 +76,42 @@ other than Unix, the final timing line reports elapsed time and the `COMPUTERNAM
 
 ## Speed
 
-By default experiments run in parallel, which makes a search roughly 10 times faster than the C
-programs on a multi-core machine.
+subgraphsearch is faster than the C programs in two separate ways: each move is cheaper in the
+counting search, and experiments run in parallel. The table separates the two. Each program runs the
+same input three ways:
+- compiled from the original source with `cc -O2` (the compiler's standard optimization level);
+- through `subgraphsearch legacy`, which gives the same output on one thread;
+- through `subgraphsearch search` with the programs' settings (no region kicks, tabu tenure 1), on 1
+  and on 16 threads.
 
-Legacy mode is single-threaded, and still faster than the C programs compiled with `-O2`, with
-the same output. Edge-count and weight searches skip candidate swaps that cannot be best (*bounded
-rows* in [ALGORITHM.md](ALGORITHM.md#objective-and-moves)), which the C programs evaluate one by
-one: `sub_search` ran 1.3 times faster on a hard exact target (30 vertices with 346 edges in a
-100-vertex graph) and 5 times faster on an unreachable clique target in a 1000-vertex graph, and
-`wsub_search` 4 times faster on a 400-item maximum diversity instance. `reg_search` and
-`ereg_search`, whose moves bounded rows do not change, were already faster than the C programs.
+Every target is unreachable, so every run makes the same number of moves. Times are medians of
+three runs on a 16-core Apple M3 Max, measured by
+[benchmarks/legacy_speed.py](benchmarks/legacy_speed.py).
+
+| Program | Search | Moves | C | Legacy, 1 thread | Faster than C | 16 threads | Faster than 1 thread | Faster than C |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sub_search` | a 100-clique in G(1000, 0.5) | 64,000 | 2.14 s | 0.36 s | 6.0× | 0.042 s | 8.0× | 51× |
+| `asub_search` | the same, with aspiration | 64,000 | 2.20 s | 0.41 s | 5.4× | 0.048 s | 8.3× | 46× |
+| `wsub_search` | total weight 17,500 in SOM-b n400 m80 | 320,000 | 3.21 s | 0.65 s | 5.0× | 0.063 s | 10.2× | 51× |
+| `reg_search` | a 40-vertex independent set, as 0-regular, in G(1000, 0.5) | 6,400 | 4.68 s | 5.85 s | 0.8× | 0.46 s | 12.6× | 10× |
+| `ereg_search` | the same, in two phases | 32,000 | 0.57 s | 1.09 s | 0.5× | 0.12 s | 9.3× | 5× |
+
+- **On one thread,** the counting search (`sub_search`, `asub_search`, `wsub_search`) is 5–6 times
+  faster than the C programs, with the same output. It skips candidate swaps that cannot be best
+  (*bounded rows* in [ALGORITHM.md](ALGORITHM.md#objective-and-moves)), which the C programs
+  evaluate one by one. The degree search (`reg_search`, `ereg_search`) has no such shortcut, and
+  the port is slower than the C programs there. The modern search on one thread is as fast as
+  legacy mode.
+- **On many threads,** experiments run in parallel. Legacy mode cannot do this: the programs'
+  random number generator is one stream shared by all experiments, so they must run in order. The
+  modern search gives each experiment its own stream, and 16 threads (12 performance and 4
+  efficiency cores) run 8–13 times faster than one.
+- **Together,** the counting search runs about 50 times faster than the C programs, and the
+  degree search 5–10 times.
+
+Compiling the C programs with the original Makefile's `-O3 -march=native` instead of `-O2` makes no
+difference. The modern search's defaults, region kicks and a longer tabu tenure, change the search
+itself rather than its speed; [TUNING.md](TUNING.md) covers them.
 
 ## Tests against the original programs
 

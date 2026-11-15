@@ -1,7 +1,7 @@
 # Benchmark scripts
 
-These scripts reproduce the measurements in [BENCHMARKS.md](../BENCHMARKS.md), one per section. Run
-them from the repository root with the package installed (`uv sync`); each prints one line per
+These scripts reproduce the measurements in [BENCHMARKS.md](../BENCHMARKS.md), one per section,
+and the speed comparison in [PORTING.md](../PORTING.md#speed). Run them from the repository root with the package installed (`uv sync`); each prints one line per
 case, and `--help` lists its options.
 
 | Script | Section | Default run | Optional extras |
@@ -11,6 +11,7 @@ case, and `--help` lists its options.
 | `cliques.py` | Maximum cliques | about 4 s | `--tenures`; `--igraph`: igraph's exact clique number, 90 s cap per graph |
 | `hypercubes.py` | Snake-in-the-box | about 30 s | `--nine`: the 9-cube (about 2.5 minutes) |
 | `steiner.py` | Steiner triple systems | about 75 s | `--points`, `--large` |
+| `legacy_speed.py` | [PORTING.md](../PORTING.md#speed), Speed: the original C programs against legacy mode and threads | about 1 minute | `--threads`, `--repeats` |
 
 Times are for a 16-core Apple M3 Max laptop, where BENCHMARKS.md's numbers were measured.
 
