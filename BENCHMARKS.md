@@ -121,6 +121,29 @@ a smaller one. A [tabu tenure](TUNING.md#settings) of 5 instead of the default 3
 clique in 30 of 32 experiments; no tenure from 1 to 20 gets closer than one edge on brock200_2 or
 six on brock400_2.
 
+## Steiner triple systems
+
+A Steiner triple system on $`v`$ points is a set of triples containing every pair of points
+exactly once: an independent set of $`v(v-1)/6`$ vertices in the graph of all
+$`\binom{v}{3}`$ triples, joined when they share a pair. A method made for these designs,
+D. R. Stinson's hill-climbing (*Annals of Discrete Mathematics* 26, 1985), builds one directly: it
+keeps adding a triple through an uncovered pair, removing whichever triple already covered one of
+its other pairs. Each method here builds one system, and every system was checked pair by pair:
+subgraphsearch with one experiment and `tabu_tenure=2` (median of 3 runs), and Stinson's method
+written in plain Python, on one core (median of 5).
+
+| Points | Triples | subgraphsearch: graph, then search | Stinson's hill-climbing |
+| --- | --- | --- | --- |
+| 31 | 155 | 0.02&nbsp;s, then 0.01&nbsp;s | 0.9&nbsp;ms |
+| 49 | 392 | 0.30&nbsp;s, then 0.19&nbsp;s | 2.6&nbsp;ms |
+| 61 | 610 | 1.1&nbsp;s, then 1.1&nbsp;s | 4.0&nbsp;ms |
+| 81 | 1,080 | 6.3&nbsp;s, then 15&nbsp;s | 7.3&nbsp;ms |
+
+The specialist is thousands of times faster and goes much further: 999 points, 166,167 triples, in
+2.3 s. subgraphsearch's graph has a vertex for every triple, so beyond about 100 points it no
+longer fits in memory. Steiner triple systems show the general search finding a classical design
+knowing nothing about designs, not a way to build them in practice.
+
 ## Snake-in-the-box
 
 The longest induced paths in the $`n`$-dimensional hypercube, *snakes*, are a long-studied search
@@ -141,6 +164,7 @@ subgraphsearch is the tool for subgraphs with a prescribed number of vertices an
 weight, where no specialized solver exists: it finds them in milliseconds where general solvers
 stall, and matches the best published maximum diversity values up to 500 items. Where specialists
 exist they win at scale: on maximum diversity at 2000 items (though subgraphsearch reaches the best
-known value there too, less often), on maximum cliques, and on the 9-cube's snake. The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+known value there too, less often), on maximum cliques, on Steiner triple systems, and on the
+9-cube's snake. The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
 runs several of these searches, and [examples/data](examples/data/README.md) holds the benchmark
 instances and their licenses.

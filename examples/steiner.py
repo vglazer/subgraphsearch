@@ -9,7 +9,8 @@ then cover all v(v - 1)/2 pairs. In the graph on all triples, joined when they s
 The search finds one for every v here, up to 81 points: 1,080 triples among 85,320. A short tabu
 tenure suits this problem, so the script sets `tabu_tenure=2` rather than the longer default. Each
 system found is checked pair by pair. The whole script takes about 40 seconds on 16 cores.
-Methods made for designs, such as hill-climbing (D. R. Stinson, 1985), are faster still.
+A method made for these designs, hill-climbing (D. R. Stinson, 1985), is thousands of times faster
+and reaches far more points (see BENCHMARKS.md); this script shows the general search finding them.
 
     uv run python examples/steiner.py
 """

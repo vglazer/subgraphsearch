@@ -679,7 +679,10 @@ print(f"{found.successes} of 8 experiments found {len(system)} triples;",
 """),
     md("""
 `examples/steiner.py` goes up to 81 points, 1,080 triples among 85,320 candidates, which takes about 25
-seconds.
+seconds. A hill-climbing method made for these designs (Stinson, 1985) builds them thousands of times faster
+and on far more points; the
+[benchmarks](https://github.com/vglazer/subgraphsearch/blob/main/BENCHMARKS.md#steiner-triple-systems) compare
+the two.
 """),
     md(f"""
 ### From a design to strongly regular graphs

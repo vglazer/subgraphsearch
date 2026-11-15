@@ -117,6 +117,8 @@ goes through all of these.
   subgraphsearch in 6.
 - **Maximum cliques:** far faster than an exact search, but a dedicated clique solver is faster
   still and solves graphs built to trap local search.
+- **Steiner triple systems:** found on up to 81 points, but a hill-climbing method made for these
+  designs is thousands of times faster and reaches far larger ones.
 - **Snake-in-the-box:** the records up to the 8-cube, and within 3 vertices of the 9-cube's.
 
 [BENCHMARKS.md](BENCHMARKS.md) has the tables, settings and sources.
@@ -137,7 +139,8 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
 - **Steiner triple systems.** Triples of points containing every pair exactly once are an
   independent set in the graph of triples joined when they share a pair.
   [examples/steiner.py](examples/steiner.py) finds them on up to 81 points, 1,080 triples among
-  85,320, with a short tabu tenure.
+  85,320, with a short tabu tenure; a hill-climbing method made for these designs is thousands of
+  times faster ([BENCHMARKS.md](BENCHMARKS.md#steiner-triple-systems)).
 - **Strongly regular graphs.** Switching a strongly regular graph with respect to a regular
   subgraph the search finds can give a new one with the same parameters: the Shrikhande graph from
   the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.
