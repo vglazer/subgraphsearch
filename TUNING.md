@@ -50,11 +50,20 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   successful experiments needed (`viz.plot_run_time_distribution`), and set `max_moves` to two or
   three times the median, using the rest of the time for more experiments. Do not go far below the
   size of the subgraph, since a random start may need about $`k`$ swaps to reach a solution.
-- **Give hard targets longer runs and compare kick sizes.** Runs longer than `div_freq`
-  (`--div-freq`) moves make [region kicks](ALGORITHM.md#perturbations), of 4 vertices by default,
-  which keep finding solutions where an unperturbed run would stall. Larger kicks (`kick_size`,
-  `--kick-size`) can help much more on some problems and less on others, so compare a few sizes
-  with `ss.sweep`; `kick_size=0` turns them off.
+- **Give hard targets longer runs, and compare kick sizes.** Runs longer than `div_freq`
+  (`--div-freq`) moves make [region kicks](ALGORITHM.md#perturbations), of 4 vertices by default.
+  Larger kicks (`kick_size`, `--kick-size`) help much more on some problems and hurt on others;
+  `kick_size=0` turns them off.
+- **Compare a few tabu tenures.** The default [tabu tenure](ALGORITHM.md#objective-and-moves)
+  (`tabu_tenure`, `--tabu-tenure`), $`\min(k/10, (n - k)/80)`$, was never worse than the
+  original tenure of 1, but it is cautious: in graphs of fewer than 160 vertices it is 1, and
+  longer tenures often help there. On the quickstart's 100-vertex graph, a tenure of 5 raises the
+  successes on its hardest target from 41 to 60 of 60. Much longer tenures hurt, so sweep a few
+  small values (`ss.sweep(g, k, m, "tabu_tenure", [1, 2, 3, 5, 8])`). The best seen were 3 to 10
+  for 150 to 200 of 500 items, 5 for the MANN_a27 clique graph's 126-clique, 7 to 10 for a 72-word
+  code among 2048 words, and 15 to 25 for 200 of 2000 items; 12 already hurt cliques of a dozen
+  vertices, and 40 hurt everywhere. No tenure helps on graphs built to trap local search, such as
+  the *brock* clique graphs.
 - **Use more experiments to find more solutions.** The success rate estimates how hard a target is,
   and more experiments find more distinct solutions, although many repeat (`r.solutions()` lists
   each once).

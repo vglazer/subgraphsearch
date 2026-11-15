@@ -58,6 +58,9 @@ class SearchParams:
     #: Region kicks: see :func:`search`. 0 means off.
     kick_size: int = 0
     kick_ban: int = 20
+    #: The tabu tenure the search used (see :func:`search`); 1, the original programs', for results saved before it
+    #: existed.
+    tabu_tenure: int = 1
 
 
 @dataclass
@@ -225,6 +228,29 @@ def _kick_size(kick_size: int | None, regular_or_path: bool, rng: str) -> int:
     return int(kick_size)
 
 
+def auto_tabu_tenure(size: int, vertices: int) -> int:
+    """The tabu tenure edge-count and weight searches of ``size`` of a graph's ``vertices`` use unless
+    ``tabu_tenure`` is given: a tenth of the size or an eightieth of the vertices left outside it, whichever is
+    smaller, and at least 1. Small graphs and small subgraphs get 1, the original programs' tenure."""
+    return max(1, min(int(size) // 10, max(0, int(vertices) - int(size)) // 80))
+
+
+def _tabu_tenure(tabu_tenure: int | str | None, regular_or_path: bool, rng: str) -> int:
+    """The tenure to pass to the core: 0 for automatic (the default where it applies), 1 for regular and path
+    searches and the legacy rng; an explicit tenure must apply."""
+    if tabu_tenure is None:
+        return 1 if regular_or_path or rng == "legacy" else 0
+    if tabu_tenure == "auto":
+        if regular_or_path:
+            raise ValueError("tabu_tenure is available for edge-count searches only, not regular or path searches")
+        return 0
+    if isinstance(tabu_tenure, str) or int(tabu_tenure) < 1:
+        raise ValueError(f"tabu_tenure must be a positive number of moves or 'auto', not {tabu_tenure!r}")
+    if int(tabu_tenure) > 1 and regular_or_path:
+        raise ValueError("tabu_tenure is available for edge-count searches only, not regular or path searches")
+    return int(tabu_tenure)
+
+
 def search(
     graph: Graph | WeightedGraph,
     size: int,
@@ -246,6 +272,7 @@ def search(
     endpoints: tuple[int, int] | None = None,
     kick_size: int | None = None,
     kick_ban: int = 20,
+    tabu_tenure: int | str | None = None,
 ) -> SearchResult:
     """Searches ``graph`` for induced subgraphs on ``size`` vertices with ``edges`` edges, or, in
     a :class:`WeightedGraph`, with total weight ``edges`` (the original ``wsub_search``).
@@ -295,6 +322,12 @@ def search(
     sizes can help much more on some problems and hurt on others, so compare several, for example
     with :func:`sweep`; ``kick_size=0`` turns kicks off. Regular and path searches have no kicks, and
     neither, by default, does ``rng="legacy"``, so that it still reproduces the original programs.
+    ``tabu_tenure=t`` keeps each vertex swapped out from returning, and each vertex swapped in from
+    leaving, for ``t`` moves. By default (``"auto"``), edge-count and weight searches use
+    :func:`auto_tabu_tenure`: a tenth of ``size`` or an eightieth of the vertices left outside
+    the subgraph, whichever is smaller, so 1 below 20 vertices or in graphs of fewer than 160. Longer tenures
+    help most on large subgraphs of large graphs; 1 is the original programs' tenure, which regular
+    and path searches and ``rng="legacy"`` keep.
     """
     if (edges is not None) + (degree is not None) + bool(path) != 1:
         raise ValueError(
@@ -309,16 +342,18 @@ def search(
             raise ValueError("endpoints takes two vertices, the ends of the path")
     fixed = tuple(int(v) for v in fixed)
     kick_size = _kick_size(kick_size, degree is not None or bool(path), rng)
+    tabu_tenure = _tabu_tenure(tabu_tenure, degree is not None or bool(path), rng)
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
         int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
         bool(connected), bool(path), endpoints, int(kick_size), int(kick_ban),
+        auto_tabu_tenure(size, graph.n) if tabu_tenure == 0 else tabu_tenure,
     )
     raw = _core.search(
         graph._g, params.size, params.edges, list(fixed), params.experiments, params.max_moves, params.div_freq,
         params.div_dur, params.seed, rng, params.trace, params.aspiration, params.degree, params.two_phase,
         params.connected, params.path, None if endpoints is None else list(endpoints), params.kick_size,
-        params.kick_ban,
+        params.kick_ban, tabu_tenure,
     )
     exps = [
         Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))
@@ -397,6 +432,7 @@ def largest(
     aspiration: bool = False,
     kick_size: int | None = None,
     kick_ban: int = 20,
+    tabu_tenure: int | str | None = None,
 ) -> LargestResult:
     """Searches ``graph`` for the largest ``shape`` it can find: an induced ``"path"``, ``"cycle"`` or
     ``"tree"``, a ``"clique"``, or an ``"independent"`` set.
@@ -419,6 +455,7 @@ def largest(
         raise TypeError("largest needs an unweighted Graph")
     fixed = tuple(int(v) for v in fixed)
     kick_size = _kick_size(kick_size, shape in ("path", "cycle"), rng)
+    tabu_tenure = _tabu_tenure(tabu_tenure, shape in ("path", "cycle"), rng)
     if endpoints is not None:
         endpoints = tuple(int(v) for v in endpoints)
         if len(endpoints) != 2:
@@ -426,7 +463,7 @@ def largest(
     _, sizes = _core.largest(
         graph._g, shape, None if start is None else int(start), int(lookahead), list(fixed),
         None if endpoints is None else list(endpoints), int(experiments), int(max_moves), int(div_freq),
-        int(div_dur), int(seed), rng, bool(trace), bool(aspiration), int(kick_size), int(kick_ban),
+        int(div_dur), int(seed), rng, bool(trace), bool(aspiration), int(kick_size), int(kick_ban), tabu_tenure,
     )
     results = {}
     for size, edges, raw in sizes:
@@ -434,6 +471,7 @@ def largest(
             size, edges, fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng,
             bool(trace), bool(aspiration), 2 if shape == "cycle" else None, False, shape in ("cycle", "tree"),
             shape == "path", endpoints if shape == "path" else None, int(kick_size), int(kick_ban),
+            auto_tabu_tenure(size, graph.n) if tabu_tenure == 0 else tabu_tenure,
         )
         exps = [
             Experiment(i, c, m, s, tuple(v), None if t is None else np.asarray(t, dtype=np.int64))

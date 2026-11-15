@@ -703,6 +703,16 @@ def test_largest(tmp_path):
         assert kicks == {str(kick)}, kicks
     run = largest("--shape", "path", "--kick-size", "4")
     assert run.returncode != 0 and "not paths or cycles" in run.stderr
+    # the tabu tenure: automatic by default, recorded as used, settable, refused for paths and cycles
+    run = largest("--shape", "independent", "--start", "18", "-q", "--json", str(tmp_path / "t.json"))
+    assert run.returncode == 0, run.stderr
+    sizes = json.loads((tmp_path / "t.json").read_text(encoding="utf-8"))["results"]
+    assert sizes and all(r["params"]["tabu_tenure"] == ss.auto_tabu_tenure(r["params"]["size"], 64) for r in sizes)
+    run = largest("--shape", "independent", "--tabu-tenure", "3", "-q", "--json", str(tmp_path / "t.json"))
+    tenures = set(re.findall(r'"tabu_tenure":\s*(\d+)', (tmp_path / "t.json").read_text(encoding="utf-8")))
+    assert run.returncode == 0 and tenures == {"3"}, tenures
+    run = largest("--shape", "cycle", "--tabu-tenure", "4")
+    assert run.returncode != 0 and "not paths or cycles" in run.stderr
 
 
 def test_legacy_regular_programs():
@@ -827,6 +837,48 @@ def test_kick_default():
     # within the first div_freq moves kicks change nothing, so default-length searches are as before
     short = {"experiments": 20, "max_moves": 250, "div_freq": 250}
     assert ss.search(g, 15, 60, **short).experiments == ss.search(g, 15, 60, kick_size=0, **short).experiments
+
+
+def test_tabu_tenure_default():
+    g = ss.generate("exponential", 400, 0.5, seed=3)
+    # a tenth of the size or an eightieth of the vertices left outside, at least 1
+    assert ss.auto_tabu_tenure(200, 2000) == 20 and ss.auto_tabu_tenure(200, 500) == 3
+    assert ss.auto_tabu_tenure(72, 2048) == 7 and ss.auto_tabu_tenure(30, 100) == 1
+    # edge-count and weight searches use it; path, regular and legacy searches 1
+    assert ss.search(g, 60, 900).params.tabu_tenure == ss.auto_tabu_tenure(60, 400) == 4
+    assert ss.search(g, 8, 20).params.tabu_tenure == 1
+    assert ss.search(ss.generate_weighted(300, 0.5), 40, 40).params.tabu_tenure == 3
+    assert ss.search(g, 25, path=True).params.tabu_tenure == 1
+    assert ss.search(g, 25, degree=2).params.tabu_tenure == 1
+    assert ss.search(g, 60, 900, rng="legacy").params.tabu_tenure == 1
+    assert ss.search(g, 60, 900, tabu_tenure=7).params.tabu_tenure == 7
+    assert ss.search(g, 60, 900, tabu_tenure="auto").params.tabu_tenure == 4
+    # largest records the tenure each size used
+    found = ss.largest(g, "clique", start=8)
+    assert all(r.params.tabu_tenure == ss.auto_tabu_tenure(size, 400) for size, r in found.results.items())
+    # in a graph of fewer than 160 vertices the automatic tenure is 1, the original programs', so nothing changes
+    small = ss.generate("exponential", 120, 0.5, seed=3)
+    assert ss.search(small, 40, 300).experiments == ss.search(small, 40, 300, tabu_tenure=1).experiments
+    assert ss.search(g, 60, 900).experiments != ss.search(g, 60, 900, tabu_tenure=1).experiments
+    for bad in (0, -2, "long"):
+        with pytest.raises(ValueError):
+            ss.search(g, 30, 200, tabu_tenure=bad)
+    with pytest.raises(ValueError):
+        ss.search(g, 25, path=True, tabu_tenure=5)
+    with pytest.raises(ValueError):
+        ss.largest(g, "cycle", tabu_tenure=5)
+
+
+def test_results_saved_before_the_tabu_tenure_load_with_tenure_one(tmp_path, g100):
+    import json
+
+    r = ss.search(g100, 10, 20, experiments=4)
+    path = tmp_path / "old.json"
+    r.save(path)
+    data = json.loads(path.read_text())
+    data["params"].pop("tabu_tenure")
+    path.write_text(json.dumps(data))
+    assert ss.SearchResult.load(path, g100).params.tabu_tenure == 1
 
 
 def test_targets_above_the_total_find_the_closest_subgraphs():

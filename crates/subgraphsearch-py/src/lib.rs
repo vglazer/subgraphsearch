@@ -499,7 +499,7 @@ type ExperimentTuple = (i64, usize, bool, Vec<usize>, Option<Vec<u32>>);
 
 /// Runs a search; returns one (best_conflict, moves, success, vertices, trace) per experiment.
 #[pyfunction]
-#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration = false, degree = None, two_phase = false, connected = false, path = false, endpoints = None, kick_size = 0, kick_ban = 20))]
+#[pyo3(signature = (graph, size, edges, fixed, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration = false, degree = None, two_phase = false, connected = false, path = false, endpoints = None, kick_size = 0, kick_ban = 20, tabu_tenure = 1))]
 #[allow(clippy::too_many_arguments)]
 fn search(
     py: Python<'_>,
@@ -522,6 +522,7 @@ fn search(
     endpoints: Option<[usize; 2]>,
     kick_size: usize,
     kick_ban: usize,
+    tabu_tenure: usize,
 ) -> PyResult<Vec<ExperimentTuple>> {
     let params = SearchParams {
         size,
@@ -533,6 +534,7 @@ fn search(
         div_dur,
         kick_size,
         kick_ban,
+        tabu_tenure,
         seed,
         rng: parse(rng)?,
         record_trace: trace,
@@ -564,7 +566,7 @@ type SizeTuple = (usize, i64, Vec<ExperimentTuple>);
 /// Searches for the largest induced path, cycle, tree or clique; returns (the largest size found,
 /// one `SizeTuple` per size searched, in increasing order).
 #[pyfunction]
-#[pyo3(signature = (graph, shape, start, lookahead, fixed, endpoints, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration, kick_size = 0, kick_ban = 20))]
+#[pyo3(signature = (graph, shape, start, lookahead, fixed, endpoints, experiments, max_moves, div_freq, div_dur, seed, rng, trace, aspiration, kick_size = 0, kick_ban = 20, tabu_tenure = 1))]
 #[allow(clippy::too_many_arguments)]
 fn largest(
     py: Python<'_>,
@@ -584,6 +586,7 @@ fn largest(
     aspiration: bool,
     kick_size: usize,
     kick_ban: usize,
+    tabu_tenure: usize,
 ) -> PyResult<(Option<usize>, Vec<SizeTuple>)> {
     let shape: subgraphsearch_core::Shape = shape.parse().map_err(err)?;
     let mut base = SearchParams::new(2, 0);
@@ -599,6 +602,7 @@ fn largest(
     base.aspiration = aspiration;
     base.kick_size = kick_size;
     base.kick_ban = kick_ban;
+    base.tabu_tenure = tabu_tenure;
     let g = Arc::clone(&graph.inner);
     let found = py
         .detach(move || subgraphsearch_core::largest(&g, shape, &base, start, lookahead))

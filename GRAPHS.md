@@ -64,7 +64,8 @@ largest becomes 255 and rounds them; a positive score too small to survive round
 and a score of 0 is no edge. It returns the graph and the scale factor, so a total weight $`t`$
 stands for scores totalling about $`t`$ divided by the factor. 255 levels are usually enough: on
 the maximum diversity benchmark's real-valued instances, the heaviest selections found this way
-match the best known values to the precision the scores are published with.
+match or come within 0.002% of the best known values; rounding can make nearly equal selections
+tie.
 
 ## Incidence structures
 

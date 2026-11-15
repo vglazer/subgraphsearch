@@ -328,6 +328,7 @@ fn run_search<W: Write>(
         endpoints: None,
         kick_size: 0,
         kick_ban: 20,
+        tabu_tenure: 1,
         regular: match variant {
             Variant::Regular => Some(Regular {
                 degree: e_sub,

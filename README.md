@@ -6,20 +6,18 @@
 [![crates.io: subgraphsearch-core](https://img.shields.io/crates/v/subgraphsearch-core?label=crates.io%3A%20subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a prescribed number of
-vertices and edges** in a graph, or with a given total weight in a weighted graph. Searches are
-[fast](#how-it-compares), reproducible from a seed and come with diagnostics for tuning them, and
-near misses are reported alongside exact solutions, so the search also works as an approximation
-algorithm. Many [graph formats](GRAPHS.md#formats) are supported.
-
-On these targets subgraphsearch finds solutions in milliseconds where general solvers take seconds
-or give out, and on the [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html),
-choosing items as different from each other as possible, it reaches the best published values for
-up to 500 items in about a second (see [How it compares](#how-it-compares)).
+vertices and edges** in a graph, or with a prescribed total weight in a weighted graph. It finds
+them in milliseconds where general solvers take seconds or give out, and on the
+[maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), choosing items as
+different from each other as possible, it reaches the best published values for up to 500 items in
+about a second ([How it compares](#how-it-compares)).
 
 The same search finds induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
 [paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
 and [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)), regular subgraphs of a given
-degree, and subgraphs through given vertices.
+degree, and subgraphs through given vertices. Searches are reproducible from a seed, report near
+misses alongside exact solutions, and come with diagnostics for tuning; many
+[graph formats](GRAPHS.md#formats) are supported.
 
 ![One random graph with 36 vertices and 156 edges, searched four times and drawn with viz.plot_graph: an induced 12-cycle, an induced path on 15 vertices, an induced tree on 16 vertices and a 5-clique, each drawn in its own shape with the rest of the graph around it](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/overview.png)
 
@@ -110,15 +108,14 @@ goes through all of these.
 
 ![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
 
-- **Exact edge counts:** milliseconds, where general solvers (CP-SAT, and the MIP solvers SCIP,
-  HiGHS and CBC) need seconds at a few dozen vertices and mostly find nothing within 10 seconds
-  past 40.
-- **Maximum diversity:** the best published values on MDPLIB instances of up to 500 items in about
-  a second, where the best general solver, CP-SAT, falls up to 9% short and the MIP solvers up to
-  38%. At 2000 items a heuristic made for the problem is ahead: subgraphsearch ends about 0.1% short.
-- **Snake-in-the-box:** the known records up to the 8-cube, and within 3 vertices of the 9-cube's.
-- **Maximum cliques:** far faster than a general exact search; a dedicated clique solver is faster
-  still.
+- **Exact edge counts:** milliseconds, where CP-SAT and the MIP solvers SCIP, HiGHS and CBC need
+  seconds at a few dozen vertices and mostly find nothing within 10 seconds past 40.
+- **Maximum diversity:** the best published MDPLIB values up to 500 items in under a second, where
+  CP-SAT ends up to 9% short and the MIP solvers up to 38%. At 2000 items a heuristic made for the
+  problem is ahead; subgraphsearch comes within 0.02%.
+- **Maximum cliques:** far faster than an exact search, but a dedicated clique solver is faster
+  still and solves graphs built to trap local search.
+- **Snake-in-the-box:** the records up to the 8-cube, and within 3 vertices of the 9-cube's.
 
 [BENCHMARKS.md](BENCHMARKS.md) has the tables, settings and sources.
 
@@ -129,12 +126,12 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
 - **Choosing diverse items.** Picking $`k`$ of $`n`$ items so that the total distance between the
   chosen ones is as large as possible, the
   [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), is a weighted search:
-  the items are vertices and the distances edge weights. See
-  [BENCHMARKS.md](BENCHMARKS.md#maximum-diversity) for how it fares on the standard benchmark.
+  the items are vertices and the distances edge weights
+  ([BENCHMARKS.md](BENCHMARKS.md#maximum-diversity)).
 - **Error-correcting codes.** A binary code of minimum distance $`d`$ is a clique in the graph of
   words joined when they differ in at least $`d`$ places.
   [examples/codes.py](examples/codes.py) finds codes of the largest possible size for lengths 9 to
-  12, among them the 72-word code of length 11 and distance 4 in about 3 seconds.
+  12, among them the 72-word code of length 11 and distance 4 in about 5 seconds.
 - **Strongly regular graphs.** Switching a strongly regular graph with respect to a regular
   subgraph the search finds can give a new one with the same parameters: the Shrikhande graph from
   the 4×4 rook's graph, and the three Chang graphs from the triangular graph $`T(8)`$.
@@ -149,9 +146,8 @@ Many combinatorial objects are induced subgraphs of the right graph, so one sear
   [examples/hadamard.py](examples/hadamard.py) finds matrices of orders 8 to 20 this way, the order-20
   graph having 31,752 vertices and 169 million edges.
 - **Snakes and coils in hypercubes.** The longest induced paths and cycles in the $`n`$-cube are the
-  snake-in-the-box and coil-in-the-box problems; the path search reaches the known records up to
-  the 8-cube (see [BENCHMARKS.md](BENCHMARKS.md#snake-in-the-box) and
-  [examples/snake_9cube.py](examples/snake_9cube.py)).
+  snake-in-the-box and coil-in-the-box problems
+  ([BENCHMARKS.md](BENCHMARKS.md#snake-in-the-box), [examples/snake_9cube.py](examples/snake_9cube.py)).
 - **Equiangular lines.** Lines whose vectors have inner products ±c form a clique; the search
   finds the 16 equiangular lines in 6 dimensions, the most there can be.
 
@@ -161,11 +157,11 @@ The quickstart notebook works through each of these.
 
 subgraphsearch is a randomized tabu search with perturbations. Each move swaps one subgraph vertex
 for one outside vertex, chosen among the swaps that bring the edge count (or total weight) closest
-to the target; recently swapped vertices are tabu, so the search does not cycle; and every few
-hundred moves a perturbation, random moves or a *region kick* that rebuilds the part of the subgraph
-nearest a random vertex, moves it out of local minima. Independent experiments run in parallel, and
-results depend only on the seed. There is no fixed limit on the size of a graph; memory is the
-limit, mostly one bit per pair of vertices, about 1.25 GB at 100,000 vertices
+to the target. Vertices just swapped stay tabu for a few moves, longer for larger subgraphs of larger
+graphs, so the search does not circle back; and every few hundred moves a perturbation, random moves
+or a *region kick* that rebuilds the part of the subgraph nearest a random vertex, moves it out of
+local minima. Experiments run in parallel, and results depend only on the seed. Memory is the only
+limit on graph size, mostly one bit per pair of vertices, about 1.25 GB at 100,000 vertices
 ([details](ALGORITHM.md#data-structures-and-limits)). [ALGORITHM.md](ALGORITHM.md) describes the
 method in full, and [TUNING.md](TUNING.md) how to choose a search and its settings.
 
@@ -216,6 +212,7 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 | `--moves` | maximum moves per experiment | 250 |
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
 | `--kick-size`, `--kick-ban` | region kicks in place of the random moves of every cycle after the first: vertices rebuilt per kick, and moves they stay out (0 turns kicks off) | 4, 20 (no kicks with `--degree`, `--path`, `--rng legacy`) |
+| `--tabu-tenure` | moves a vertex just swapped stays tabu (0 = automatic) | `min(k/10, (n-k)/80)`, at least 1 (1 with `--degree`, `--path`, `--rng legacy`) |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
 

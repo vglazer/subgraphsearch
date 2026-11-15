@@ -41,30 +41,32 @@ Two refinements make this fast and effective:
   other swap has the same value it had before the move, so the search concentrates on the swaps
   the move changed. This improves the search as well as its speed, and on large dense graphs it
   skips most of the work.
-- **Tabu moves.** The two vertices just swapped are *tabu* for the next move: the vertex just
-  added cannot be removed and the vertex just removed cannot be added back, so the search does not
-  cycle between the same two subgraphs. Moves stay tabu for a single step, the shortest possible
-  *tabu tenure*.
+- **Tabu moves.** A vertex just swapped out may not return, and one just swapped in may not leave,
+  for `tabu_tenure` (`--tabu-tenure`) moves, the *tabu tenure*, so the search does not circle back
+  to the subgraphs it just left. The original programs' tenure was 1. A longer one helps large
+  subgraphs escape a local optimum, but too long a tenure hems the search in, and the best length
+  grows with both the subgraph size $`k`$ and the $`n - k`$ vertices outside it. The default is
+  $`\min(k/10, (n - k)/80)`$, rounded down and at least 1: on 200 of 2000 weighted vertices it is
+  20, in graphs of fewer than 160 vertices 1 (see [TUNING.md](TUNING.md#settings) for other
+  values). Regular and path searches, and the legacy random number generator by default, keep a
+  tenure of 1.
 
 ## Perturbations
 
-A local search gets stuck in local minima, so the search is perturbed at regular intervals. Every
-`div_freq` (`--div-freq`) moves a *diversification cycle* begins, and the first `div_dur`
-(`--div-dur`) moves of the first cycle are made at random (`div_dur=0` turns this off).
+A local search gets stuck in local minima, so every `div_freq` (`--div-freq`) moves a
+*diversification cycle* begins. The first cycle starts with `div_dur` (`--div-dur`) random moves
+(`div_dur=0` turns them off). Later cycles start with a *region kick* instead: the `kick_size`
+(`--kick-size`) subgraph vertices nearest a random subgraph vertex, in breadth-first order, are
+swapped out one per move, each for the best vertex to swap in, and may not return for `kick_ban`
+(`--kick-ban`) moves, 20 by default. A kick rebuilds one part of the subgraph and leaves the rest,
+like the large-neighborhood moves of searches for codes, where random moves would scatter changes
+across it.
 
-In later cycles the random moves are replaced by a *region kick*: the search takes the `kick_size`
-(`--kick-size`) subgraph vertices nearest a random subgraph vertex, in breadth-first order from it, and swaps each
-out, one per move, for the best vertex to swap in by the usual move value. The vertices removed may
-not return for `kick_ban` (`--kick-ban`) moves, 20 by default. A kick rebuilds one part of the subgraph at a time
-while leaving the rest in place, much as the large-neighborhood moves of searches for codes do,
-where random moves would scatter changes across the whole subgraph.
-
-Edge-count and weight searches use kicks of 4 vertices by default, a size that rebuilds little at
-a time. Larger kicks rebuild more and suit some problems but not others, so the size is a setting
-to compare; `kick_size=0` keeps random moves in every cycle. Regular and path searches use random
-moves only, as does the legacy random number generator by default, so that it reproduces the
-original programs. A search no longer than `div_freq` moves, such as one with the default settings,
-never reaches a second cycle and so is the same with or without kicks.
+Edge-count and weight searches kick 4 vertices by default; larger kicks suit some problems and not
+others, and `kick_size=0` keeps random moves throughout. Regular and path searches, and the legacy
+random number generator by default, use random moves only. A search of at most `div_freq` moves,
+such as one with the default settings, never reaches a second cycle and so is the same with or
+without kicks.
 
 ## Experiments, threads and seeds
 
@@ -171,14 +173,10 @@ proportion to the size of the subgraph; a search that misses its target makes ev
 allowed. Experiments are independent, so the time divides almost evenly among cores.
 
 Regular, cycle and path searches also keep, in every thread, where each vertex's neighbors are in
-its neighbor list. On graphs of up to 2,048 vertices they use a table with an entry for every pair
-of vertices, as the original programs do; on larger ones, an entry for every edge, so their memory
-grows with the number of edges rather than with the square of the number of vertices. Positions are
-32-bit integers, 4 bytes per edge end in every thread, which adds up in dense graphs: a graph on
-10,000 vertices with 25 million edges needs about 200 MB per thread, and a search can use fewer
-threads (`--threads`) when memory is short. Edge-count and weight searches, including those for
-cliques, independent sets and trees, keep no such table, so for them only the adjacency matrix and
-lists count. The original programs stored positions in 16 bits, which limited these searches to
-32,767 vertices; subgraphsearch has no such limit, so a path search runs in the 16-cube, with 65,536
-vertices, as in smaller ones. No search has a fixed limit on the number of vertices: memory is the
+its neighbor list: a table with an entry per pair of vertices on graphs of up to 2,048 vertices, as
+in the original programs, and an entry per edge end (4 bytes) on larger ones. That adds up in dense
+graphs, about 200 MB per thread for 10,000 vertices and 25 million edges, so use fewer threads
+(`--threads`) when memory is short. Edge-count and weight searches keep no such table. The original
+programs' 16-bit positions limited these searches to 32,767 vertices; subgraphsearch has no fixed
+limit on any search, so a path search runs in the 16-cube, with 65,536 vertices. Memory is the
 limit.

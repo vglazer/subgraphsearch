@@ -195,6 +195,11 @@ struct SearchArgs {
     /// Moves a vertex removed by a region kick stays out.
     #[arg(long, default_value_t = 20)]
     kick_ban: usize,
+    /// Moves a vertex just swapped out stays out, and one just swapped in stays in (0 = automatic:
+    /// a tenth of the subgraph size, at least 1). Default: automatic, except 1, the original
+    /// programs' tenure, with --rng legacy.
+    #[arg(long)]
+    tabu_tenure: Option<usize>,
     /// Random seed.
     #[arg(short, long, default_value_t = 1)]
     seed: i64,
@@ -295,6 +300,11 @@ struct LargestArgs {
     /// Moves a vertex removed by a region kick stays out.
     #[arg(long, default_value_t = 20)]
     kick_ban: usize,
+    /// Moves a vertex just swapped out stays out, and one just swapped in stays in (0 = automatic:
+    /// a tenth of the subgraph size, at least 1). Default: automatic, except 1, the original
+    /// programs' tenure, with --rng legacy.
+    #[arg(long)]
+    tabu_tenure: Option<usize>,
     /// Random seed.
     #[arg(short, long, default_value_t = 1)]
     seed: i64,
@@ -574,6 +584,14 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 0,
         None => subgraphsearch_core::DEFAULT_KICK_SIZE,
     };
+    let tabu_tenure = match args.tabu_tenure {
+        Some(t) if t != 1 && regular_or_path => {
+            bail!("--tabu-tenure is available for edge-count searches only, not --degree or --path")
+        }
+        Some(t) => t,
+        None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 1,
+        None => subgraphsearch_core::AUTO_TABU_TENURE,
+    };
     let graphs = if args.weighted {
         Vec::new()
     } else if args.all {
@@ -597,6 +615,7 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         div_dur: args.div_dur,
         kick_size,
         kick_ban: args.kick_ban,
+        tabu_tenure,
         seed: args.seed,
         rng: args.rng.into(),
         record_trace: args.trace,
@@ -738,6 +757,17 @@ fn run_largest(args: LargestArgs) -> Result<u8> {
         None => subgraphsearch_core::DEFAULT_KICK_SIZE,
     };
     base.kick_ban = args.kick_ban;
+    base.tabu_tenure = match args.tabu_tenure {
+        Some(t) if t != 1 && regular_or_path => {
+            bail!(
+                "--tabu-tenure is available for trees, cliques and independent sets, not paths or cycles"
+            )
+        }
+        Some(t) => t,
+        // the legacy rng reproduces the original programs' runs, whose tenure was 1
+        None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 1,
+        None => subgraphsearch_core::AUTO_TABU_TENURE,
+    };
     let shape = subgraphsearch_core::Shape::from(args.shape);
     let start = std::time::Instant::now();
     let found = subgraphsearch_core::largest(&graph, shape, &base, args.start, args.lookahead)?;

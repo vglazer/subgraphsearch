@@ -9,8 +9,9 @@
 //!   when the edge count did not change on the last move, only rows for vertices adjacent to
 //!   exactly one of the two vertices just swapped get a full scan; the rest only look at such
 //!   columns.
-//! - The two vertices just swapped are *tabu* for one move (a tabu tenure of 1): the vertex just
-//!   added cannot be removed and the vertex just removed cannot be added back.
+//! - The vertices just swapped are *tabu* for [`SearchParams::tabu_tenure`] moves: the vertex just
+//!   added cannot be removed and the vertex just removed cannot be added back. The original
+//!   programs' tenure was 1, a single move; by default it is a tenth of the subgraph size.
 //! - For the first `div_dur` moves of every `div_freq` (and whenever no optimal move is known),
 //!   a uniformly random swap is made instead ("diversification").
 //!
@@ -165,6 +166,15 @@ pub struct SearchParams {
     /// How many moves a vertex removed by a region kick stays out (see `kick_size`).
     #[serde(default = "default_kick_ban")]
     pub kick_ban: usize,
+    /// The *tabu tenure*: for how many moves a vertex just swapped out may not be swapped back in,
+    /// and a vertex just swapped in may not be swapped out. [`AUTO_TABU_TENURE`] (0), which
+    /// [`SearchParams::new`] sets, chooses [`auto_tabu_tenure`] of the subgraph size and the
+    /// number of vertices left outside it, and results record the tenure chosen. 1 is the shortest tenure, the original programs', and what
+    /// results saved before the tenure existed used; to reproduce the original programs' runs with
+    /// [`RngKind::Legacy`], set it to 1. Edge-count and weight searches only: regular and path
+    /// searches ignore it.
+    #[serde(default = "default_tabu_tenure")]
+    pub tabu_tenure: usize,
     /// Random seed.
     pub seed: i64,
     /// Random number generator.
@@ -216,6 +226,34 @@ fn default_kick_ban() -> usize {
 /// problem tried.
 pub const DEFAULT_KICK_SIZE: usize = 4;
 
+fn default_tabu_tenure() -> usize {
+    1
+}
+
+/// The `tabu_tenure` that chooses [`auto_tabu_tenure`], and the one [`SearchParams::new`] sets.
+pub const AUTO_TABU_TENURE: usize = 0;
+
+/// The tabu tenure [`AUTO_TABU_TENURE`] chooses for a subgraph of `size` of the graph's `vertices`:
+/// a tenth of the size or an eightieth of the vertices left outside it, whichever is smaller,
+/// and at least 1. Fitted on random weighted and unweighted graphs of 200 to 2000 vertices, the
+/// maximum diversity benchmark, cliques and codes: the best tenure grows with both, and much longer
+/// ones hurt everywhere. Small graphs get 1, the original programs' tenure.
+pub fn auto_tabu_tenure(size: usize, vertices: usize) -> usize {
+    (size / 10).min(vertices.saturating_sub(size) / 80).max(1)
+}
+
+impl SearchParams {
+    /// The tabu tenure a search of a graph on `vertices` vertices uses: `tabu_tenure`, or
+    /// [`auto_tabu_tenure`] for [`AUTO_TABU_TENURE`].
+    pub fn resolved_tabu_tenure(&self, vertices: usize) -> usize {
+        if self.tabu_tenure == AUTO_TABU_TENURE {
+            auto_tabu_tenure(self.size, vertices)
+        } else {
+            self.tabu_tenure
+        }
+    }
+}
+
 impl SearchParams {
     /// Parameters with the given subgraph size and edge count and otherwise reasonable defaults:
     /// 40 experiments of up to 250 moves (many short runs usually beat a few long ones), 4 random
@@ -232,6 +270,7 @@ impl SearchParams {
             div_dur: 4,
             kick_size: DEFAULT_KICK_SIZE,
             kick_ban: default_kick_ban(),
+            tabu_tenure: AUTO_TABU_TENURE,
             seed: 1,
             rng: RngKind::Xoshiro,
             record_trace: false,
@@ -421,7 +460,10 @@ impl SearchResult {
 /// another and match the C program exactly.
 pub fn search<G: SearchGraph>(graph: &G, params: &SearchParams) -> Result<SearchResult, Error> {
     if params.regular.is_some() || params.path {
-        return crate::regular::search(unweighted(graph)?, params);
+        // regular and path searches have a tenure of 1
+        let mut result = crate::regular::search(unweighted(graph)?, params)?;
+        result.params.tabu_tenure = 1;
+        return Ok(result);
     }
     params.validate(graph.num_vertices())?;
     let experiments = match params.rng {
@@ -442,8 +484,11 @@ pub fn search<G: SearchGraph>(graph: &G, params: &SearchParams) -> Result<Search
             )
             .collect(),
     };
+    // record the tenure the search used, not "automatic"
+    let mut params = params.clone();
+    params.tabu_tenure = params.resolved_tabu_tenure(graph.num_vertices());
     Ok(SearchResult {
-        params: params.clone(),
+        params,
         experiments,
     })
 }
@@ -564,6 +609,11 @@ struct Workspace {
     banned_until: Vec<usize>,
     fixed: Vec<bool>,
     kick_queue: Vec<usize>,
+    /// The tabu tenure, and with one above 1, the move until which each removed vertex may not
+    /// return and each added vertex may not leave.
+    tenure: usize,
+    tabu_in: Vec<usize>,
+    tabu_out: Vec<usize>,
 }
 
 impl Workspace {
@@ -610,7 +660,14 @@ impl Workspace {
             banned_until: Vec::new(),
             fixed: Vec::new(),
             kick_queue: Vec::new(),
+            tenure: params.resolved_tabu_tenure(v),
+            tabu_in: Vec::new(),
+            tabu_out: Vec::new(),
         };
+        if ws.tenure > 1 {
+            ws.tabu_in = vec![0; v];
+            ws.tabu_out = vec![0; v];
+        }
         if params.kick_size > 0 {
             ws.banned_until = vec![0; v];
             ws.fixed = vec![false; v];
@@ -807,6 +864,11 @@ impl Workspace {
             self.banned_until.fill(0);
             self.kick_queue.clear();
         }
+        let tenure = self.tenure;
+        if tenure > 1 {
+            self.tabu_in.fill(0);
+            self.tabu_out.fill(0);
+        }
         let mut j = 0;
         while j < params.max_moves {
             // with kicks on, a region kick starts each diversification cycle after the first, whose
@@ -863,6 +925,10 @@ impl Workspace {
 
             self.sub_ch[sub_vert] = 0;
             self.sub_ch[rest_vert] = 1;
+            if tenure > 1 {
+                self.tabu_in[sub_vert] = j + tenure;
+                self.tabu_out[rest_vert] = j + tenure;
+            }
 
             self.sub_verts[sub_row] = rest_vert;
             self.vert_inds[rest_vert] = sub_row;
@@ -891,8 +957,10 @@ impl Workspace {
             // with a region kick, none that are banned)
             let mut u_cols = 0;
             self.u_ch[sub_vert] = 0;
-            let banned = |w: usize| kick && self.banned_until[w] > j;
-            let m = if kick {
+            let banned = |w: usize| {
+                (kick && self.banned_until[w] > j) || (tenure > 1 && self.tabu_in[w] > j)
+            };
+            let m = if kick || tenure > 1 {
                 (0..v_rest)
                     .filter(|&k| k != rest_col && !banned(self.rest_verts[k]))
                     .count()
@@ -902,6 +970,9 @@ impl Workspace {
             let mut temp = m;
             for k in 0..v_rest {
                 if k == rest_col || banned(self.rest_verts[k]) {
+                    if tenure > 1 {
+                        self.u_ch[self.rest_verts[k]] = 0;
+                    }
                     continue;
                 }
                 let vert = self.rest_verts[k];
@@ -929,6 +1000,10 @@ impl Workspace {
             for k in 0..v_sub {
                 let vert = self.sub_verts[k];
                 if vert == rest_vert {
+                    continue;
+                }
+                if tenure > 1 && self.tabu_out[vert] > j {
+                    self.u_ch[vert] = 0;
                     continue;
                 }
                 let w_cols = if self.u_ch[vert] != 0 {
@@ -1016,6 +1091,49 @@ mod tests {
             assert_eq!(g.induced_edge_count(&e.vertices), 0);
         }
         assert!(r.successes() > 0);
+    }
+
+    #[test]
+    fn tabu_tenure_defaults_and_resolution() {
+        assert_eq!(SearchParams::new(30, 0).tabu_tenure, AUTO_TABU_TENURE);
+        // a tenth of the size or an eightieth of the rest, whichever is smaller, at least 1
+        assert_eq!(SearchParams::new(200, 0).resolved_tabu_tenure(2000), 20);
+        assert_eq!(SearchParams::new(200, 0).resolved_tabu_tenure(500), 3);
+        assert_eq!(SearchParams::new(72, 0).resolved_tabu_tenure(2048), 7);
+        assert_eq!(SearchParams::new(15, 0).resolved_tabu_tenure(2000), 1);
+        assert_eq!(SearchParams::new(30, 0).resolved_tabu_tenure(100), 1);
+        let mut p = SearchParams::new(45, 0);
+        p.tabu_tenure = 7;
+        assert_eq!(p.resolved_tabu_tenure(2000), 7);
+        // results saved before the tenure existed used 1
+        assert_eq!(default_tabu_tenure(), 1);
+    }
+
+    #[test]
+    fn automatic_tenure_is_one_for_small_subgraphs() {
+        let g = cycle(60);
+        let mut p = SearchParams::new(12, 4);
+        p.experiments = 8;
+        p.max_moves = 600;
+        let auto = search(&g, &p).unwrap().experiments;
+        p.tabu_tenure = 1;
+        assert_eq!(auto, search(&g, &p).unwrap().experiments);
+    }
+
+    #[test]
+    fn long_tenures_still_find_subgraphs() {
+        let g = cycle(120);
+        for tenure in [AUTO_TABU_TENURE, 2, 8] {
+            let mut p = SearchParams::new(40, 20);
+            p.experiments = 8;
+            p.max_moves = 3000;
+            p.tabu_tenure = tenure;
+            let r = search(&g, &p).unwrap();
+            assert!(r.successes() > 0, "tenure {tenure}");
+            for e in r.experiments.iter().filter(|e| e.success) {
+                assert_eq!(g.induced_edge_count(&e.vertices), 20);
+            }
+        }
     }
 
     #[test]

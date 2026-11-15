@@ -29,11 +29,11 @@ as it can reach. The same search finds induced [cycles]({W}Cycle_(graph_theory))
 [trees]({W}Tree_(graph_theory)) and [cliques]({W}Clique_(graph_theory)), and [regular]({W}Regular_graph) and
 connected subgraphs. The method is a randomized [tabu search]({W}Tabu_search).
 
-The notebook starts with one dense random graph: exact edge counts and near misses. It then turns to weighted graphs and choosing diverse items, a practical problem where
-subgraphsearch reaches published best values in about a second, and to saving and tuning searches. Next come
-shapes: regular subgraphs, cycles and trees, induced paths, cliques and independent sets. Then mathematics:
-strongly regular graphs from switching and block designs, spectral bounds, Hadamard matrices, equiangular
-lines and error-correcting codes. It ends with graph structure and file formats.
+The notebook starts with exact edge counts and near misses on one dense random graph, then weighted graphs and
+choosing diverse items, where subgraphsearch reaches published best values in under a second, then saving and
+tuning searches. Next come shapes: regular subgraphs, cycles, trees, induced paths, cliques and independent
+sets. Then mathematics: strongly regular graphs, spectral bounds, Hadamard matrices, equiangular lines and
+codes. It ends with graph structure and file formats.
 """),
     code("""
 import subgraphsearch as ss
@@ -110,8 +110,8 @@ The **run-time distribution** (left) is the fraction of experiments that succeed
 moves, the middle panel counts the best conflict each experiment reached, and the **traces** (right) show the
 conflict after each move for some of the experiments. Here 19 of the 41 successes came within 100 moves, and
 the rest in bursts just after moves 300, 600, 900 and so on, where each diversification cycle after the first
-starts with a region kick (see Tuning). Without kicks, the rest of the 2000-move budget adds only two successes
-to those first 19, so many short experiments beat a few long ones; with them, longer runs keep paying off.
+starts with a region kick (see Tuning). Without kicks the rest of the 2000-move budget adds only two successes,
+so short experiments would do as well; with kicks, longer runs keep paying off.
 
 Success falls off sharply around the limit: one edge fewer is found by every experiment, and a few more by
 none.
@@ -166,15 +166,13 @@ maximize the sum of the distances between the chosen items. With the items as ve
 edge weights, that sum is the total weight of an induced subgraph on $k$ vertices, which is what a weighted
 search aims at.
 
-The problem has a standard benchmark, MDPLIB (Martí, Gallego and Duarte, 2010), with best known values from
-two-hour runs of a scatter search made for the problem. Its SOM-b instances have integer distances from 0 to 9
-between every two items. Eight of them, with 100 to 400 items, are in `examples/data/mdplib` (under their own
-license, Creative Commons Attribution). Below, subgraphsearch aims at each best known value with the same
-settings for every instance, once without *region kicks* (`kick_size=0`) and once with large ones
-(`kick_size=16`). A region kick starts each diversification cycle after the first by rebuilding the part of
-the selection nearest a random item; searches use small kicks of 4 by default (more under Tuning). The
-[benchmarks](https://github.com/vglazer/subgraphsearch/blob/main/BENCHMARKS.md#maximum-diversity) compare these results with other
-methods.
+Its standard benchmark, MDPLIB (Martí, Gallego and Duarte, 2010), lists best known values from two-hour runs
+of heuristics made for the problem. Eight of its SOM-b instances, with 100 to 400 items and integer distances
+from 0 to 9, are in `examples/data/mdplib` (under their own license, Creative Commons Attribution). Below,
+subgraphsearch aims at each best known value, once without *region kicks* (`kick_size=0`), which rebuild the
+part of the selection nearest a random item (see Tuning), and once with large ones (`kick_size=16`). The
+[benchmarks](https://github.com/vglazer/subgraphsearch/blob/main/BENCHMARKS.md#maximum-diversity) compare the
+results with other methods.
 """),
     code("""
 import time
@@ -238,12 +236,10 @@ if mdp_rows:
     ax.invert_yaxis()
 """),
     md("""
-Without kicks, subgraphsearch reaches every best known value up to 300 items but finds the larger instances
-harder, and on the 400-item ones a run rarely gets there, if ever. With large kicks, most runs reach the best
-known value on every instance, in about a second or less for 60 runs. Without a published value to aim at,
-`ss.densest(items, k)` finds the most diverse selection the search can reach. Choosing $k$ items for a target total
-of pairwise scores is the kind of problem subgraphsearch is for: a practical one, where its search is fast and
-needs little tuning.
+Without kicks, subgraphsearch reaches the best known value of the 100-item instances in nearly every run, and
+of the larger ones in about half to most runs. With large kicks nearly every run reaches it on every instance,
+in under half a second for 60 runs. Without a published value to aim at, `ss.densest(items, k)` finds the most
+diverse selection the search can reach.
 """),
     md("""
 ## Saving and repeating results
@@ -284,9 +280,8 @@ for aspiration in (False, True):
     md("""
 `kick_size` often matters more. A *region kick* replaces the random moves at the start of each diversification
 cycle after the first: it swaps out the $k$ subgraph vertices nearest a random one, each for the best
-replacement, and keeps them out for a while (`kick_ban` moves), so it rebuilds one part of the subgraph at a
-time. Edge-count and weight searches use kicks of 4 by default, which only take effect in searches longer than
-`div_freq` moves. On the same target:
+replacement, and keeps them out for `kick_ban` moves, rebuilding one part of the subgraph at a time. The
+default, 4, only takes effect in searches longer than `div_freq` moves. On the same target:
 """),
     code("""
 for kick_size in (0, 4, 16):
@@ -294,10 +289,24 @@ for kick_size in (0, 4, 16):
     print(f"kick_size={kick_size:<2}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
 """),
     md("""
-In every problem tried, kicks of about 4 vertices helped or did no harm: this target, the maximum diversity
-benchmark above, the DIMACS clique graphs, error-correcting codes and random graphs of many sizes and densities,
-which is why 4 is the default. Larger kicks often help much more, but on some problems they rebuild too much
-at once and do worse than none, as the codes below show, so compare a few sizes; `kick_size=0` turns kicks off.
+Kicks of 4 helped or did no harm on every problem tried, which is why 4 is the default. Larger kicks often
+help much more, but on some problems they rebuild too much at once and do worse than none, as the codes below
+show, so compare a few sizes; `kick_size=0` turns kicks off.
+"""),
+    md("""
+`tabu_tenure` is how many moves a vertex just swapped out must stay out, and one just swapped in must stay in.
+Longer tenures keep the search from circling back to the same subgraphs, but too long a tenure hems it in. The
+default grows with the subgraph and with the vertices left outside it, and is cautious: in a graph of fewer than
+160 vertices, like this one, it is 1. On the same target:
+"""),
+    code("""
+for tenure, res in ss.sweep(g, 30, 346, "tabu_tenure", [1, 2, 3, 5, 8], **settings).items():
+    print(f"tabu_tenure={tenure}: {res.successes}/60 successes, {res.true_cost:.0f} moves per success")
+"""),
+    md("""
+Every tenure above 1 helps here, and 5 or more finds the target in every experiment with a tenth of the
+moves. On other problems much longer tenures hurt (in the maximum diversity benchmark, 20 instead of 10 cost
+most of the successes on 200 of 500 items), so compare a few small values rather than taking the longest.
 """),
     md(f"""
 ## Regular subgraphs
@@ -543,15 +552,13 @@ assert all(g.induced_edge_count(c) == 55 for c in cliques_via_nbhd)
     md("""
 ### Benchmark graphs
 
-Maximum cliques have a standard benchmark, the DIMACS graphs, with known clique numbers. Eight of them, of three kinds, are in `examples/data` (under their own license, Creative Commons Attribution-ShareAlike,
-from the Network Repository): random dense graphs (C125.9, C250.9, p_hat300-3), structured ones from geometry
-and coding theory (MANN_a27, hamming8-4, keller4), and two *brock* graphs, which hide their largest clique
-among many large cliques that are not quite as large, to defeat local search. The cell reads them from a
-clone of the repository or else downloads them from GitHub.
-
-Below, subgraphsearch aims at each graph's clique number with 32 experiments. The
-[benchmarks](https://github.com/vglazer/subgraphsearch/blob/main/BENCHMARKS.md#maximum-cliques) set these results beside a solver made for
-maximum cliques and an exact search.
+Maximum cliques have a standard benchmark, the DIMACS graphs, with known clique numbers. Eight of them are in
+`examples/data` (from the Network Repository, under Creative Commons Attribution-ShareAlike): random dense
+graphs (C125.9, C250.9, p_hat300-3), structured ones from geometry and coding theory (MANN_a27, hamming8-4,
+keller4), and two *brock* graphs, which hide their largest clique among many slightly smaller ones to defeat
+local search. Below, subgraphsearch aims at each clique number with 32 experiments; the
+[benchmarks](https://github.com/vglazer/subgraphsearch/blob/main/BENCHMARKS.md#maximum-cliques) set the results
+beside a solver made for cliques and an exact search.
 """),
     code("""
 local = Path("examples/data/dimacs.g6")
@@ -584,9 +591,10 @@ if dimacs:
     display(Markdown("\\n".join(lines)))
 """),
     md("""
-On most of these graphs subgraphsearch finds a largest clique in milliseconds. On the brock graphs it ends in
-one of the decoy cliques however it is tuned; a solver made for maximum cliques does better there, and is
-faster on the others too, so for maximum cliques alone it is the better tool.
+On most of these graphs subgraphsearch finds a largest clique in milliseconds, and a tabu tenure of 5 (see
+Tuning) finds MANN_a27's in nearly every experiment. On the brock graphs it ends on a decoy however it is
+tuned. A solver made for maximum cliques solves them and is faster on the others, so for maximum cliques alone
+it is the better tool.
 """),
     md(f"""
 ## Switching
@@ -1073,11 +1081,10 @@ A code can be searched the other way round too: as an independent set in the gra
 close*, joined when they differ in fewer than $d$ places. That graph is sparse, and distances in it mean
 something: the codewords nearest a codeword lie in one region of the space of words. A region kick (see
 Tuning) then removes the $k$ codewords nearest a random one and refills the gap with the best words it can
-find, rebuilding one region of the code at a time, the kind of move searches for codes use.
-
-How large a region to rebuild depends on the problem, so the size is a setting to compare. Here it is for the
-72-word code above and for a [constant-weight code]({W}Constant-weight_code): 69 words of length 15, each with
-seven 1s, at distance at least 6 from one another, also the most there can be:
+find, rebuilding one region of the code at a time, the kind of move searches for codes use. How large a
+region to rebuild depends on the problem; here it is compared for the 72-word code above and a
+[constant-weight code]({W}Constant-weight_code): 69 words of length 15, each with seven 1s, at distance at
+least 6 from one another, also the most there can be:
 """),
     code("""
 weight_7 = ss.vectors.binary_words(15, weight=7)
@@ -1094,10 +1101,10 @@ for kick_size in (0, 4, 32):
     print(f"kick_size={kick_size:<2}" + "".join(f"{cell:>30}" for cell in row))
 """),
     md("""
-Each code wants what the other cannot stand. The 72-word code gains from rebuilding large regions: kicks of 32
-codewords, nearly half the code, find it in nearly every experiment with about a sixth of the work. The constant-weight code
-is best with small kicks of 4 and is wrecked by large ones. So compare a few sizes on a problem, as for any
-setting, before relying on one.
+The two codes want different things. The 72-word code is found in nearly every experiment at any kick size,
+and kicks of 32 codewords, nearly half the code, save about a quarter of the work. The constant-weight code
+does as well with small kicks as with none and is wrecked by large ones, which find it a third as often. So
+compare a few sizes on a problem, as for any setting, before relying on one.
 """),
     md(f"""
 ## Graph structure
