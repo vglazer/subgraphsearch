@@ -6,11 +6,15 @@
 [![crates.io: subgraphsearch-core](https://img.shields.io/crates/v/subgraphsearch-core?label=crates.io%3A%20subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a prescribed number of
-vertices and edges** in a graph, or with a prescribed total weight in a weighted graph. It finds
-them in milliseconds where general solvers take seconds or give out, and on the
-[maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), choosing items as
-different from each other as possible, it reaches the best published values for up to 500 items in
-well under a second ([How it compares](#how-it-compares)).
+vertices and edges** in a graph, or with a prescribed total weight in a weighted graph, in
+milliseconds where general solvers take seconds or give out.
+
+Its most practical use is **choosing $`k`$ of $`n`$ items that are as different from each other as
+possible**: a diverse portfolio, sites for facilities that should be far apart, a varied set of
+compounds to test. On the standard benchmark for this, the
+[maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), it reaches the best
+published values for up to 500 items in well under a second, where general solvers left running for
+10 seconds fall short, CP-SAT by up to 9% ([How it compares](#how-it-compares)).
 
 The same search finds induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
 [paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
@@ -81,8 +85,15 @@ pip install "subgraphsearch[all]" jupyterlab && python -m subgraphsearch quickst
 ## Python
 
 ```python
+import numpy as np
 import subgraphsearch as ss
 from subgraphsearch import viz
+
+# choose 50 of 500 items as different from each other as possible
+items = np.random.default_rng(0).random((500, 8))             # 500 items, 8 features each
+dist = np.linalg.norm(items[:, None] - items[None], axis=-1)  # the distance between every two
+w, factor = ss.WeightedGraph.from_scores(dist)                # items as vertices, distances as weights
+picked = ss.densest(w, 50).vertices                           # 50 items as far apart as possible
 
 g = ss.generate("exponential", 100, 0.6, seed=1)   # a random graph: 100 vertices, density 0.6
 
@@ -122,12 +133,12 @@ goes through all of these.
 
 ![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
 
-- **Exact edge counts:** milliseconds, where CP-SAT and the MIP solvers SCIP, HiGHS and CBC need
-  seconds at a few dozen vertices and mostly find nothing within 10 seconds past 40.
 - **Maximum diversity:** the best published MDPLIB values up to 500 items in under a second, where
   CP-SAT ends up to 9% short and the MIP solvers up to 38%. At 2000 items a heuristic made for the
   problem is ahead: in the same 20 s per run, it reaches the best known value in 22 of 30 runs,
   subgraphsearch in 6.
+- **Exact edge counts:** milliseconds, where CP-SAT and the MIP solvers SCIP, HiGHS and CBC need
+  seconds at a few dozen vertices and mostly find nothing within 10 seconds past 40.
 - **Maximum cliques:** far faster than an exact search, but a dedicated clique solver is faster
   still and solves graphs built to trap local search.
 - **Steiner triple systems:** found on up to 81 points, but a hill-climbing method made for these
@@ -141,10 +152,12 @@ goes through all of these.
 Many combinatorial objects are induced subgraphs of the right graph, so one search finds them all.
 
 - **Choosing diverse items.** Picking $`k`$ of $`n`$ items so that the total distance between the
-  chosen ones is as large as possible, the
-  [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), is a weighted search:
-  the items are vertices and the distances edge weights
-  ([BENCHMARKS.md](BENCHMARKS.md#maximum-diversity)).
+  chosen ones is as large as possible, such as a diverse portfolio, facility sites that should be far
+  apart, or a varied set of compounds to test, is the
+  [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html). It is a weighted
+  search: the items are vertices and the distances edge weights (`ss.WeightedGraph.from_scores`
+  turns a distance matrix into one). The quickstart notebook works through benchmark instances,
+  and [BENCHMARKS.md](BENCHMARKS.md#maximum-diversity) compares the results with other methods.
 - **Error-correcting codes.** A binary code of minimum distance $`d`$ is a clique in the graph of
   words joined when they differ in at least $`d`$ places.
   [examples/codes.py](examples/codes.py) finds codes of the largest possible size for lengths 9 to
