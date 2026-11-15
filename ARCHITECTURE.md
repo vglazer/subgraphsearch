@@ -94,8 +94,11 @@ form of a result, and `SearchResult.load` reads it as well as Python's own saved
   `rng="legacy"` byte-identical; the golden tests in `crates/subgraphsearch-cli/tests/golden.rs`
   check it against recorded output ([PORTING.md](PORTING.md)).
 - **Speed-ups must not change results.** The same seed gives the same experiments, so an
-  optimization must make exactly the same moves; `skipping_rows_changes_no_result` in `search.rs`
-  shows how to test one against the plain scan.
+  optimization must make exactly the same moves. The move scan in `search.rs` has three layers
+  that skip work without changing it: bounds that rule out whole rows, buckets of columns by
+  degree that narrow a row to the columns that can matter, and a pause that stops building
+  buckets when they do not help. `skipping_rows_changes_no_result` compares every kind of search
+  against a plain scan of every swap; keep it passing, and extend it for any new shortcut.
 
 ## Adding a search setting
 

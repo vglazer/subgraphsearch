@@ -76,7 +76,8 @@ pub trait SearchGraph: Sync {
 /// search's arithmetic with it cannot overflow.
 const NO_ROW_BOUND: i64 = i64::MAX / 4;
 
-/// In tests, makes every row's bound 0, so the search scans every row, as a reference.
+/// In tests, makes every row's bound 0 and turns off the buckets, so the search scans every
+/// column of every row, as a reference.
 #[cfg(test)]
 static NO_ROW_SKIPPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -608,6 +609,224 @@ fn scan_row<R: AdjacencyRow>(
     *opt_mov = count;
 }
 
+/// The candidate columns bucketed by their degree into the subgraph, so that a row can visit only
+/// the columns whose degree lets a swap reach a given value. Results are exactly those of scanning
+/// the columns in order: buckets keep the columns' order, and ties are listed by position.
+#[derive(Default)]
+struct Buckets {
+    /// Degree of bucket 0.
+    base: i64,
+    start: Vec<u32>,
+    pos: Vec<u32>,
+    fill: Vec<u32>,
+    /// Each column's degree, by position.
+    deg: Vec<i64>,
+    gather: Vec<u32>,
+    /// Whether bucketing is paying off: rows whose moves were collected from buckets, rows tried,
+    /// and the move before which buckets are not built (when their degrees are too crowded for
+    /// the buckets to narrow anything down, building them only costs time).
+    collected: u32,
+    tried: u32,
+    paused_until: usize,
+}
+
+impl Buckets {
+    /// Buckets `cols` by degree, if their degrees span few enough values to pay off; returns
+    /// whether it did.
+    fn build(&mut self, cols: &[usize], sub_degs: &[i32], lo: i64, hi: i64) -> bool {
+        let span = (hi - lo + 1) as usize;
+        if span > 2 * cols.len() + 64 {
+            return false;
+        }
+        self.base = lo;
+        self.start.clear();
+        self.start.resize(span + 1, 0);
+        self.deg.clear();
+        for &t in cols {
+            let d = i64::from(sub_degs[t]);
+            self.deg.push(d);
+            self.start[(d - lo) as usize + 1] += 1;
+        }
+        for b in 0..span {
+            self.start[b + 1] += self.start[b];
+        }
+        self.fill.clear();
+        self.fill.extend_from_slice(&self.start[..span]);
+        self.pos.clear();
+        self.pos.resize(cols.len(), 0);
+        for (p, &d) in self.deg.iter().enumerate() {
+            let b = (d - lo) as usize;
+            self.pos[self.fill[b] as usize] = p as u32;
+            self.fill[b] += 1;
+        }
+        true
+    }
+
+    /// Starts an experiment with bucketing on.
+    fn reset(&mut self) {
+        (self.collected, self.tried, self.paused_until) = (0, 0, 0);
+    }
+
+    /// After a move made with buckets: once enough rows have tried them, pauses bucketing for a
+    /// while if they mostly could not narrow the columns down.
+    fn review(&mut self, j: usize) {
+        if self.tried >= 256 {
+            if self.collected * 2 < self.tried {
+                self.paused_until = j + 1024;
+            }
+            (self.collected, self.tried) = (0, 0);
+        }
+    }
+
+    /// The positions in degree `d`'s bucket, ascending.
+    #[inline]
+    fn bucket(&self, d: i64) -> &[u32] {
+        let b = (d - self.base) as usize;
+        &self.pos[self.start[b] as usize..self.start[b + 1] as usize]
+    }
+
+    /// [`row_min`] over the first `w_cols` columns, whose degrees lie in `range`, visiting buckets
+    /// in order of the least value their swaps can have and stopping once none can beat `best`.
+    #[allow(clippy::too_many_arguments)]
+    fn row_min<R: AdjacencyRow>(
+        &self,
+        row: R,
+        u_list: &[usize],
+        w_cols: usize,
+        (lo, hi): (i64, i64),
+        degree: i64,
+        wmax: i64,
+        bound: i64,
+        mut best: i64,
+    ) -> i64 {
+        // a swap with a column of degree d has value |degree + d - w| for some w in 0..=wmax: 0 is
+        // possible for d in [-degree, -degree + wmax], and the least value grows by 1 per step away
+        let visit = |d: i64, best: &mut i64| -> bool {
+            for &p in self.bucket(d) {
+                let p = p as usize;
+                if p >= w_cols {
+                    break;
+                }
+                let val = (degree + d - row.value(u_list[p])).abs();
+                if val < *best {
+                    *best = val;
+                    if *best <= bound {
+                        return true;
+                    }
+                }
+            }
+            false
+        };
+        let (za, zb) = ((-degree).max(lo), (-degree).saturating_add(wmax).min(hi));
+        let (mut left, mut right) = if za <= zb {
+            for d in za..=zb {
+                if visit(d, &mut best) {
+                    return best;
+                }
+            }
+            (za - 1, zb + 1)
+        } else if -degree > hi {
+            (hi, hi + 1)
+        } else {
+            (lo - 1, lo)
+        };
+        loop {
+            let from_left = if left >= lo {
+                -(degree + left)
+            } else {
+                i64::MAX
+            };
+            let from_right = if right <= hi {
+                degree + right - wmax
+            } else {
+                i64::MAX
+            };
+            let least = from_left.min(from_right);
+            if least == i64::MAX || least >= best {
+                return best;
+            }
+            let d = if from_left <= from_right {
+                left -= 1;
+                left + 1
+            } else {
+                right += 1;
+                right - 1
+            };
+            if visit(d, &mut best) {
+                return best;
+            }
+        }
+    }
+
+    /// [`scan_row`] over the first `w_cols` columns, visiting only the buckets whose swaps can have
+    /// value `best`, and listing those swaps in order of position. Returns false, having done
+    /// nothing, when those buckets hold too many columns for this to pay off.
+    #[allow(clippy::too_many_arguments)]
+    fn collect_row<R: AdjacencyRow>(
+        &mut self,
+        row: R,
+        u_list: &[usize],
+        w_cols: usize,
+        (lo, hi): (i64, i64),
+        degree: i64,
+        wmax: i64,
+        best: i64,
+        vert: usize,
+        opt_mov: &mut usize,
+        sub_opt: &mut [usize],
+        rest_opt: &mut [usize],
+    ) -> bool {
+        // |degree + d - w| = best needs d - w = best - degree or -best - degree, w in 0..=wmax
+        let window = |c: i64| (c.max(lo), c.saturating_add(wmax).min(hi));
+        let (a, b) = (window(-best - degree), window(best - degree));
+        let spans: &[(i64, i64)] = &if a.1 + 1 >= b.0 {
+            [(a.0, b.1), (1, 0)]
+        } else {
+            [a, b]
+        };
+        let total: usize = spans
+            .iter()
+            .filter(|s| s.0 <= s.1)
+            .map(|&(x, y)| {
+                (self.start[(y - self.base) as usize + 1] - self.start[(x - self.base) as usize])
+                    as usize
+            })
+            .sum();
+        self.tried += 1;
+        if total * 4 > w_cols {
+            return false;
+        }
+        self.collected += 1;
+        self.gather.clear();
+        for &(x, y) in spans {
+            for d in x..=y {
+                let b = (d - self.base) as usize;
+                for &p in &self.pos[self.start[b] as usize..self.start[b + 1] as usize] {
+                    if p as usize >= w_cols {
+                        break;
+                    }
+                    self.gather.push(p);
+                }
+            }
+        }
+        self.gather.sort_unstable();
+        let cap = sub_opt.len().min(rest_opt.len());
+        for &p in &self.gather {
+            if *opt_mov >= cap {
+                break;
+            }
+            let p = p as usize;
+            let t = u_list[p];
+            if (degree + self.deg[p] - row.value(t)).abs() == best {
+                sub_opt[*opt_mov] = vert;
+                rest_opt[*opt_mov] = t;
+                *opt_mov += 1;
+            }
+        }
+        true
+    }
+}
+
 fn unweighted<G: SearchGraph>(graph: &G) -> Result<&Graph, Error> {
     graph
         .as_graph()
@@ -659,6 +878,9 @@ struct Workspace {
     /// The rows to scan in a move: vertex, candidate columns, row constant and a lower bound on
     /// the row's best value.
     rows: Vec<(usize, usize, i64, i64)>,
+    /// The candidate columns' positions bucketed by subgraph degree: bucket `b` (degree
+    /// `all_lo + b`) is `bucket_pos[bucket_start[b]..bucket_start[b + 1]]`, in increasing position.
+    buckets: Buckets,
 }
 
 impl Workspace {
@@ -709,6 +931,7 @@ impl Workspace {
             tabu_in: Vec::new(),
             tabu_out: Vec::new(),
             rows: Vec::with_capacity(params.size),
+            buckets: Buckets::default(),
         };
         if ws.tenure > 1 {
             ws.tabu_in = vec![0; v];
@@ -915,6 +1138,7 @@ impl Workspace {
             self.tabu_in.fill(0);
             self.tabu_out.fill(0);
         }
+        self.buckets.reset();
         let mut j = 0;
         while j < params.max_moves {
             // with kicks on, a region kick starts each diversification cycle after the first, whose
@@ -1088,20 +1312,48 @@ impl Workspace {
             // Collect the optimal moves (at most v of them), exactly the ones a scan of every row
             // in order would: first find the best value, scanning the most promising row first and
             // skipping rows that cannot beat it, then list the moves that reach it, in row order.
+            // When the columns' degrees span a narrow enough range, they are bucketed by degree,
+            // and each row visits only the buckets that can hold its best moves.
+            let bucketed = m > 0
+                && j >= self.buckets.paused_until
+                && self
+                    .buckets
+                    .build(&self.u_list[..m], &self.sub_degs, all_lo, all_hi);
+            #[cfg(test)]
+            let bucketed = bucketed && !NO_ROW_SKIPPING.load(std::sync::atomic::Ordering::Relaxed);
             let mut opt_val = e;
             if let Some(first) = (0..self.rows.len()).min_by_key(|&i| self.rows[i].3) {
                 for i in std::iter::once(first).chain((0..self.rows.len()).filter(|&i| i != first))
                 {
                     let (vert, w_cols, degree, bound) = self.rows[i];
                     if bound < opt_val {
-                        opt_val = row_min(
-                            graph.adjacency_row(vert),
-                            &self.u_list[..w_cols],
-                            &self.sub_degs,
-                            degree,
-                            bound,
-                            opt_val,
-                        );
+                        let row = graph.adjacency_row(vert);
+                        opt_val = if bucketed {
+                            let (lo, hi) = if w_cols == m {
+                                (all_lo, all_hi)
+                            } else {
+                                (act_lo, act_hi)
+                            };
+                            self.buckets.row_min(
+                                row,
+                                &self.u_list,
+                                w_cols,
+                                (lo, hi),
+                                degree,
+                                graph.max_row_value(vert),
+                                bound,
+                                opt_val,
+                            )
+                        } else {
+                            row_min(
+                                row,
+                                &self.u_list[..w_cols],
+                                &self.sub_degs,
+                                degree,
+                                bound,
+                                opt_val,
+                            )
+                        };
                     }
                 }
             }
@@ -1109,18 +1361,44 @@ impl Workspace {
             for i in 0..self.rows.len() {
                 let (vert, w_cols, degree, bound) = self.rows[i];
                 if bound <= opt_val {
-                    scan_row(
-                        graph.adjacency_row(vert),
-                        &self.u_list[..w_cols],
-                        &self.sub_degs,
-                        degree,
-                        vert,
-                        opt_val,
-                        &mut opt_mov,
-                        &mut self.sub_opt,
-                        &mut self.rest_opt,
-                    );
+                    let row = graph.adjacency_row(vert);
+                    let (lo, hi) = if w_cols == m {
+                        (all_lo, all_hi)
+                    } else {
+                        (act_lo, act_hi)
+                    };
+                    if !(bucketed
+                        && self.buckets.collect_row(
+                            row,
+                            &self.u_list,
+                            w_cols,
+                            (lo, hi),
+                            degree,
+                            graph.max_row_value(vert),
+                            opt_val,
+                            vert,
+                            &mut opt_mov,
+                            &mut self.sub_opt,
+                            &mut self.rest_opt,
+                        ))
+                    {
+                        scan_row(
+                            row,
+                            &self.u_list[..w_cols],
+                            &self.sub_degs,
+                            degree,
+                            vert,
+                            opt_val,
+                            &mut opt_mov,
+                            &mut self.sub_opt,
+                            &mut self.rest_opt,
+                        );
+                    }
                 }
+            }
+
+            if bucketed {
+                self.buckets.review(j);
             }
 
             if params.aspiration {

@@ -48,7 +48,10 @@ Three refinements make this fast and effective:
   skipping every $`u`$ whose bound cannot beat it, then lists the swaps that reach it. The list,
   and so every move, is exactly what scanning every swap would give, but far fewer swaps are
   evaluated when the target is far from typical subgraphs, as for the densest or heaviest
-  subgraphs and large cliques: about 3 to 10 times fewer on maximum diversity instances.
+  subgraphs and large cliques: about 3 to 10 times fewer on maximum diversity instances. When the
+  outside vertices' $`d_S(w)`$ take few enough values, each move also sorts them into buckets by
+  $`d_S(w)`$, so that a row visits only the buckets that can hold its best swaps; the search stops
+  building buckets for a while when they are too crowded to narrow anything down.
 - **Tabu moves.** A vertex just swapped out may not return, and one just swapped in may not leave,
   for `tabu_tenure` (`--tabu-tenure`) moves, the *tabu tenure*, so the search does not circle back
   to the subgraphs it just left. The original programs' tenure was 1. A longer one helps large
