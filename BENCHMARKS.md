@@ -112,8 +112,8 @@ times slower than today's processors), and igraph's exact clique number, stopped
 | MANN_a27 | 378 | 126 | 17 of 32 in 153&nbsp;ms | 48&nbsp;ms | over 90&nbsp;s |
 | hamming8-4 | 256 | 16 | 32 of 32 in 1&nbsp;ms | under 0.1&nbsp;ms | 18&nbsp;s |
 | keller4 | 171 | 11 | 32 of 32 in 1&nbsp;ms | under 0.1&nbsp;ms | 1.8&nbsp;s |
-| brock200_2 | 200 | 12 | 11 at most | 24&nbsp;ms | 0.3&nbsp;s |
-| brock400_2 | 400 | 29 | 25 at most | 0.48&nbsp;s | over 90&nbsp;s |
+| brock200_2 | 200 | 12 | 0 of 32 (11 at most) in 83&nbsp;ms | 24&nbsp;ms | 0.3&nbsp;s |
+| brock400_2 | 400 | 29 | 0 of 32 (25 at most) in 0.20&nbsp;s | 0.48&nbsp;s | over 90&nbsp;s |
 
 subgraphsearch is far faster than the exact search, but DLS-MC is faster still and solves the
 *brock* graphs, built to hide their largest clique from local search, where subgraphsearch ends on
