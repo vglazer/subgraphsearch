@@ -59,9 +59,10 @@ The Cargo workspace in `crates/` has three members that share one version number
 
 - **`subgraphsearch-core`** is everything that computes, with only `rayon`, `serde` and `thiserror`
   as dependencies. It is published to crates.io for use from Rust.
-  - `search.rs`: the counting search, for edge counts and weights; `regular.rs`: the degree
-    search, for regular subgraphs, cycles and paths (see
-    [ALGORITHM.md](ALGORITHM.md#two-searches));
+  - `search.rs`: the counting search, for edge counts and weights, whose move loop `Workspace::run`
+    drives named steps (`start_experiment`, `choose_move`, `apply_swap`, `list_candidates`,
+    `bound_rows`, `collect_best_moves`); `regular.rs`: the degree search, for regular
+    subgraphs, cycles and paths (see [ALGORITHM.md](ALGORITHM.md#two-searches));
     `largest.rs`: the search for the largest size of a shape.
   - `graph.rs`: `Graph` (a bit matrix and adjacency lists) and `WeightedGraph` (a byte matrix).
     Searches are generic over the `SearchGraph` trait, which both implement.
@@ -136,18 +137,21 @@ To change what Python can call, edit `lib.rs`; to change how the package is buil
 
 `ss.search(g, 30, 346)` in Python:
 
-1. `_search.search` checks the arguments and resolves the defaults that depend on the search, such
-   as the kick size and the automatic tabu tenure, then calls `_core.search` with every setting
-   given explicitly.
-2. The binding builds a `SearchParams` and runs `subgraphsearch_core::search` inside
+1. `_search.search` checks the arguments, has the core's `search_settings` resolve the kick size
+   and tabu tenure for the kind of search, and passes its `SearchParams` to `_core.search`.
+2. The binding reads that object field by field (the `Params` struct, with PyO3's
+   `FromPyObject`) into the core's `SearchParams`, and runs `subgraphsearch_core::search` inside
    `py.detach`, releasing the GIL, so other Python threads keep running meanwhile.
 3. The core runs the experiments in parallel on rayon's thread pool, each with its own random
    stream derived from the seed, so results depend only on the seed and the settings.
-4. Each experiment returns as a plain tuple, and Python builds the `Experiment` and
-   `SearchResult` objects from them, recording the settings actually used.
+4. The binding returns the parameters the core used, with the automatic tenure resolved, and each
+   experiment as a plain tuple; Python builds the `SearchParams`, `Experiment` and
+   `SearchResult` objects from them. `largest` works the same way, and reports each size's own
+   parameters, so Python never re-derives what the core decided.
 
-The command line follows the same path from step 2, resolving the same defaults in
-`crates/subgraphsearch-cli/src/lib.rs`. `subgraphsearch search --json` writes the core's serde
+The command line follows the same path from step 2: its `search` and `largest` share one
+`Settings` struct of options, whose `apply` fills in the `SearchParams` through the same
+`search_settings`. `subgraphsearch search --json` writes the core's serde
 form of a result, and `SearchResult.load` reads it as well as Python's own saved results, so
 `python -m subgraphsearch explore` can show a search run from the command line.
 
@@ -171,10 +175,10 @@ those against a build for x86-64-v3 would show whether runtime dispatch to POPCN
 
 ## Conventions
 
-- **Defaults live in the front ends.** The core takes every setting explicitly
-  (`SearchParams::new` gives Rust users sensible ones). Python and the CLI each resolve defaults that
-  depend on the kind of search, such as no kicks for path searches and tenure 1 with the legacy
-  generator, and must agree.
+- **Defaults that depend on the kind of search live in the core.** `search_settings` decides the
+  kick size and tabu tenure (none and 1 for the degree search and the legacy generator) and
+  rejects settings a search cannot take; Python and the CLI both call it, so they cannot
+  disagree. `SearchParams::new` gives Rust users the counting search's defaults.
 - **Saved results stay loadable.** A new `SearchParams` field needs a serde default equal to the
   old behavior, and the Python `SearchParams` dataclass a matching default, so older results load
   as they ran.
@@ -192,10 +196,13 @@ those against a build for x86-64-v3 would show whether runtime dispatch to POPCN
 
 A new setting touches every layer, in this order:
 
-1. The core: a `SearchParams` field with a serde default, used by the search, and unit tests.
-2. The binding: a keyword argument of `search` and `largest` in `crates/subgraphsearch-py/src/lib.rs`.
-3. Python: the argument in `_search.py`, its default resolution, the `SearchParams` dataclass field
-   and the docstring.
-4. The CLI: an option in `crates/subgraphsearch-cli/src/lib.rs`, resolved the same way.
+1. The core: a `SearchParams` field with a serde default, used by the search, and unit tests; if
+   its default depends on the kind of search, decide it in `search_settings`.
+2. The binding: a field of the `Params` struct and an entry in `params_dict`, in
+   `crates/subgraphsearch-py/src/lib.rs`.
+3. Python: a field of the `SearchParams` dataclass with the same name and default, the argument of
+   `search` (and `largest`) in `_search.py`, and its docstring.
+4. The CLI: a field of the shared `Settings` struct, set in `Settings::apply`, in
+   `crates/subgraphsearch-cli/src/lib.rs`; or of `SearchArgs` alone if only `search` takes it.
 5. Tests in `python/tests`, including one through the command line, and the documentation:
    [ALGORITHM.md](ALGORITHM.md), [TUNING.md](TUNING.md) and the README's option table.
