@@ -174,39 +174,8 @@ struct SearchArgs {
     /// Vertices the subgraph must contain, e.g. 3,17,42.
     #[arg(long, value_delimiter = ',')]
     fixed: Vec<usize>,
-    /// Number of independent experiments (restarts).
-    #[arg(short = 'n', long, default_value_t = 40)]
-    experiments: usize,
-    /// Maximum moves per experiment.
-    #[arg(long, default_value_t = 250)]
-    moves: usize,
-    /// Start a burst of random moves every this many moves.
-    #[arg(long, default_value_t = 250)]
-    div_freq: usize,
-    /// Number of random moves per burst (0 disables diversification).
-    #[arg(long, default_value_t = 4)]
-    div_dur: usize,
-    /// Start each burst after the first with a region kick instead of random moves: swap out this
-    /// many subgraph vertices nearest a random one, each for the best replacement (0 = off). Default:
-    /// 4 for edge-count and weight searches, none for --degree, --path and --rng legacy. Larger
-    /// sizes can help much more on some problems; compare a few.
-    #[arg(long)]
-    kick_size: Option<usize>,
-    /// Moves a vertex removed by a region kick stays out.
-    #[arg(long, default_value_t = 20)]
-    kick_ban: usize,
-    /// Moves a vertex just swapped out stays out, and one just swapped in stays in (0 = automatic:
-    /// a tenth of the subgraph size or an eightieth of the vertices outside it, whichever is
-    /// smaller, from 1 to 20). Default: automatic, except 1, the original programs' tenure, with
-    /// --rng legacy.
-    #[arg(long)]
-    tabu_tenure: Option<usize>,
-    /// Random seed.
-    #[arg(short, long, default_value_t = 1)]
-    seed: i64,
-    /// Random number generator.
-    #[arg(long, value_enum, default_value_t = RngArg::Xoshiro)]
-    rng: RngArg,
+    #[command(flatten)]
+    settings: Settings,
     /// Also report subgraphs within this many edges of the target (0 = exact matches only).
     #[arg(long, default_value_t = 0)]
     max_conflict: i64,
@@ -216,9 +185,6 @@ struct SearchArgs {
     /// Record the objective value after every move in the JSON output.
     #[arg(long)]
     trace: bool,
-    /// Number of threads (default: all cores). Ignored with --rng legacy, which is sequential.
-    #[arg(long)]
-    threads: Option<usize>,
     /// Print nothing but the summary.
     #[arg(short, long)]
     quiet: bool,
@@ -281,7 +247,20 @@ struct LargestArgs {
     /// Count a size as reachable if a search succeeds at it or at one of this many sizes above.
     #[arg(long, default_value_t = 2)]
     lookahead: usize,
-    /// Number of independent experiments (restarts) at each size.
+    #[command(flatten)]
+    settings: Settings,
+    /// Write every search made (parameters and experiments, by size) as JSON to this file.
+    #[arg(long)]
+    json: Option<PathBuf>,
+    /// Print only the largest subgraph found, not every size tried.
+    #[arg(short, long)]
+    quiet: bool,
+}
+
+/// The search settings `search` and `largest` share.
+#[derive(Args)]
+struct Settings {
+    /// Number of independent experiments (restarts); with `largest`, at each size.
     #[arg(short = 'n', long, default_value_t = 40)]
     experiments: usize,
     /// Maximum moves per experiment.
@@ -293,9 +272,10 @@ struct LargestArgs {
     /// Number of random moves per burst (0 disables diversification).
     #[arg(long, default_value_t = 4)]
     div_dur: usize,
-    /// Start each burst after the first with a region kick of this many subgraph vertices (0 =
-    /// off). Default: 4 for trees, cliques and independent sets, none for paths, cycles and
-    /// --rng legacy.
+    /// Start each burst after the first with a region kick instead of random moves: swap out this
+    /// many subgraph vertices nearest a random one, each for the best replacement (0 = off).
+    /// Default: 4 in the counting search; none in the degree search (--degree, --path, cycles) or
+    /// with --rng legacy. Larger sizes can help much more on some problems; compare a few.
     #[arg(long)]
     kick_size: Option<usize>,
     /// Moves a vertex removed by a region kick stays out.
@@ -303,8 +283,8 @@ struct LargestArgs {
     kick_ban: usize,
     /// Moves a vertex just swapped out stays out, and one just swapped in stays in (0 = automatic:
     /// a tenth of the subgraph size or an eightieth of the vertices outside it, whichever is
-    /// smaller, from 1 to 20). Default: automatic, except 1, the original programs' tenure, with
-    /// --rng legacy.
+    /// smaller, from 1 to 20). Default: automatic, except 1, the original programs' tenure, in the
+    /// degree search or with --rng legacy.
     #[arg(long)]
     tabu_tenure: Option<usize>,
     /// Random seed.
@@ -313,15 +293,48 @@ struct LargestArgs {
     /// Random number generator.
     #[arg(long, value_enum, default_value_t = RngArg::Xoshiro)]
     rng: RngArg,
-    /// Write every search made (parameters and experiments, by size) as JSON to this file.
-    #[arg(long)]
-    json: Option<PathBuf>,
-    /// Number of threads (default: all cores).
+    /// Number of threads (default: all cores). Ignored with --rng legacy, which is sequential.
     #[arg(long)]
     threads: Option<usize>,
-    /// Print only the largest subgraph found, not every size tried.
-    #[arg(short, long)]
-    quiet: bool,
+}
+
+impl Settings {
+    /// Sets these on `params`, with kicks and tenure resolved for the kind of search.
+    fn apply(&self, params: &mut SearchParams, degree_search: bool) -> Result<()> {
+        params.experiments = self.experiments;
+        params.max_moves = self.moves;
+        params.div_freq = self.div_freq;
+        params.div_dur = self.div_dur;
+        params.kick_ban = self.kick_ban;
+        params.seed = self.seed;
+        params.rng = self.rng.into();
+        (params.kick_size, params.tabu_tenure) = subgraphsearch_core::search_settings(
+            self.kick_size,
+            self.tabu_tenure,
+            degree_search,
+            matches!(self.rng, RngArg::Legacy),
+        )?;
+        Ok(())
+    }
+
+    /// Sizes the thread pool, if --threads asks to.
+    fn start_threads(&self) {
+        if let Some(t) = self.threads {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(t)
+                .build_global()
+                .ok();
+        }
+    }
+}
+
+/// The two vertices of --endpoints, if given.
+fn parse_endpoints(endpoints: &[usize]) -> Result<Option<[usize; 2]>> {
+    match endpoints {
+        [] => Ok(None),
+        [s, t] => Ok(Some([*s, *t])),
+        _ => bail!("--endpoints takes two vertices, e.g. --endpoints 0,127"),
+    }
 }
 
 #[derive(Args)]
@@ -578,22 +591,6 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         bail!("--two-phase needs --degree: it searches for regular subgraphs");
     }
     let regular_or_path = args.degree.is_some() || args.path;
-    let kick_size = match args.kick_size {
-        Some(k) if k > 0 && regular_or_path => {
-            bail!("region kicks are available for edge-count searches only, not --degree or --path")
-        }
-        Some(k) => k,
-        None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 0,
-        None => subgraphsearch_core::DEFAULT_KICK_SIZE,
-    };
-    let tabu_tenure = match args.tabu_tenure {
-        Some(t) if t != 1 && regular_or_path => {
-            bail!("--tabu-tenure is available for edge-count searches only, not --degree or --path")
-        }
-        Some(t) => t,
-        None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 1,
-        None => subgraphsearch_core::AUTO_TABU_TENURE,
-    };
     let graphs = if args.weighted {
         Vec::new()
     } else if args.all {
@@ -601,39 +598,19 @@ fn run_search(args: SearchArgs) -> Result<u8> {
     } else {
         vec![args.input.load()?]
     };
-    if let Some(t) = args.threads {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(t)
-            .build_global()
-            .ok();
-    }
-    let params = SearchParams {
-        size: args.vertices,
-        edges: args.edges.unwrap_or(0),
-        fixed: args.fixed.clone(),
-        experiments: args.experiments,
-        max_moves: args.moves,
-        div_freq: args.div_freq,
-        div_dur: args.div_dur,
-        kick_size,
-        kick_ban: args.kick_ban,
-        tabu_tenure,
-        seed: args.seed,
-        rng: args.rng.into(),
-        record_trace: args.trace,
-        aspiration: args.aspiration,
-        connected: args.connected,
-        path: args.path,
-        endpoints: match args.endpoints[..] {
-            [] => None,
-            [s, t] => Some([s, t]),
-            _ => bail!("--endpoints takes two vertices, e.g. --endpoints 0,127"),
-        },
-        regular: args.degree.map(|degree| subgraphsearch_core::Regular {
-            degree,
-            two_phase: args.two_phase,
-        }),
-    };
+    args.settings.start_threads();
+    let mut params = SearchParams::new(args.vertices, args.edges.unwrap_or(0));
+    params.fixed = args.fixed.clone();
+    params.record_trace = args.trace;
+    params.aspiration = args.aspiration;
+    params.connected = args.connected;
+    params.path = args.path;
+    params.endpoints = parse_endpoints(&args.endpoints)?;
+    params.regular = args.degree.map(|degree| subgraphsearch_core::Regular {
+        degree,
+        two_phase: args.two_phase,
+    });
+    args.settings.apply(&mut params, regular_or_path)?;
     let mut out = io::stdout().lock();
     // --densest and --sparsest aim at the most any -k vertices could span, capped at the graph's
     // total, or at nothing, so the closest subgraphs found are the densest or sparsest
@@ -727,49 +704,12 @@ fn run_search(args: SearchArgs) -> Result<u8> {
 
 fn run_largest(args: LargestArgs) -> Result<u8> {
     let graph = args.input.load()?;
-    if let Some(t) = args.threads {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(t)
-            .build_global()
-            .ok();
-    }
+    args.settings.start_threads();
     let mut base = SearchParams::new(2, 0);
     base.fixed = args.fixed.clone();
-    base.endpoints = match args.endpoints[..] {
-        [] => None,
-        [s, t] => Some([s, t]),
-        _ => bail!("--endpoints takes two vertices, e.g. --endpoints 0,127"),
-    };
-    base.experiments = args.experiments;
-    base.max_moves = args.moves;
-    base.div_freq = args.div_freq;
-    base.div_dur = args.div_dur;
-    base.seed = args.seed;
-    base.rng = args.rng.into();
-    let regular_or_path = matches!(args.shape, ShapeArg::Path | ShapeArg::Cycle);
-    base.kick_size = match args.kick_size {
-        Some(k) if k > 0 && regular_or_path => {
-            bail!(
-                "region kicks are available for trees, cliques and independent sets, not paths or cycles"
-            )
-        }
-        Some(k) => k,
-        // the legacy rng reproduces the original programs' runs, which had no kicks
-        None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 0,
-        None => subgraphsearch_core::DEFAULT_KICK_SIZE,
-    };
-    base.kick_ban = args.kick_ban;
-    base.tabu_tenure = match args.tabu_tenure {
-        Some(t) if t != 1 && regular_or_path => {
-            bail!(
-                "--tabu-tenure is available for trees, cliques and independent sets, not paths or cycles"
-            )
-        }
-        Some(t) => t,
-        // the legacy rng reproduces the original programs' runs, whose tenure was 1
-        None if regular_or_path || matches!(args.rng, RngArg::Legacy) => 1,
-        None => subgraphsearch_core::AUTO_TABU_TENURE,
-    };
+    base.endpoints = parse_endpoints(&args.endpoints)?;
+    let degree_search = matches!(args.shape, ShapeArg::Path | ShapeArg::Cycle);
+    args.settings.apply(&mut base, degree_search)?;
     let shape = subgraphsearch_core::Shape::from(args.shape);
     let start = std::time::Instant::now();
     let found = subgraphsearch_core::largest(&graph, shape, &base, args.start, args.lookahead)?;

@@ -710,6 +710,17 @@ fn dumps_all(graphs: Vec<PyRef<'_, PyGraph>>, format: &str) -> PyResult<String> 
     formats::to_string_all(&owned, parse(format)?).map_err(err)
 }
 
+/// The kick size and tabu tenure a search uses: see `subgraphsearch_core::search_settings`.
+#[pyfunction]
+fn search_settings(
+    kick_size: Option<usize>,
+    tabu_tenure: Option<usize>,
+    degree_search: bool,
+    legacy: bool,
+) -> PyResult<(usize, usize)> {
+    subgraphsearch_core::search_settings(kick_size, tabu_tenure, degree_search, legacy).map_err(err)
+}
+
 /// Names of the supported file formats, and whether each can be read.
 #[pyfunction]
 fn formats_list() -> Vec<(&'static str, bool)> {
@@ -733,7 +744,8 @@ mod _core {
         PyGraph, PyWeightedGraph, cli_main, dumps_all, formats_list, generate_graph,
         generate_weighted, grid_graph, hypercube_graph, incidence_graph, largest,
         legacy_asub_search, legacy_ereg_search, legacy_ggen, legacy_reg_search, legacy_sub_search,
-        legacy_wggen, legacy_wsub_search, random_regular_graph, search, sparse_random_graph,
+        legacy_wggen, legacy_wsub_search, random_regular_graph, search, search_settings,
+        sparse_random_graph,
     };
 
     #[pymodule_init]

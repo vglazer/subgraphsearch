@@ -44,7 +44,7 @@ pub use largest::{Largest, Shape, largest};
 pub use rng::RngKind;
 pub use search::{
     AUTO_TABU_TENURE, DEFAULT_KICK_SIZE, Experiment, MAX_AUTO_TABU_TENURE, Regular, SearchGraph,
-    SearchParams, SearchResult, auto_tabu_tenure, search, search_sequential,
+    SearchParams, SearchResult, auto_tabu_tenure, search, search_sequential, search_settings,
 };
 
 /// Errors reported by this crate.

@@ -219,15 +219,6 @@ class SearchResult:
 DEFAULT_KICK_SIZE = 4
 
 
-def _kick_size(kick_size: int | None, regular_or_path: bool, rng: str) -> int:
-    """The kick size a search uses: the default where kicks apply, else 0; explicit kicks must apply."""
-    if kick_size is None:
-        return 0 if regular_or_path or rng == "legacy" else DEFAULT_KICK_SIZE
-    if kick_size > 0 and regular_or_path:
-        raise ValueError("region kicks are available for edge-count searches only, not regular or path searches")
-    return int(kick_size)
-
-
 def auto_tabu_tenure(size: int, vertices: int) -> int:
     """The tabu tenure edge-count and weight searches of ``size`` of a graph's ``vertices`` use unless
     ``tabu_tenure`` is given: a tenth of the size or an eightieth of the vertices left outside it, whichever is
@@ -235,20 +226,15 @@ def auto_tabu_tenure(size: int, vertices: int) -> int:
     return max(1, min(int(size) // 10, max(0, int(vertices) - int(size)) // 80, 20))
 
 
-def _tabu_tenure(tabu_tenure: int | str | None, regular_or_path: bool, rng: str) -> int:
-    """The tenure to pass to the core: 0 for automatic (the default where it applies), 1 for regular and path
-    searches and the legacy rng; an explicit tenure must apply."""
-    if tabu_tenure is None:
-        return 1 if regular_or_path or rng == "legacy" else 0
+def _settings(kick_size: int | None, tabu_tenure: int | str | None, degree_search: bool, rng: str) -> tuple[int, int]:
+    """The kick size and the tenure to pass to the core (0 for the automatic tenure), resolved by the core's
+    rules for which searches take them."""
     if tabu_tenure == "auto":
-        if regular_or_path:
-            raise ValueError("tabu_tenure is available for edge-count searches only, not regular or path searches")
-        return 0
-    if isinstance(tabu_tenure, str) or int(tabu_tenure) < 1:
+        tabu_tenure = 0
+    elif tabu_tenure is not None and (isinstance(tabu_tenure, str) or int(tabu_tenure) < 1):
         raise ValueError(f"tabu_tenure must be a positive number of moves or 'auto', not {tabu_tenure!r}")
-    if int(tabu_tenure) > 1 and regular_or_path:
-        raise ValueError("tabu_tenure is available for edge-count searches only, not regular or path searches")
-    return int(tabu_tenure)
+    return _core.search_settings(None if kick_size is None else int(kick_size),
+                                 None if tabu_tenure is None else int(tabu_tenure), degree_search, rng == "legacy")
 
 
 def search(
@@ -343,8 +329,7 @@ def search(
         if len(endpoints) != 2:
             raise ValueError("endpoints takes two vertices, the ends of the path")
     fixed = tuple(int(v) for v in fixed)
-    kick_size = _kick_size(kick_size, degree is not None or bool(path), rng)
-    tabu_tenure = _tabu_tenure(tabu_tenure, degree is not None or bool(path), rng)
+    kick_size, tabu_tenure = _settings(kick_size, tabu_tenure, degree is not None or bool(path), rng)
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
         int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
@@ -456,8 +441,7 @@ def largest(
     if not isinstance(graph, Graph):
         raise TypeError("largest needs an unweighted Graph")
     fixed = tuple(int(v) for v in fixed)
-    kick_size = _kick_size(kick_size, shape in ("path", "cycle"), rng)
-    tabu_tenure = _tabu_tenure(tabu_tenure, shape in ("path", "cycle"), rng)
+    kick_size, tabu_tenure = _settings(kick_size, tabu_tenure, shape in ("path", "cycle"), rng)
     if endpoints is not None:
         endpoints = tuple(int(v) for v in endpoints)
         if len(endpoints) != 2:

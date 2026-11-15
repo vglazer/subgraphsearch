@@ -271,6 +271,40 @@ pub fn auto_tabu_tenure(size: usize, vertices: usize) -> usize {
 /// subgraphs of structured graphs they stop the search from finding anything.
 pub const MAX_AUTO_TABU_TENURE: usize = 20;
 
+/// The kick size and tabu tenure a search uses, from those requested (`None` for the default, and
+/// [`AUTO_TABU_TENURE`] for the automatic tenure): the one place that knows which searches take
+/// them. The counting search takes both, by default kicks of [`DEFAULT_KICK_SIZE`] and the
+/// automatic tenure. The degree search (`degree_search`: regular subgraphs, cycles and paths) and
+/// the legacy random number generator (`legacy`) default to no kicks and a tenure of 1, the
+/// original programs'; the degree search accepts no others.
+pub fn search_settings(
+    kick_size: Option<usize>,
+    tabu_tenure: Option<usize>,
+    degree_search: bool,
+    legacy: bool,
+) -> Result<(usize, usize), Error> {
+    let not_for_degree = |what: &str| {
+        Err(Error::Invalid(format!(
+            "{what} for the counting search only, not for regular subgraphs, paths or cycles"
+        )))
+    };
+    let kick_size = match kick_size {
+        Some(k) if k > 0 && degree_search => return not_for_degree("region kicks are"),
+        Some(k) => k,
+        None if degree_search || legacy => 0,
+        None => DEFAULT_KICK_SIZE,
+    };
+    let tabu_tenure = match tabu_tenure {
+        Some(t) if t != 1 && degree_search => {
+            return not_for_degree("a tabu tenure other than 1 is");
+        }
+        Some(t) => t,
+        None if degree_search || legacy => 1,
+        None => AUTO_TABU_TENURE,
+    };
+    Ok((kick_size, tabu_tenure))
+}
+
 impl SearchParams {
     /// The tabu tenure a search of a graph on `vertices` vertices uses: `tabu_tenure`, or
     /// [`auto_tabu_tenure`] for [`AUTO_TABU_TENURE`].
@@ -1472,6 +1506,27 @@ mod tests {
             assert_eq!(g.induced_edge_count(&e.vertices), 0);
         }
         assert!(r.successes() > 0);
+    }
+
+    #[test]
+    fn settings_resolve_by_kind_of_search() {
+        assert_eq!(
+            search_settings(None, None, false, false).unwrap(),
+            (DEFAULT_KICK_SIZE, AUTO_TABU_TENURE)
+        );
+        assert_eq!(search_settings(None, None, true, false).unwrap(), (0, 1));
+        assert_eq!(search_settings(None, None, false, true).unwrap(), (0, 1));
+        assert_eq!(
+            search_settings(Some(16), Some(7), false, true).unwrap(),
+            (16, 7)
+        );
+        assert_eq!(
+            search_settings(Some(0), Some(1), true, false).unwrap(),
+            (0, 1)
+        );
+        assert!(search_settings(Some(4), None, true, false).is_err());
+        assert!(search_settings(None, Some(AUTO_TABU_TENURE), true, false).is_err());
+        assert!(search_settings(None, Some(3), true, false).is_err());
     }
 
     #[test]

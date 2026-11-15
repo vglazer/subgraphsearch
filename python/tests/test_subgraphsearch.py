@@ -418,7 +418,7 @@ def test_words_and_codes():
     assert all(v.min_distance(words[list(vs)]) >= d for vs in kicked.solutions())
     assert ss.SearchResult.from_dict(json.loads(kicked.to_json()), close).params.kick_size == 4
     assert ss.largest(close, "independent", kick_size=4, experiments=16, max_moves=2000, div_freq=100).size == 16
-    with pytest.raises(ValueError, match="edge-count searches only"):
+    with pytest.raises(ValueError, match="counting search only"):
         ss.search(close, 8, path=True, kick_size=4)
 
 
@@ -702,7 +702,7 @@ def test_largest(tmp_path):
         kicks = set(re.findall(r'"kick_size":\s*(\d+)', (tmp_path / "k.json").read_text(encoding="utf-8")))
         assert kicks == {str(kick)}, kicks
     run = largest("--shape", "path", "--kick-size", "4")
-    assert run.returncode != 0 and "not paths or cycles" in run.stderr
+    assert run.returncode != 0 and "not for regular subgraphs, paths or cycles" in run.stderr
     # the tabu tenure: automatic by default, recorded as used, settable, refused for paths and cycles
     run = largest("--shape", "independent", "--start", "18", "-q", "--json", str(tmp_path / "t.json"))
     assert run.returncode == 0, run.stderr
@@ -712,7 +712,7 @@ def test_largest(tmp_path):
     tenures = set(re.findall(r'"tabu_tenure":\s*(\d+)', (tmp_path / "t.json").read_text(encoding="utf-8")))
     assert run.returncode == 0 and tenures == {"3"}, tenures
     run = largest("--shape", "cycle", "--tabu-tenure", "4")
-    assert run.returncode != 0 and "not paths or cycles" in run.stderr
+    assert run.returncode != 0 and "not for regular subgraphs, paths or cycles" in run.stderr
 
 
 def test_legacy_regular_programs():
