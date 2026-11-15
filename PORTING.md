@@ -90,11 +90,11 @@ three runs on a 16-core Apple M3 Max, measured by
 
 | Program | Search | Moves | C | Legacy, 1 thread | Faster than C | 16 threads | Faster than 1 thread | Faster than C |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `sub_search` | a 100-clique in G(1000, 0.5) | 64,000 | 2.14 s | 0.36 s | 6.0× | 0.042 s | 8.0× | 51× |
-| `asub_search` | the same, with aspiration | 64,000 | 2.20 s | 0.41 s | 5.4× | 0.048 s | 8.3× | 46× |
-| `wsub_search` | total weight 17,500 in SOM-b n400 m80 | 320,000 | 3.21 s | 0.65 s | 5.0× | 0.063 s | 10.2× | 51× |
-| `reg_search` | a 40-vertex independent set, as 0-regular, in G(1000, 0.5) | 6,400 | 4.68 s | 5.85 s | 0.8× | 0.46 s | 12.6× | 10× |
-| `ereg_search` | the same, in two phases | 32,000 | 0.57 s | 1.09 s | 0.5× | 0.12 s | 9.3× | 5× |
+| `sub_search` | a 100-clique in G(1000, 0.5) | 64,000 | 2.13 s | 0.35 s | 6.1× | 0.041 s | 8.3× | 53× |
+| `asub_search` | the same, with aspiration | 64,000 | 2.20 s | 0.41 s | 5.4× | 0.047 s | 8.5× | 47× |
+| `wsub_search` | total weight 17,500 in SOM-b n400 m80 | 320,000 | 3.19 s | 0.65 s | 4.9× | 0.061 s | 10.6× | 52× |
+| `reg_search` | a 40-vertex independent set, as 0-regular, in G(1000, 0.5) | 6,400 | 4.68 s | 5.10 s | 0.9× | 0.41 s | 12.4× | 11× |
+| `ereg_search` | the same, in two phases | 32,000 | 0.57 s | 0.92 s | 0.6× | 0.093 s | 9.9× | 6× |
 
 - **On one thread,** the counting search (`sub_search`, `asub_search`, `wsub_search`) is 5–6 times
   faster than the C programs, with the same output. It skips candidate swaps that cannot be best
@@ -105,9 +105,9 @@ three runs on a 16-core Apple M3 Max, measured by
 - **On many threads,** experiments run in parallel. Legacy mode cannot do this: the programs'
   random number generator is one stream shared by all experiments, so they must run in order. The
   modern search gives each experiment its own stream, and 16 threads (12 performance and 4
-  efficiency cores) run 8–13 times faster than one.
+  efficiency cores) run 8–12 times faster than one.
 - **Together,** the counting search runs about 50 times faster than the C programs, and the
-  degree search 5–10 times.
+  degree search 6–11 times.
 
 Compiling the C programs with the original Makefile's `-O3 -march=native` instead of `-O2` makes no
 difference. The modern search's defaults, region kicks and a longer tabu tenure, change the search

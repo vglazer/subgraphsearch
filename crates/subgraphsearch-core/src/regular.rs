@@ -40,7 +40,7 @@
 use rayon::prelude::*;
 
 use crate::Error;
-use crate::graph::Graph;
+use crate::graph::{Graph, bit};
 use crate::rng::{Randu, RngKind, SearchRng, Xoshiro};
 use crate::search::{Components, Experiment, SearchParams, SearchResult};
 
@@ -253,6 +253,61 @@ fn validate(graph: &Graph, params: &SearchParams) -> Result<(), Error> {
 #[inline]
 fn abs(x: i64) -> i64 {
     x.abs()
+}
+
+/// The optimal moves found so far, as in the C programs: `sub[i]` out for `rest[i]` in, at most
+/// `v` of them. They are borrowed apart from the rest of the [`Workspace`] so that the hot loops
+/// keep what they read in registers: recording a move through `&mut self` would make the compiler
+/// reload every list's address and length after each candidate swap.
+struct Moves<'a> {
+    sub: &'a mut [usize],
+    rest: &'a mut [usize],
+}
+
+impl Moves<'_> {
+    /// Records the swap if its value `val` is at most the best so far, `opt_val`, starting the list
+    /// afresh when it is lower.
+    #[inline(always)]
+    fn store(
+        &mut self,
+        val: i64,
+        opt_val: &mut i64,
+        opt_mov: &mut usize,
+        sub_vert: usize,
+        rest_vert: usize,
+    ) {
+        if val <= *opt_val {
+            if val < *opt_val {
+                *opt_val = val;
+                *opt_mov = 0;
+            }
+            if *opt_mov < self.sub.len() {
+                self.sub[*opt_mov] = sub_vert;
+                self.rest[*opt_mov] = rest_vert;
+                *opt_mov += 1;
+            }
+        }
+    }
+}
+
+/// The regularity objective after swapping `sub_vert` out for a vertex whose subgraph neighbors
+/// are `nbrs`, given `degree`, the objective with `sub_vert` removed (and `diffs` adjusted for
+/// that; see [`Workspace::without`]).
+#[inline(always)]
+fn swap_value(nbrs: &[u32], diffs: &[i64], degree: i64, d_sub: i64, sub_vert: usize) -> i64 {
+    let mut curr_val = degree;
+    let mut temp = nbrs.len() as i64 - d_sub;
+    for &vert in nbrs {
+        let vert = vert as usize;
+        if vert == sub_vert {
+            temp -= 1;
+        } else {
+            // +1 if diffs[vert] >= 0, else -1, without a branch: the sign is close to random, so
+            // a branch on it would often be mispredicted
+            curr_val += 1 | (diffs[vert] >> 63);
+        }
+    }
+    curr_val + abs(temp)
 }
 
 /// Search state. Field names follow `reg_search.c` and `ereg_search.c`.
@@ -521,45 +576,6 @@ impl Workspace {
         (u_cols, m)
     }
 
-    fn store(
-        &mut self,
-        val: i64,
-        opt_val: &mut i64,
-        opt_mov: &mut usize,
-        sub_vert: usize,
-        rest_vert: usize,
-    ) {
-        if val <= *opt_val {
-            if val < *opt_val {
-                *opt_val = val;
-                *opt_mov = 0;
-            }
-            if *opt_mov < self.v {
-                self.sub_opt[*opt_mov] = sub_vert;
-                self.rest_opt[*opt_mov] = rest_vert;
-                *opt_mov += 1;
-            }
-        }
-    }
-
-    /// The regularity objective after swapping `sub_vert` out for `rest_vert` in, given
-    /// `degree`: the objective with `sub_vert` removed (and `diffs` adjusted for that).
-    fn swap_value(&self, degree: i64, d_sub: i64, sub_vert: usize, rest_vert: usize) -> i64 {
-        let mut curr_val = degree;
-        let mut temp = self.sub_degs[rest_vert] - d_sub;
-        for m in 0..self.sub_degs[rest_vert] as usize {
-            let vert = self.adj_list[rest_vert][m] as usize;
-            if vert == sub_vert {
-                temp -= 1;
-            } else if self.diffs[vert] >= 0 {
-                curr_val += 1;
-            } else {
-                curr_val -= 1;
-            }
-        }
-        curr_val + abs(temp)
-    }
-
     /// The objective with `sub_vert` removed; adjusts `diffs` of its subgraph neighbors, which
     /// [`Workspace::restore_diffs`] undoes.
     fn without(&mut self, obj_val: i64, sub_vert: usize) -> i64 {
@@ -750,19 +766,30 @@ impl Workspace {
                     u_cols
                 };
                 let degree = self.without(obj_val, sv);
-                for l in 0..w_cols {
-                    let rv = self.u_list[l];
-                    let val = self.swap_value(degree, d_sub, sv, rv);
+                let (adj_list, diffs, sub_degs) =
+                    (&self.adj_list, &self.diffs[..], &self.sub_degs[..]);
+                let mut moves = Moves {
+                    sub: &mut self.sub_opt,
+                    rest: &mut self.rest_opt,
+                };
+                for &rv in &self.u_list[..w_cols] {
+                    let val = swap_value(
+                        &adj_list[rv][..sub_degs[rv] as usize],
+                        diffs,
+                        degree,
+                        d_sub,
+                        sv,
+                    );
                     // a path search aims at a deviation of 2, for the path's two endpoints, and
                     // at one edge fewer than vertices
                     let val = if params.path {
-                        let after = edges - self.sub_degs[sv] + self.sub_degs[rv]
-                            - i64::from(graph.has_edge(sv, rv));
+                        let after =
+                            edges - sub_degs[sv] + sub_degs[rv] - i64::from(graph.has_edge(sv, rv));
                         abs(val - 2) + abs(after - target_edges)
                     } else {
                         val
                     };
-                    self.store(val, &mut opt_val, &mut opt_mov, sv, rv);
+                    moves.store(val, &mut opt_val, &mut opt_mov, sv, rv);
                 }
                 self.restore_diffs(sv);
             }
@@ -942,12 +969,14 @@ impl Workspace {
                         u_cols
                     };
                     let degree = new_min_val - self.sub_degs[vert];
-                    for l in 0..w_cols {
-                        let temp = self.u_list[l];
-                        let val =
-                            abs(degree + self.sub_degs[temp]
-                                - i64::from(graph.has_edge(vert, temp)));
-                        self.store(val, &mut opt_val, &mut opt_mov, vert, temp);
+                    let (row, sub_degs) = (graph.row(vert), &self.sub_degs[..]);
+                    let mut moves = Moves {
+                        sub: &mut self.sub_opt,
+                        rest: &mut self.rest_opt,
+                    };
+                    for &temp in &self.u_list[..w_cols] {
+                        let val = abs(degree + sub_degs[temp] - bit(row, temp) as i64);
+                        moves.store(val, &mut opt_val, &mut opt_mov, vert, temp);
                     }
                 }
                 for k in 0..u_cols {
@@ -975,9 +1004,21 @@ impl Workspace {
                             candidates.push(vert);
                         }
                     }
+                    let (adj_list, diffs, sub_degs) =
+                        (&self.adj_list, &self.diffs[..], &self.sub_degs[..]);
+                    let mut moves = Moves {
+                        sub: &mut self.sub_opt,
+                        rest: &mut self.rest_opt,
+                    };
                     for &rv in &candidates {
-                        let val = self.swap_value(degree, d_sub, sv, rv);
-                        self.store(val, &mut opt_val, &mut opt_mov, sv, rv);
+                        let val = swap_value(
+                            &adj_list[rv][..sub_degs[rv] as usize],
+                            diffs,
+                            degree,
+                            d_sub,
+                            sv,
+                        );
+                        moves.store(val, &mut opt_val, &mut opt_mov, sv, rv);
                     }
                     self.restore_diffs(sv);
                 }
