@@ -175,24 +175,45 @@ form of a result, and `SearchResult.load` reads it as well as Python's own saved
 
 ## Performance
 
-The time goes into each move's search for the best swaps (`collect_best_moves` and the functions
-it calls), and that work is bound by memory access, not arithmetic: every candidate is reached
-through `u_list`, then its degree in `sub_degs` and its entry in the adjacency row, at scattered
-positions in memory. *SIMD* instructions, which process several values at once, help when the
-values lie side by side; loading scattered ones in one instruction, a *gather*, is something ARM's
-vector instructions cannot do and x86's AVX2 does slowly, so wider vectors have little to speed
-up. And since bounded rows and buckets, most swaps are never evaluated at all. A build for the newest instructions of the CPU it runs on
-(`RUSTFLAGS="-C target-cpu=native"`) ran 0.98 to 1.05 times as fast as the portable build on six
-workloads on an Apple M3, so the wheels lose nothing by targeting baseline CPUs there. Gains come
-from evaluating fewer swaps, not from evaluating them faster; when changing the scan, compare
-builds with alternating runs, since single timings vary by 5% to 10%.
+Almost all of a search's time goes into one step of each move: evaluating candidate swaps to find
+the best ones (`collect_best_moves` and the functions it calls in the counting search, the
+optimal-move loops in `regular.rs` in the degree search). Four rules follow from that.
 
-One place could still gain on x86-64. Portable builds target the baseline x86-64 processor, which
-lacks POPCNT, the instruction that counts the 1 bits in a word, so `count_ones` becomes a sequence
-of bit operations. It is used in `Graph::from_words` (all pairs of binary words, for codes) and
-`induced_edge_count`. That has not been measured: an x86-64 runner timing those against a build
-for x86-64-v3, a later baseline that has POPCNT and AVX2, would show whether it is worth adding
-*runtime dispatch*, which chooses the faster code while running, on processors that have it.
+**Evaluate fewer swaps before evaluating them faster.** The counting search's large speed-ups came
+from skipping swaps that cannot be best, with bounded rows and degree buckets
+([ALGORITHM.md](ALGORITHM.md#objective-and-moves)), not from cheaper evaluations.
+
+**Do not expect SIMD to help.** *SIMD* instructions process several values at once, but only values
+that lie side by side in memory. Each candidate swap is reached through the candidate list, then
+its subgraph degree and its adjacency bit, at scattered positions; loading scattered values in one
+instruction, a *gather*, is something ARM's vector instructions cannot do and x86's AVX2 does
+slowly. So the wheels target baseline processors: building for the newest instructions of the
+processor at hand (`RUSTFLAGS="-C target-cpu=native"`) is no faster on Apple silicon.
+
+**Keep the innermost loops easy for the compiler.**
+- Read the workspace's lists through local slices, not through `self`. Recording a move through
+  `&mut self` makes the compiler assume any list may have changed, so it reloads each list's address
+  and length after every candidate; `Moves` in `regular.rs` borrows the move lists separately.
+- Avoid branches on data that is close to random, such as the sign of a degree surplus: the
+  processor mispredicts them often. Compute the ±1 arithmetically instead.
+- When the loop body is tiny, scan in fixed chunks (`chunks_exact(8)`), which the compiler unrolls,
+  so the loop's own bookkeeping runs once per chunk.
+- Stay in safe Rust. Bounds checks cost a few percent at most here, and the code has no `unsafe`.
+
+**Measure, and check results.** Compare builds with alternating runs, since single timings vary by
+5% to 10%, and confirm that results are unchanged: the golden tests, the output check in
+[benchmarks/legacy_speed.py](benchmarks/legacy_speed.py), and the JSON of the same searches before
+and after. To find where the time goes, build with debug information
+(`CARGO_PROFILE_RELEASE_DEBUG=true cargo build --release`) and profile with
+[samply](https://github.com/mstange/samply), a sampling profiler that shows the time spent on each
+source line and instruction; [cargo-show-asm](https://github.com/pacak/cargo-show-asm) prints a
+function's assembly.
+
+One question is open on x86-64. Portable builds target the baseline x86-64 processor, which lacks
+POPCNT, the instruction that counts the 1 bits in a word, so `count_ones` in `Graph::from_words` and
+`induced_edge_count` compiles to a sequence of bit operations. Timing those against a build for
+x86-64-v3, a later baseline with POPCNT, on an x86-64 machine would show whether *runtime dispatch*,
+choosing the faster code while running on processors that have it, is worth adding.
 
 ## Conventions
 
