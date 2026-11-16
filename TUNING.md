@@ -49,6 +49,22 @@ Some reformulations make a search easier:
   more experiments or moves can raise it, and `lookahead` matters where some sizes below the
   largest are impossible.
 
+Other requirements have to be built into the graph or the vertex set, since a search has one
+target:
+
+- **Items that must be chosen:** `fixed=` (`--fixed`).
+- **Items that may not be chosen:** search `g.induced(allowed)` for the vertices `allowed`; vertex
+  `i` of the result is `allowed[i]`.
+- **Pairs that may not be chosen together,** in an independent-set search: add each pair as an
+  edge, `ss.Graph(g.n, g.edge_list() + pairs)`. In a clique search, leave those edges out instead.
+- **One item from each group,** in an independent-set search: join every two items of the same
+  group, so that at most one of each is chosen, and search for as many vertices as there are groups.
+  In a clique search, leave out the edges within each group.
+- **Everything else,** such as a budget on the chosen items' costs, several items from each group,
+  or forbidden pairs in a weighted search, is beyond what one target can express. A mixed-integer
+  or constraint solver handles such constraints directly, though more slowly on the problems both
+  can solve ([BENCHMARKS.md](BENCHMARKS.md)).
+
 ## Settings
 
 Tune a search on your own graph by trying a few settings; `ss.sweep` runs one search per value of
