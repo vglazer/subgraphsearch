@@ -90,15 +90,28 @@ Matching is to within 0.003, the precision of the published distances. The GKD-c
 rounding: some slightly lighter selections tie with the best one at integer weights.
 
 **Against specialists.** These instances are easy for the heuristics made for the problem, whose
-papers test on 2000 to 5000 items. There they are ahead. On MDG-a_21 (200 of 2000 items, integer
-distances 0 to 10, best known value 114,271), OBMA (Y. Zhou, J.-K. Hao and B. Duval, *IEEE
-Transactions on Evolutionary Computation* 21, 2017) reaches the best known value in 22 of 30 runs
-of 20 s, on one core of a 2.5 GHz Xeon E5-2670, a 2012 processor slower than one core here.
-subgraphsearch makes about 77,000 moves a second here on one core. Given the same 20 s per run,
-1.5 million moves, it reaches the best known value in 6 of 30 runs, and the median run ends 4
-short; it never exceeds it. Its default [tabu tenure](ALGORITHM.md#objective-and-moves) of 20
-matters most: with the original tenure of 1, the median run of 200,000 moves ends about 300 short,
-against 19 with it.
+papers test on 2000 to 5000 items. On MDG-a_21 (200 of 2000 items, integer distances 0 to 10, best
+known value 114,271), OBMA (Y. Zhou, J.-K. Hao and B. Duval, *IEEE Transactions on Evolutionary
+Computation* 21, 2017) reaches the best known value in 22 of 30 runs of 20 s, on one core of a
+2.5 GHz Xeon E5-2670, a 2012 processor slower than one core here. Given the same 20 s per run on one
+core here, subgraphsearch reaches it:
+
+| Settings | Moves in 20 s | Runs reaching 114,271 | Median run | Worst run |
+| --- | ---: | ---: | ---: | ---: |
+| default | 1.8 million | 7 of 30 | 2 short | 8 short |
+| `aspiration="full"` | 1.5 million | 27 of 30 | reaches it | 6 short |
+
+No run exceeds it. The default [tabu tenure](ALGORITHM.md#objective-and-moves), 20 here, matters
+most: with the original tenure of 1, the median run of 200,000 moves ends about 300 short, against
+19 with it. The full [aspiration criterion](ALGORITHM.md#variants) then lets swaps the tenure
+forbids through whenever they beat the best total so far, which turns most near misses into hits;
+it costs about 15% of the moves. With one instance, and OBMA's result from slower hardware, the
+comparison shows the two in the same range rather than one ahead. On three
+more 2000-item instances, MDG-a_22 to 24, at the same budgets, the full criterion raised the median
+run on all three. On MDG-a_22 it raised the runs reaching MDPLIB's best value from 13 to 28 of 30;
+on MDG-a_24 its worst run ended lower, 31 below MDPLIB's value where every default run exceeded it.
+Both settings beat MDPLIB's values for MDG-a_23 and 24, from 2-hour runs of an earlier heuristic, by
+up to 72.
 
 ## Maximum cliques
 
@@ -173,9 +186,9 @@ specialized annealing search.
 
 subgraphsearch is the tool for subgraphs with a prescribed number of vertices and edges or total
 weight, where no specialized solver exists: it finds them in milliseconds where general solvers
-stall, and matches the best published maximum diversity values up to 500 items. Where specialists
-exist they win at scale: on maximum diversity at 2000 items (though subgraphsearch reaches the best
-known value there too, less often), on maximum cliques, on Steiner triple systems, and on the
-9-cube's snake. The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+stall, and matches the best published maximum diversity values up to 500 items. At 2000 items,
+with `aspiration="full"`, it reaches the best known value about as often as a heuristic made for
+the problem, in the same time. Where specialists exist elsewhere they win at scale: on maximum
+cliques, on Steiner triple systems, and on the 9-cube's snake. The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
 runs several of these searches, and [examples/data](examples/data/README.md) holds the benchmark
 instances and their licenses.

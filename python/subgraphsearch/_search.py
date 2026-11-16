@@ -44,7 +44,8 @@ class SearchParams:
     seed: int = 1
     rng: str = "xoshiro"
     trace: bool = False
-    aspiration: bool = False
+    #: ``False``, ``True`` (the original programs' limited criterion) or ``"full"``: see :func:`search`.
+    aspiration: bool | str = False
     #: For a regular-subgraph search (the original ``reg_search``): the degree; ``edges`` is then unused.
     degree: int | None = None
     #: With ``degree``: first find the right number of edges (the original ``ereg_search``).
@@ -174,6 +175,8 @@ class SearchResult:
         p = dict(data["params"])
         if "record_trace" in p:  # the Rust CLI's field names
             p["trace"] = p.pop("record_trace")
+        if p.pop("full_aspiration", False):
+            p["aspiration"] = "full"
         regular = p.pop("regular", None)
         if regular:
             p["degree"], p["two_phase"] = regular["degree"], regular.get("two_phase", False)
@@ -265,7 +268,7 @@ def search(
     seed: int = 1,
     rng: str = "xoshiro",
     trace: bool = False,
-    aspiration: bool = False,
+    aspiration: bool | str = False,
     connected: bool = False,
     path: bool = False,
     endpoints: tuple[int, int] | None = None,
@@ -290,9 +293,12 @@ def search(
     (the original ``reg_search``); add ``two_phase=True`` to first find the right number of edges and
     then make the subgraph regular (``ereg_search``). Regular searches need an unweighted graph.
 
-    ``aspiration=True`` adds the aspiration criterion of the original ``asub_search``: tabu swaps,
-    those involving the two vertices just swapped, are taken whenever they would beat the best
-    value found so far.
+    ``aspiration=True`` adds the aspiration criterion of the original ``asub_search``: tabu swaps
+    involving the two vertices just swapped are taken whenever they would beat the best value found
+    so far. ``aspiration="full"`` considers every swap the tabu tenure forbids instead, which lets
+    a long tenure keep the search from circling back without blocking improvements; it costs some
+    time per move, and with tenure 1 it is the same as ``True``. Edge-count and weight searches
+    only.
 
     ``connected=True`` requires a connected subgraph: each component beyond the first adds 1 to the
     conflict, so only connected subgraphs that hit the target count as successes, and near misses
@@ -345,11 +351,20 @@ def search(
     kick_size, tabu_tenure = _settings(kick_size, tabu_tenure, degree is not None or bool(path), rng)
     params = SearchParams(
         int(size), 0 if edges is None else int(edges), fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur),
-        int(seed), rng, bool(trace), bool(aspiration), None if degree is None else int(degree), bool(two_phase),
+        int(seed), rng, bool(trace), _aspiration(aspiration), None if degree is None else int(degree), bool(two_phase),
         bool(connected), bool(path), endpoints, kick_size, int(kick_ban), tabu_tenure,
     )
     used, raw = _core.search(graph._g, params)
     return SearchResult(graph, _params(used), _experiments(raw))
+
+
+def _aspiration(aspiration) -> bool | str:
+    """``aspiration`` as ``SearchParams`` holds it: a bool, or ``"full"``."""
+    if not isinstance(aspiration, str):
+        return bool(aspiration)
+    if aspiration != "full":
+        raise ValueError(f"aspiration must be False, True or 'full', not {aspiration!r}")
+    return aspiration
 
 
 def sweep(graph: Graph | WeightedGraph, size: int, edges: int | None, parameter: str, values: Sequence, **kwargs) -> dict:
@@ -419,7 +434,7 @@ def largest(
     seed: int = 1,
     rng: str = "xoshiro",
     trace: bool = False,
-    aspiration: bool = False,
+    aspiration: bool | str = False,
     kick_size: int | None = None,
     kick_ban: int = 20,
     tabu_tenure: int | str | None = None,
@@ -451,7 +466,7 @@ def largest(
             raise ValueError("endpoints takes two vertices, the ends of the path")
     base = SearchParams(
         2, 0, fixed, int(experiments), int(max_moves), int(div_freq), int(div_dur), int(seed), rng, bool(trace),
-        bool(aspiration), endpoints=endpoints, kick_size=kick_size, kick_ban=int(kick_ban), tabu_tenure=tabu_tenure,
+        _aspiration(aspiration), endpoints=endpoints, kick_size=kick_size, kick_ban=int(kick_ban), tabu_tenure=tabu_tenure,
     )
     _, sizes = _core.largest(graph._g, shape, None if start is None else int(start), int(lookahead), base)
     results = {size: SearchResult(graph, _params(used), _experiments(raw)) for size, used, raw in sizes}

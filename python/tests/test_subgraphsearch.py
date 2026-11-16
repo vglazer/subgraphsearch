@@ -161,6 +161,28 @@ def test_aspiration_search(g100):
     assert ss.SearchResult.from_dict(r.to_dict(), g100).params.aspiration
 
 
+def test_full_aspiration(g100, tmp_path):
+    settings = {"experiments": 8, "max_moves": 1000, "div_freq": 300, "div_dur": 8, "seed": 3}
+    # with tenure 1 it allows the same swaps as the original criterion, in the same order
+    limited = ss.search(g100, 30, 340, aspiration=True, tabu_tenure=1, **settings)
+    full = ss.search(g100, 30, 340, aspiration="full", tabu_tenure=1, **settings)
+    assert full.params.aspiration == "full"
+    assert [e.vertices for e in limited.experiments] == [e.vertices for e in full.experiments]
+    # with a longer tenure it considers every tabu swap
+    full = ss.search(g100, 30, 340, aspiration="full", tabu_tenure=5, **settings)
+    for e in full.experiments:
+        assert abs(g100.induced_edge_count(e.vertices) - 340) == e.best_conflict
+    assert ss.SearchResult.from_dict(full.to_dict(), g100).params.aspiration == "full"
+    # and the command line's JSON records it as full_aspiration
+    data = full.to_dict()
+    data["params"] = {**data["params"], "aspiration": False, "full_aspiration": True}
+    assert ss.SearchResult.from_dict(data, g100).params.aspiration == "full"
+    with pytest.raises(ValueError, match="aspiration"):
+        ss.search(g100, 30, 340, aspiration="ful")
+    with pytest.raises(ValueError, match="aspiration"):
+        ss.search(g100, 10, degree=3, aspiration="full")
+
+
 def test_legacy_ggen_and_errors():
     assert ss.legacy.ggen((FIXTURES / "ggen" / "exp_10_500_42.in").read_text(encoding="utf-8")) == (FIXTURES / "ggen" / "exp_10_500_42.out").read_text(encoding="utf-8")
     with pytest.raises(ValueError, match="seed must be a positive integer"):
@@ -270,6 +292,14 @@ def test_rust_cli_json_loads_in_python(tmp_path, g100):
     assert main(["explore", str(graph_path), "--result", str(out), "-o", str(tmp_path / "x.html")]) == 0
     assert main(["report", str(graph_path), "--result", str(out), "-o", str(tmp_path / "x.png")]) == 0
     assert (tmp_path / "x-search.png").exists() and (tmp_path / "x-graph.png").exists()
+    # --aspiration=full gives the same experiments as aspiration="full", and loads back as such
+    out = tmp_path / "full.json"
+    args = ["-k", "30", "-m", "340", "-n", "6", "--moves", "500", "--tabu-tenure", "5", "-q"]
+    subprocess.run([exe, "search", graph_path, *args, "--aspiration=full", "--json", out], check=True)
+    r = ss.SearchResult.load(out, g100)
+    py = ss.search(g100, 30, 340, experiments=6, max_moves=500, tabu_tenure=5, aspiration="full")
+    assert r.params.aspiration == "full"
+    assert [e.vertices for e in r.experiments] == [e.vertices for e in py.experiments]
 
 
 # ---- multi-graph files

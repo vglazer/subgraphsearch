@@ -497,6 +497,31 @@ fn incidence_graph(
 
 type ExperimentTuple = (i64, usize, bool, Vec<usize>, Option<Vec<u32>>);
 
+/// `SearchParams.aspiration` in Python: `False`, `True` (the original, limited criterion) or
+/// `"full"`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AspirationParam {
+    Off,
+    Limited,
+    Full,
+}
+
+impl<'a, 'py> FromPyObject<'a, 'py> for AspirationParam {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
+        if let Ok(on) = ob.extract::<bool>() {
+            return Ok(if on { Self::Limited } else { Self::Off });
+        }
+        match ob.extract::<String>().as_deref() {
+            Ok("full") => Ok(Self::Full),
+            _ => Err(PyValueError::new_err(
+                "aspiration must be False, True or \"full\"",
+            )),
+        }
+    }
+}
+
 /// The Python package's `SearchParams`, read attribute by attribute. A `tabu_tenure` of 0 asks for
 /// the automatic tenure.
 #[derive(FromPyObject)]
@@ -511,7 +536,7 @@ struct Params {
     seed: i64,
     rng: String,
     trace: bool,
-    aspiration: bool,
+    aspiration: AspirationParam,
     degree: Option<i64>,
     two_phase: bool,
     connected: bool,
@@ -538,7 +563,8 @@ impl Params {
             seed: self.seed,
             rng: parse(&self.rng)?,
             record_trace: self.trace,
-            aspiration: self.aspiration,
+            aspiration: self.aspiration == AspirationParam::Limited,
+            full_aspiration: self.aspiration == AspirationParam::Full,
             connected: self.connected,
             path: self.path,
             endpoints: self.endpoints,
@@ -569,7 +595,11 @@ fn params_dict<'py>(py: Python<'py>, p: &SearchParams) -> PyResult<Bound<'py, Py
         },
     )?;
     d.set_item("trace", p.record_trace)?;
-    d.set_item("aspiration", p.aspiration)?;
+    if p.full_aspiration {
+        d.set_item("aspiration", "full")?;
+    } else {
+        d.set_item("aspiration", p.aspiration)?;
+    }
     d.set_item("degree", p.regular.map(|r| r.degree))?;
     d.set_item("two_phase", p.regular.is_some_and(|r| r.two_phase))?;
     d.set_item("connected", p.connected)?;

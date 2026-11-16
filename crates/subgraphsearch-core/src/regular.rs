@@ -236,7 +236,7 @@ where
 
 fn validate(graph: &Graph, params: &SearchParams) -> Result<(), Error> {
     params.validate(graph.num_vertices())?;
-    if params.aspiration {
+    if params.aspiration || params.full_aspiration {
         return Err(Error::Invalid(
             "aspiration is not available for regular or path searches".into(),
         ));

@@ -62,6 +62,14 @@ enum LegacyCommand {
     Ggen,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum AspirationArg {
+    /// The original asub_search's: the swaps involving the two vertices just swapped.
+    Limited,
+    /// Every swap the tabu tenure forbids; the same as limited with tenure 1.
+    Full,
+}
+
 #[derive(Clone, Copy, ValueEnum)]
 enum RngArg {
     /// xoshiro256++ (the default).
@@ -188,10 +196,11 @@ struct SearchArgs {
     /// Print nothing but the summary.
     #[arg(short, long)]
     quiet: bool,
-    /// Aspiration criterion (the original asub_search): lift the tabu on swaps involving the two
-    /// vertices just swapped when they would beat the best value so far.
-    #[arg(long)]
-    aspiration: bool,
+    /// Aspiration criterion: take a tabu swap when it would beat the best value so far. Alone, as
+    /// in the original asub_search, it considers the swaps involving the two vertices just swapped;
+    /// --aspiration=full considers every swap the tabu tenure forbids, which suits long tenures
+    #[arg(long, value_enum, num_args = 0..=1, require_equals = true, default_missing_value = "limited")]
+    aspiration: Option<AspirationArg>,
     /// Require the subgraph to be connected: each component beyond the first adds 1 to the
     /// conflict. With --degree 2, finds induced cycles rather than unions of them.
     #[arg(long)]
@@ -602,7 +611,8 @@ fn run_search(args: SearchArgs) -> Result<u8> {
     let mut params = SearchParams::new(args.vertices, args.edges.unwrap_or(0));
     params.fixed = args.fixed.clone();
     params.record_trace = args.trace;
-    params.aspiration = args.aspiration;
+    params.aspiration = args.aspiration == Some(AspirationArg::Limited);
+    params.full_aspiration = args.aspiration == Some(AspirationArg::Full);
     params.connected = args.connected;
     params.path = args.path;
     params.endpoints = parse_endpoints(&args.endpoints)?;

@@ -6,7 +6,9 @@ and the real-valued GKD-c 1 and MDG-a 1, scored on their original distances. Ins
 from examples/data are fetched from MDPLIB on first use (see common.py).
 
 --specialist adds MDG-a_21, 200 of 2000 items, with a budget per run equal to OBMA's 20 seconds on
-one core, measured first. --solvers adds the general solvers, each maximizing for --limit seconds.
+one core, measured first, with the default settings and with aspiration="full" (which costs some
+time per move, so its budget is measured separately); then MDG-a_22 to 24 with the same budgets,
+against MDPLIB's values from 2-hour runs of G_SS. --solvers adds the general solvers, each maximizing for --limit seconds.
 
     uv run python benchmarks/diversity.py
     uv run python benchmarks/diversity.py --specialist
@@ -73,18 +75,36 @@ def real_valued(solvers, limit):
         print("; ".join(row), flush=True)
 
 
+# MDPLIB's best values for MDG-a_22 to 24, from 2-hour runs of G_SS (mdplib_2010_bestvalues.xls)
+MORE_MDG_A = {"MDG-a_22_n2000_m200": 114327, "MDG-a_23_n2000_m200": 114123, "MDG-a_24_n2000_m200": 114040}
+
+
 def specialist():
     w, k = integer_instance("MDG-a_21_n2000_m200")
     best = 114271
-    _, t = timed(lambda: ss.densest(w, k, experiments=1, max_moves=200_000, div_freq=300, div_dur=10), repeats=3)
-    rate = 200_000 / t
-    moves = int(round(rate * 20 / 100_000) * 100_000)
-    print(f"MDG-a_21: {rate:,.0f} moves a second on one core, so OBMA's 20 s is {moves:,} moves", flush=True)
-    for budget in (200_000, moves):
-        d, t = timed(lambda budget=budget: ss.densest(w, k, experiments=30, max_moves=budget, div_freq=300, div_dur=10))
-        totals = sorted(d._value(e.vertices) for e in d.result.experiments)
-        print(f"  {budget:,} moves (tenure {d.result.params.tabu_tenure}): {sum(v >= best for v in totals)} of 30 "
-              f"reach {best:,}; the median ends {best - totals[15]} short ({t:.0f} s for all 30)", flush=True)
+    budgets = {}
+    for aspiration in (False, "full"):
+        settings = {"div_freq": 300, "div_dur": 10, "aspiration": aspiration}
+        _, t = timed(lambda settings=settings: ss.densest(w, k, experiments=1, max_moves=200_000, **settings), repeats=3)
+        rate = 200_000 / t
+        moves = budgets[aspiration] = int(round(rate * 20 / 100_000) * 100_000)
+        label = "aspiration='full'" if aspiration else "default settings"
+        print(f"MDG-a_21, {label}: {rate:,.0f} moves a second on one core, so OBMA's 20 s is {moves:,} moves",
+              flush=True)
+        for budget in (200_000, moves):
+            d, t = timed(lambda budget=budget, settings=settings: ss.densest(w, k, experiments=30, max_moves=budget, **settings))
+            totals = sorted(d._value(e.vertices) for e in d.result.experiments)
+            print(f"  {budget:,} moves (tenure {d.result.params.tabu_tenure}): {sum(v >= best for v in totals)} of 30 "
+                  f"reach {best:,}; the median ends {best - totals[15]} short, the worst {best - totals[0]} "
+                  f"({t:.0f} s for all 30)", flush=True)
+    for name, reference in MORE_MDG_A.items():
+        w, k = integer_instance(name)
+        for aspiration, moves in budgets.items():
+            d = ss.densest(w, k, experiments=30, max_moves=moves, div_freq=300, div_dur=10, aspiration=aspiration)
+            totals = sorted(d._value(e.vertices) for e in d.result.experiments)
+            print(f"{name.split('_n')[0]}, {'aspiration=full' if aspiration else 'default settings'}, {moves:,} moves: "
+                  f"{sum(v >= reference for v in totals)} of 30 reach MDPLIB's {reference:,}; best {totals[-1] - reference:+}, "
+                  f"median {totals[15] - reference:+}, worst {totals[0] - reference:+}", flush=True)
 
 
 def main() -> None:

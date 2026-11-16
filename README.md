@@ -134,9 +134,9 @@ goes through all of these.
 ![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
 
 - **Maximum diversity:** the best published MDPLIB values up to 500 items in under a second, where
-  CP-SAT ends up to 9% short and the MIP solvers up to 38%. At 2000 items a heuristic made for the
-  problem is ahead: in the same 20 s per run, it reaches the best known value in 22 of 30 runs,
-  subgraphsearch in 6.
+  CP-SAT ends up to 9% short and the MIP solvers up to 38%. At 2000 items, in the 20 s per run of
+  a heuristic made for the problem, which reaches the best known value in 22 of 30 runs,
+  subgraphsearch reaches it in 7 with default settings and in 27 with `aspiration="full"`.
 - **Exact edge counts:** milliseconds, where CP-SAT and the MIP solvers SCIP, HiGHS and CBC need
   seconds at a few dozen vertices and mostly find nothing within 10 seconds past 40.
 - **Maximum cliques:** far faster than an exact search, but a dedicated clique solver is faster
@@ -250,6 +250,7 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 | `--div-freq`, `--div-dur` | make `div-dur` random moves at the start of every `div-freq` moves | 250, 4 |
 | `--kick-size`, `--kick-ban` | region kicks in place of the random moves of every cycle after the first: vertices rebuilt per kick, and moves they stay out (0 turns kicks off) | 4, 20 (no kicks with `--degree`, `--path`, `--rng legacy`) |
 | `--tabu-tenure` | moves a vertex just swapped stays tabu (0 = automatic) | `min(k/10, (n-k)/80, 20)`, at least 1 (1 with `--degree`, `--path`, `--rng legacy`) |
+| `--aspiration[=full]` | take a tabu swap that beats the best value so far: the two vertices just swapped, or with `=full` every swap the tenure forbids (for long tenures) | off |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
 

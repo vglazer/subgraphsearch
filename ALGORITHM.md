@@ -133,8 +133,12 @@ original programs, and reproduce their results exactly (see [PORTING.md](PORTING
   search with fixed vertices.
 - **Aspiration** (`aspiration=True`, `--aspiration`). The tabu search's *aspiration criterion* lifts the tabu on a move that would beat
   the best conflict so far: after each move the search also considers the swaps involving the two
-  vertices just swapped, and takes one of them whenever it would. The counting search
-  only.
+  vertices just swapped, and takes one of them whenever it would. With `aspiration="full"`
+  (`--aspiration=full`) it considers every swap the tabu tenure forbids: each subgraph vertex that
+  may not leave yet with every outside vertex, and each outside vertex that may not return yet with
+  every subgraph vertex, skipping rows that a bound like the one for bounded rows rules out. With a
+  tenure of 1 the two are the same. The full criterion lets a long tenure keep the search from
+  circling back without blocking improvements. The counting search only.
 - **Connected subgraphs** (`connected=True`, `--connected`). Each component of the subgraph beyond the first adds 1 to the conflict,
   so only connected subgraphs that hit the target count as successes. Swaps are still chosen by the
   target alone: a disconnected subgraph that hits it leaves the search on a plateau, which it

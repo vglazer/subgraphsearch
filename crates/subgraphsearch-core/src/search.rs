@@ -17,7 +17,9 @@
 //!
 //! - With [`SearchParams::aspiration`] (the original `asub_search`), an *aspiration criterion*
 //!   lifts the tabu: the swaps involving the two vertices just swapped are also examined after
-//!   each move, and one is taken whenever it would beat the best value so far.
+//!   each move, and one is taken whenever it would beat the best value so far. With
+//!   [`SearchParams::full_aspiration`], every swap the tabu tenure forbids is examined the same
+//!   way; with tenure 1 the two are the same.
 //!
 //! - With [`SearchParams::connected`], every component of the subgraph beyond the first adds 1 to
 //!   the conflict, so an experiment succeeds only on a connected subgraph that hits the target.
@@ -210,6 +212,14 @@ pub struct SearchParams {
     /// of them whenever it would beat the best value so far.
     #[serde(default)]
     pub aspiration: bool,
+    /// The full aspiration criterion: after each move, also consider every swap the tabu tenure
+    /// forbids, not only those involving the two vertices just swapped, and take one of them
+    /// whenever it would beat the best value so far. It lets a long tenure keep the search from
+    /// circling back without blocking improvements, at some cost per move. With a tenure of 1 it is
+    /// the same as `aspiration`, whose code it then uses, so legacy runs are unchanged. Edge-count
+    /// and weight searches only.
+    #[serde(default)]
+    pub full_aspiration: bool,
     /// Require a connected subgraph: each component beyond the first adds 1 to the conflict. The
     /// components are counted after every move, at a cost of about the sum of the subgraph's
     /// degrees in the whole graph.
@@ -338,6 +348,7 @@ impl SearchParams {
             rng: RngKind::Xoshiro,
             record_trace: false,
             aspiration: false,
+            full_aspiration: false,
             connected: false,
             path: false,
             endpoints: None,
@@ -937,6 +948,8 @@ struct Workspace {
     tenure: usize,
     tabu_in: Vec<usize>,
     tabu_out: Vec<usize>,
+    /// With `params.full_aspiration`: the outside vertices that may not return yet, rebuilt each move.
+    tabu_cols: Vec<usize>,
     /// The rows to scan in a move: vertex, candidate columns, row constant and a lower bound on
     /// the row's best value.
     rows: Vec<(usize, usize, i64, i64)>,
@@ -974,12 +987,12 @@ impl Workspace {
             u_list: vec![0; v - params.size],
             sub_opt: vec![0; v],
             rest_opt: vec![0; v],
-            sub_asp: if params.aspiration {
+            sub_asp: if params.aspiration || params.full_aspiration {
                 vec![0; v]
             } else {
                 Vec::new()
             },
-            rest_asp: if params.aspiration {
+            rest_asp: if params.aspiration || params.full_aspiration {
                 vec![0; v]
             } else {
                 Vec::new()
@@ -990,6 +1003,7 @@ impl Workspace {
             fixed: Vec::new(),
             kick_queue: Vec::new(),
             tenure: params.resolved_tabu_tenure(v),
+            tabu_cols: Vec::new(),
             tabu_in: Vec::new(),
             tabu_out: Vec::new(),
             rows: Vec::with_capacity(params.size),
@@ -1120,6 +1134,87 @@ impl Workspace {
         asp_mov
     }
 
+    /// Lists the full aspiration moves (with `params.full_aspiration`): the swaps the tabu tenure
+    /// forbids at move `j` that would beat the best value so far, `g_opt_val`. Those are each
+    /// subgraph vertex that may not leave yet with every outside vertex, and each outside vertex
+    /// that may not return yet with every subgraph vertex. Rows are skipped by the same kind of
+    /// bound as in [`Workspace::bound_rows`]. At most `v` are kept.
+    fn full_aspiration_moves<G: SearchGraph>(
+        &mut self,
+        graph: &G,
+        new_min_val: i64,
+        g_opt_val: i64,
+        j: usize,
+    ) -> usize {
+        let cap = self.sub_asp.len();
+        let mut asp_mov = 0;
+        // the few outside vertices that may not return yet, and the degree ranges among all outside
+        // vertices and among those, for bounds like `bound_rows`'
+        let (mut all_lo, mut all_hi, mut tabu_lo, mut tabu_hi) =
+            (i64::MAX, i64::MIN, i64::MAX, i64::MIN);
+        let mut tabu_cols = std::mem::take(&mut self.tabu_cols);
+        tabu_cols.clear();
+        for l in 0..self.v_rest {
+            let t = self.rest_verts[l];
+            let d = i64::from(self.sub_degs[t]);
+            (all_lo, all_hi) = (all_lo.min(d), all_hi.max(d));
+            if self.tabu_in[t] > j {
+                tabu_cols.push(t);
+                (tabu_lo, tabu_hi) = (tabu_lo.min(d), tabu_hi.max(d));
+            }
+        }
+        for k in 0..self.v_sub {
+            let s = self.sub_verts[k];
+            let tabu_row = self.tabu_out[s] > j;
+            if !tabu_row && tabu_cols.is_empty() {
+                continue;
+            }
+            let degree = new_min_val - i64::from(self.sub_degs[s]);
+            let (lo, hi) = if tabu_row {
+                (all_lo, all_hi)
+            } else {
+                (tabu_lo, tabu_hi)
+            };
+            let (low, high) = (degree + lo - graph.max_row_value(s), degree + hi);
+            let bound = if high < 0 {
+                -high
+            } else if low > 0 {
+                low
+            } else {
+                0
+            };
+            #[cfg(test)]
+            let bound = if NO_ROW_SKIPPING.load(std::sync::atomic::Ordering::Relaxed) {
+                0
+            } else {
+                bound
+            };
+            if bound >= g_opt_val {
+                continue;
+            }
+            let row = graph.adjacency_row(s);
+            let mut consider = |t: usize, asp_mov: &mut usize| {
+                let val = (degree - row.value(t) + i64::from(self.sub_degs[t])).abs();
+                if val < g_opt_val && *asp_mov < cap {
+                    self.sub_asp[*asp_mov] = s;
+                    self.rest_asp[*asp_mov] = t;
+                    *asp_mov += 1;
+                }
+            };
+            if tabu_row {
+                for &t in &self.rest_verts[..self.v_rest] {
+                    consider(t, &mut asp_mov);
+                }
+            } else {
+                for &t in &tabu_cols {
+                    consider(t, &mut asp_mov);
+                }
+            }
+        }
+        self.tabu_cols = tabu_cols;
+        asp_mov
+    }
+
     /// Restores the state of a fresh workspace.
     fn reset(&mut self, params: &SearchParams) {
         self.sub_ch.fill(0);
@@ -1185,7 +1280,11 @@ impl Workspace {
             }
             self.bound_rows(graph, new_min_val, j, rest_vert, &cols);
             opt_mov = self.collect_best_moves(graph, j, &cols);
-            if params.aspiration {
+            // with tenure 1 the full criterion allows the same swaps as the original's, whose code
+            // (and order of moves) it then keeps
+            if params.full_aspiration && self.tenure > 1 {
+                asp_mov = self.full_aspiration_moves(graph, new_min_val, g_opt_val, j);
+            } else if params.aspiration || params.full_aspiration {
                 asp_mov = self.aspiration_moves(graph, new_min_val, g_opt_val, sub_vert, rest_vert);
             }
             for k in 0..cols.active {
@@ -1694,7 +1793,7 @@ mod tests {
                 .map(|(i, j)| (i, j, ((i * j) % 9 + 1) as u32)),
         )
         .unwrap();
-        for (size, edges, kick, tenure, rng) in [
+        for case in [
             (
                 20,
                 1_000_000,
@@ -1705,9 +1804,15 @@ mod tests {
             (20, 0, DEFAULT_KICK_SIZE, AUTO_TABU_TENURE, RngKind::Xoshiro), // sparsest
             (30, 180, 0, 1, RngKind::Xoshiro),
             (30, 180, 16, 5, RngKind::Xoshiro),
+            (40, 560, DEFAULT_KICK_SIZE, 8, RngKind::Xoshiro),
             (40, 600, 0, 1, RngKind::Legacy),
-        ] {
+        ]
+        .into_iter()
+        .flat_map(|case| [(case, false), (case, true)])
+        {
+            let ((size, edges, kick, tenure, rng), full_aspiration) = case;
             let mut p = SearchParams::new(size, edges);
+            p.full_aspiration = full_aspiration;
             p.experiments = 8;
             p.max_moves = 1500;
             p.div_freq = 300;
@@ -1726,8 +1831,51 @@ mod tests {
             NO_ROW_SKIPPING.store(true, std::sync::atomic::Ordering::Relaxed);
             let full = run();
             NO_ROW_SKIPPING.store(false, std::sync::atomic::Ordering::Relaxed);
-            assert_eq!(skipping, full, "size {size}, edges {edges}");
+            assert_eq!(
+                skipping, full,
+                "size {size}, edges {edges}, full aspiration {full_aspiration}"
+            );
         }
+    }
+
+    #[test]
+    fn full_aspiration_is_the_original_with_tenure_one_and_differs_with_longer() {
+        let n = 120;
+        let g = Graph::from_edges(
+            n,
+            (0..n)
+                .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+                .filter(|&(i, j)| (i * 29 + j * 13) % 7 < 3),
+        )
+        .unwrap();
+        let mut p = SearchParams::new(30, 190);
+        p.experiments = 8;
+        p.max_moves = 2000;
+        p.div_freq = 300;
+        p.div_dur = 8;
+        p.tabu_tenure = 1;
+        let run = |p: &SearchParams| search(&g, p).unwrap().experiments;
+        let (mut limited, mut full) = (p.clone(), p.clone());
+        limited.aspiration = true;
+        full.full_aspiration = true;
+        // with tenure 1 the only tabu swaps involve the two vertices just swapped
+        assert_eq!(run(&limited), run(&full));
+        // with a longer tenure it considers more swaps, and every result is still what it reports
+        limited.tabu_tenure = 6;
+        full.tabu_tenure = 6;
+        let result = run(&full);
+        assert_ne!(run(&limited), result);
+        for e in &result {
+            let edges = g.induced_edge_count(&e.vertices) as i64;
+            assert_eq!((edges - 190).abs(), e.best_conflict);
+        }
+        // the degree search has no aspiration
+        let mut regular = full.clone();
+        regular.regular = Some(Regular {
+            degree: 3,
+            two_phase: false,
+        });
+        assert!(search(&g, &regular).is_err());
     }
 
     #[test]

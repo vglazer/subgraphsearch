@@ -323,6 +323,7 @@ fn run_search<W: Write>(
         rng: RngKind::Legacy,
         record_trace: false,
         aspiration: variant == Variant::Aspiration,
+        full_aspiration: false,
         connected: false,
         path: false,
         endpoints: None,

@@ -85,8 +85,14 @@ a setting, and `viz.plot_sweep` compares them. As a rule:
   each once).
 - **Random moves** (`div_dur`, `--div-dur`): the defaults, 4 every 250 moves, rarely need
   changing; `div_dur=0` gives a pure local search.
-- **Aspiration** (`aspiration=True`, `--aspiration`, counting search only) rarely makes a
-  difference; try it on searches that stall.
+- **Aspiration** (counting search only) takes a tabu swap whenever it would beat the best value so
+  far. Use `aspiration="full"` (`--aspiration=full`) with long tenures: on large instances, where
+  the automatic tenure reaches its cap of 20, and when trying tenures above the default. It
+  considers every swap the tenure forbids, so a long tenure no longer blocks improvements, at about
+  15% more time per move; on MDG-a_21 it turned most near misses into hits. Leave it off with short
+  tenures, where it can cost successes. `aspiration=True` (`--aspiration`), the original programs'
+  criterion, considers only the two vertices just swapped: it is cheap and rarely makes a
+  difference either way.
 - **Seeds** (`seed`, `-s`): results depend only on the seed and the settings
   ([ALGORITHM.md](ALGORITHM.md#experiments-threads-and-seeds)); change the seed for independent
   runs.
