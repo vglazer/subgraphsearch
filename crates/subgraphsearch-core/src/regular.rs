@@ -974,9 +974,20 @@ impl Workspace {
                         sub: &mut self.sub_opt,
                         rest: &mut self.rest_opt,
                     };
-                    for &temp in &self.u_list[..w_cols] {
+                    // in fixed chunks, which the compiler unrolls, as clang does the C loop
+                    let mut scan = |temp: usize| {
                         let val = abs(degree + sub_degs[temp] - bit(row, temp) as i64);
                         moves.store(val, &mut opt_val, &mut opt_mov, vert, temp);
+                    };
+                    let chunks = self.u_list[..w_cols].chunks_exact(8);
+                    let rest = chunks.remainder();
+                    for chunk in chunks {
+                        for &temp in chunk {
+                            scan(temp);
+                        }
+                    }
+                    for &temp in rest {
+                        scan(temp);
                     }
                 }
                 for k in 0..u_cols {

@@ -90,11 +90,11 @@ three runs on a 16-core Apple M3 Max, measured by
 
 | Program | Search | Moves | C | Legacy, 1 thread | Faster than C | 16 threads | Faster than 1 thread | Faster than C |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `sub_search` | a 100-clique in G(1000, 0.5) | 64,000 | 2.13 s | 0.35 s | 6.1× | 0.041 s | 8.3× | 53× |
-| `asub_search` | the same, with aspiration | 64,000 | 2.20 s | 0.41 s | 5.4× | 0.047 s | 8.5× | 47× |
-| `wsub_search` | total weight 17,500 in SOM-b n400 m80 | 320,000 | 3.19 s | 0.65 s | 4.9× | 0.061 s | 10.6× | 52× |
-| `reg_search` | a 40-vertex independent set, as 0-regular, in G(1000, 0.5) | 6,400 | 4.68 s | 5.10 s | 0.9× | 0.41 s | 12.4× | 11× |
-| `ereg_search` | the same, in two phases | 32,000 | 0.57 s | 0.92 s | 0.6× | 0.093 s | 9.9× | 6× |
+| `sub_search` | a 100-clique in G(1000, 0.5) | 64,000 | 2.13 s | 0.35 s | 6.0× | 0.041 s | 8.2× | 52× |
+| `asub_search` | the same, with aspiration | 64,000 | 2.20 s | 0.41 s | 5.4× | 0.045 s | 8.9× | 49× |
+| `wsub_search` | total weight 17,500 in SOM-b n400 m80 | 320,000 | 3.19 s | 0.65 s | 4.9× | 0.063 s | 10.3× | 51× |
+| `reg_search` | a 40-vertex independent set, as 0-regular, in G(1000, 0.5) | 6,400 | 4.67 s | 5.13 s | 0.9× | 0.41 s | 12.4× | 11× |
+| `ereg_search` | the same, in two phases | 32,000 | 0.57 s | 0.78 s | 0.7× | 0.089 s | 8.9× | 6× |
 
 - **On one thread,** the counting search (`sub_search`, `asub_search`, `wsub_search`) is 5–6 times
   faster than the C programs, with the same output. It skips candidate swaps that cannot be best
