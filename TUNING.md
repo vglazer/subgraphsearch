@@ -15,7 +15,7 @@ are given by their Python names, with the command-line options in parentheses.
 | the densest (or sparsest) $`k`$ vertices, or the heaviest (lightest) in a weighted graph | `ss.densest(g, k)` (`--densest`), `ss.sparsest(g, k)` (`--sparsest`) |
 | subgraphs close to a target | `r.solutions(max_conflict=n)` (`--max-conflict n`) |
 | subgraphs containing given vertices | `fixed=` (`--fixed`), or for cliques, search their common neighborhood (below) |
-| regular subgraphs of degree $`d`$ | `degree=d, two_phase=True` (`--degree d --two-phase`), or `degree=d` alone with fixed vertices |
+| regular subgraphs of degree $`d`$ | `degree=d` (`--degree d`); on large dense graphs, also try `two_phase=True` (`--two-phase`) |
 | induced cycles on $`k`$ vertices | `degree=2, connected=True` (`--degree 2 --connected`) |
 | induced paths on $`k`$ vertices | `path=True` (`--path`), between two vertices with `endpoints=(s, t)` (`--endpoints s,t`) |
 | induced trees on $`k`$ vertices | `edges=k-1, connected=True` (`-m k-1 --connected`) |
@@ -34,6 +34,13 @@ Some reformulations make a search easier:
   vertex. Vertex `i` of the result is `nbrs[i]` of the original graph.
 - **Search the complement of a dense graph.** $`k`$ vertices with $`m`$ edges become $`k`$ vertices
   with $`k(k-1)/2 - m`$ in the complement, which is sparse when the graph is dense.
+- **Two phases for regular subgraphs in large dense graphs.** `two_phase=True` first finds $`kd/2`$
+  edges, which needs only a subtraction per candidate swap, then makes the subgraph regular. In
+  large dense graphs, where a one-phase move walks long neighbor lists, that can be several times
+  faster per success; compare the time per success both ways. In structured graphs it can succeed
+  far less often, since many subgraphs with the right edge count cannot be made regular by swaps
+  that keep it, and it does not suit fixed vertices or connected searches (see
+  [ALGORITHM.md](ALGORITHM.md#variants)).
 - **Let `densest` find the most edges** $`k`$ vertices can span (`ss.densest(g, k)`). Aiming at
   exact values just below that limit also works, since the switch from always found to never found
   is abrupt, and finds more distinct subgraphs at a given value.

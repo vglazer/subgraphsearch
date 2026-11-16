@@ -124,9 +124,13 @@ original programs, and reproduce their results exactly (see [PORTING.md](PORTING
   respect to a suitable regular subgraph can give another strongly regular graph with the same
   parameters.
 - **Two phases** (`two_phase=True`, `--two-phase`). The search first finds a subgraph with the right number of edges, $`kd/2`$, then
-  makes it regular using only swaps that keep the edge count. With fixed vertices it computes the
-  edge target from the non-fixed vertices only, a quirk of the original program, so it rarely
-  succeeds there; use the one-phase search with fixed vertices.
+  makes it regular using only swaps that keep the edge count. Phase-one moves are cheap, a
+  subtraction per candidate swap, so on large dense graphs it can find regular subgraphs faster than
+  the one-phase search. But the second phase makes no random moves, so in structured graphs, where
+  many subgraphs with the right edge count cannot be made regular that way, and in connected
+  searches it often stalls. With fixed vertices it computes the edge target from the non-fixed
+  vertices only, a quirk of the original program, so it rarely succeeds there; use the one-phase
+  search with fixed vertices.
 - **Aspiration** (`aspiration=True`, `--aspiration`). The tabu search's *aspiration criterion* lifts the tabu on a move that would beat
   the best conflict so far: after each move the search also considers the swaps involving the two
   vertices just swapped, and takes one of them whenever it would. The counting search

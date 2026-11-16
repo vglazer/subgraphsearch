@@ -333,18 +333,25 @@ reg
 """),
     md("""
 A $d$-regular subgraph on $k$ vertices has exactly $kd/2$ edges. With `two_phase=True` the search first finds
-$k$ vertices with that many edges, then makes them regular using only swaps that keep the edge count. Those
-swaps are cheaper to evaluate, so although each experiment succeeds less often on hard targets, two phases
-usually find solutions faster. Compare the time per success on a harder target, 8-regular subgraphs on 20
-vertices (with `fixed=`, use `degree=` alone: the two-phase edge target then counts only the non-fixed
-vertices, so it rarely succeeds):
+$k$ vertices with that many edges, then makes them regular using only swaps that keep the edge count. Its
+first phase is cheap, a subtraction per candidate swap, while a one-phase move checks the neighbors of every
+candidate. So which is faster depends on the graph. In a large dense graph, two phases find solutions faster;
+in a structured one such as the rook's graph of a 6 x 6 board, many subgraphs with the right edge count cannot
+be made regular that way, and two phases succeed far less often. Compare the time per success (with `fixed=`,
+use `degree=` alone: the two-phase edge target then counts only the non-fixed vertices, so it rarely succeeds):
 """),
     code("""
-for two_phase in (False, True):
-    start = time.perf_counter()
-    res = ss.search(paley, 20, degree=8, two_phase=two_phase, experiments=100, max_moves=2000, div_freq=300, div_dur=8, seed=3)
-    elapsed = time.perf_counter() - start
-    print(f"two_phase={two_phase}: {res.successes}/100 successes, {1000 * elapsed / max(res.successes, 1):.1f} ms per success")
+k6 = ss.Graph(6).complement()
+targets = [("6 x 6 rook's graph, 12 vertices 3-regular", k6.cartesian(k6), 12, 3),
+           ("G(1000, 0.5), 20 vertices 9-regular", ss.generate("exponential", 1000, 0.5, seed=3), 20, 9)]
+for target_name, target_graph, target_size, target_degree in targets:
+    for two_phase in (False, True):
+        start = time.perf_counter()
+        res = ss.search(target_graph, target_size, degree=target_degree, two_phase=two_phase,
+                        experiments=100, max_moves=2000, div_freq=300, div_dur=8, seed=1)
+        elapsed = time.perf_counter() - start
+        print(f"{target_name}, two_phase={two_phase}: {res.successes}/100 successes, "
+              f"{1000 * elapsed / max(res.successes, 1):.2f} ms per success")
 """),
     md(f"""
 ## Cycles and trees
