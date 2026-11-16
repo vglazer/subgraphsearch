@@ -1015,7 +1015,8 @@ def test_scores_are_kept_and_break_ties(tmp_path):
     path = tmp_path / "scores.edges"
     path.write_text("# vertices: 4\n" + "".join(f"{u} {v} {x}\n" for u, v, x in scores), encoding="utf-8")
     run = subprocess.run([exe, "search", path, "--scores", "--densest", "-k", "2", "-n", "20", "-q",
-                          "--json", tmp_path / "r.json"], check=True, capture_output=True, text=True)
+                          "--json", tmp_path / "r.json"], check=True, capture_output=True, text=True,
+                         encoding="utf-8")
     assert "score 2.0000, the best in experiment" in run.stdout
     data = json.loads((tmp_path / "r.json").read_text(encoding="utf-8"))
     assert max(e["score"] for e in data["experiments"]) == 2.0
