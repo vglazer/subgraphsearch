@@ -59,8 +59,9 @@ Prebuilt wheels need no compiler, and each one serves every Python from 3.10 on:
 | macOS | Intel, Apple silicon | macOS 10.12 (Intel) or 11 (Apple silicon) or later |
 | Windows | x64, ARM64 | — |
 
-On other platforms, pip builds the package from source, which needs a [Rust](https://rustup.rs)
-toolchain, 1.87 or later.
+The x86-64 wheels need an x86-64 processor from about 2009 on (the x86-64-v2 level, with the
+POPCNT instruction). On older processors and on other platforms, pip builds the package from
+source, which needs a [Rust](https://rustup.rs) toolchain, 1.87 or later.
 
 To copy the quickstart notebook into the current directory and open it in JupyterLab:
 

@@ -67,3 +67,8 @@ uv run python benchmarks/cliques.py               # one of the scripts behind BE
 
 To rehearse a release, run the release workflow by hand (Actions > Release > Run workflow). It
 publishes a development release such as `1.0.2.dev7` to TestPyPI instead.
+
+The x86-64 wheels are built for x86-64-v2, for its POPCNT instruction. To measure what that gains,
+run the POPCNT measurement workflow by hand (Actions > POPCNT measurement > Run workflow); it times
+`crates/subgraphsearch-core/examples/popcount_bench.rs` built for the baseline, x86-64-v2 and
+x86-64-v3 on an x86-64 runner.

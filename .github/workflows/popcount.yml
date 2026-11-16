@@ -1,0 +1,54 @@
+name: POPCNT measurement
+
+# Run by hand (Actions > POPCNT measurement > Run workflow). Measures what portable x86-64 builds
+# lose without POPCNT: crates/subgraphsearch-core/examples/popcount_bench.rs built for the baseline
+# x86-64 target, for x86-64-v2 (adds POPCNT) and for x86-64-v3 (adds AVX2), run alternately.
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: The runner's processor
+        run: |
+          lscpu | grep -E "Model name|^CPU\(s\)"
+          for f in popcnt avx2 bmi1; do grep -qw "$f" /proc/cpuinfo && echo "$f: yes" || echo "$f: no"; done
+      - name: Build the three variants
+        run: |
+          cargo build --release -q -p subgraphsearch-core --example popcount_bench --target-dir target/base
+          RUSTFLAGS="-C target-cpu=x86-64-v2" cargo build --release -q -p subgraphsearch-core --example popcount_bench --target-dir target/v2
+          RUSTFLAGS="-C target-cpu=x86-64-v3" cargo build --release -q -p subgraphsearch-core --example popcount_bench --target-dir target/v3
+      - name: POPCNT instructions in each binary
+        run: |
+          for v in base v2 v3; do
+            echo "$v: $(objdump -d target/$v/release/examples/popcount_bench | grep -c popcnt) popcnt instructions"
+          done
+      - name: Run the variants alternately
+        run: |
+          for round in 1 2 3 4; do
+            for v in base v2 v3; do
+              target/$v/release/examples/popcount_bench 3 | sed "s/^RESULT/$v/" | tee -a results.txt
+            done
+          done
+      - name: Summary
+        run: |
+          python3 - <<'EOF' | tee -a "$GITHUB_STEP_SUMMARY"
+          import collections, statistics
+          times = collections.defaultdict(list)
+          for line in open("results.txt", encoding="utf-8"):
+              variant, workload, seconds = line.split()
+              times[(workload, variant)].append(float(seconds))
+          workloads = sorted({w for w, _ in times}, key=lambda w: (w == "search_control", w))
+          print("| Workload | baseline | x86-64-v2 | x86-64-v3 | v2 speed-up | v3 speed-up |")
+          print("| --- | ---: | ---: | ---: | ---: | ---: |")
+          for w in workloads:
+              m = {v: statistics.median(times[(w, v)]) for v in ("base", "v2", "v3")}
+              print(f"| {w} | {m['base']:.4f} s | {m['v2']:.4f} s | {m['v3']:.4f} s | "
+                    f"{m['base'] / m['v2']:.2f}x | {m['base'] / m['v3']:.2f}x |")
+          EOF

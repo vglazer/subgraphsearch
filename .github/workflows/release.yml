@@ -54,15 +54,17 @@ jobs:
         include:
           # Each wheel is built on a runner of its own architecture, so that it can be smoke-tested
           # there; the macOS Intel wheel is tested under Rosetta on an Apple-silicon runner.
+          # x86-64 wheels target x86-64-v2 (x86 processors from about 2009 on), whose POPCNT
+          # instruction makes Graph.from_words about twice as fast (popcount.yml measures it).
           # glibc Linux (most distributions)
-          - { os: ubuntu-latest, target: x86_64, manylinux: auto, smoke: true }
+          - { os: ubuntu-latest, target: x86_64, manylinux: auto, smoke: true, v2: true }
           - { os: ubuntu-24.04-arm, target: aarch64, manylinux: auto, smoke: true }
           # musl Linux (Alpine, slim Docker images), tested in an Alpine container
-          - { os: ubuntu-latest, target: x86_64, manylinux: musllinux_1_2, smoke: false, alpine: true }
+          - { os: ubuntu-latest, target: x86_64, manylinux: musllinux_1_2, smoke: false, alpine: true, v2: true }
           - { os: ubuntu-24.04-arm, target: aarch64, manylinux: musllinux_1_2, smoke: false, alpine: true }
           - { os: macos-latest, target: aarch64, smoke: true }
-          - { os: macos-latest, target: x86_64, smoke: false, rosetta: true }
-          - { os: windows-latest, target: x64, smoke: true }
+          - { os: macos-latest, target: x86_64, smoke: false, rosetta: true, v2: true }
+          - { os: windows-latest, target: x64, smoke: true, v2: true }
           - { os: windows-11-arm, target: aarch64, smoke: true }
     steps:
       - uses: actions/checkout@v7
@@ -75,10 +77,21 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: python scripts/set_dev_version.py ${{ github.run_number }}
       - uses: PyO3/maturin-action@v1
+        env:
+          RUSTFLAGS: ${{ matrix.v2 && '-C target-cpu=x86-64-v2' || '' }}
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux || 'auto' }}
           args: --release --out dist
+      - name: Check that the x86-64 wheel uses POPCNT
+        # proves the x86-64-v2 target reached the build (Windows has no objdump on the runner)
+        if: matrix.v2 && runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir wheel && cd wheel && python -m zipfile -e ../dist/*.whl .
+          count=$(objdump -d $(find . -name '_core*.so') | grep -c popcnt || true)
+          echo "popcnt instructions: $count"
+          test "$count" -gt 0
       - name: Smoke-test the wheel
         if: matrix.smoke
         shell: bash

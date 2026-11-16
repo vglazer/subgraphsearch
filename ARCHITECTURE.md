@@ -209,11 +209,16 @@ and after. To find where the time goes, build with debug information
 source line and instruction; [cargo-show-asm](https://github.com/pacak/cargo-show-asm) prints a
 function's assembly.
 
-One question is open on x86-64. Portable builds target the baseline x86-64 processor, which lacks
-POPCNT, the instruction that counts the 1 bits in a word, so `count_ones` in `Graph::from_words` and
-`induced_edge_count` compiles to a sequence of bit operations. Timing those against a build for
-x86-64-v3, a later baseline with POPCNT, on an x86-64 machine would show whether *runtime dispatch*,
-choosing the faster code while running on processors that have it, is worth adding.
+**On x86-64, the wheels target x86-64-v2.** The baseline x86-64 processor lacks POPCNT, the
+instruction that counts the 1 bits in a word, so `count_ones` compiles to a sequence of bit
+operations. Its one hot use is `Graph::from_words`, one bit count per pair of words. Measured on an
+x86-64 GitHub runner ([popcount.yml](.github/workflows/popcount.yml), which runs
+`crates/subgraphsearch-core/examples/popcount_bench.rs`), a build for x86-64-v2 makes
+`from_words` 1.5 to 2.3 times as fast and leaves the search unchanged; x86-64-v3, which adds AVX2,
+is no faster than v2. Choosing the instruction while running, *runtime dispatch*, would need
+`unsafe` code, so the release workflow instead builds the x86-64 wheels with
+`-C target-cpu=x86-64-v2`, which every x86-64 processor from about 2009 on supports, and checks
+that each contains POPCNT instructions. Builds from source keep the portable baseline.
 
 ## Conventions
 
