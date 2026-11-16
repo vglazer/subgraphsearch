@@ -14,7 +14,7 @@ possible**: a diverse portfolio, sites for facilities that should be far apart, 
 compounds to test. On the standard benchmark for this, the
 [maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), it reaches the best
 published values for up to 500 items in well under a second, where general solvers left running for
-10 seconds fall short, CP-SAT by up to 9% ([How it compares](#how-it-compares)).
+10 seconds fall short, CP-SAT by up to 10% ([How it compares](#how-it-compares)).
 
 The same search finds induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
 [paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
@@ -132,10 +132,10 @@ goes through all of these.
 
 ## How it compares
 
-![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 8% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
+![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 7% short](https://raw.githubusercontent.com/vglazer/subgraphsearch/main/assets/comparison.png)
 
 - **Maximum diversity:** the best published MDPLIB values up to 500 items in under a second, where
-  CP-SAT ends up to 9% short and the MIP solvers up to 38%. At 2000 items, in the 20 s per run of
+  CP-SAT ends up to 10% short and the MIP solvers up to 36%. At 2000 items, in the 20 s per run of
   a heuristic made for the problem, which reaches the best known value in 22 of 30 runs,
   subgraphsearch reaches it in 7 with default settings and in 27 with `aspiration="full"`.
 - **Exact edge counts:** milliseconds, where CP-SAT and the MIP solvers SCIP, HiGHS and CBC need

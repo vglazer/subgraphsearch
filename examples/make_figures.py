@@ -107,16 +107,16 @@ def main(out: Path = OUT) -> None:
     comparison(out)
 
 
-# Recorded for the README's comparison (CP-SAT 9.15 on 16 cores, stopped after 10 s; subgraphsearch 4.1.1 with
+# Recorded for the README's comparison (CP-SAT 9.15 on 16 cores, stopped after 10 s; subgraphsearch 4.4.0 with
 # 60 experiments of up to 2,000 moves). Random graphs of density 0.6 with seed n; the target is the most edges
 # subgraphsearch finds among 30% of the vertices: vertices, subgraphsearch ms, CP-SAT ms (None: nothing in 10 s).
-EDGE_SCALING = [(20, 0.15, 25), (23, 0.18, 18), (26, 0.18, 23), (29, 0.19, 414), (32, 0.20, 650), (35, 0.21, 1125),
-                (38, 0.21, 4490), (41, 0.23, 85), (44, 0.16, None), (47, 0.38, None), (50, 0.77, 8814),
-                (53, 0.94, None), (56, 0.57, None), (59, 0.38, None)]
+EDGE_SCALING = [(20, 0.21, 30), (23, 0.14, 20), (26, 0.15, 20), (29, 0.20, 420), (32, 0.16, 470), (35, 0.28, 1300),
+                (38, 0.24, 4160), (41, 0.23, 90), (44, 0.18, None), (47, 0.40, None), (50, 0.73, 8290),
+                (53, 0.93, None), (56, 0.52, None), (59, 0.36, None)]
 # MDPLIB SOM-b instances: items, chosen, best known value, CP-SAT's best after 10 s. subgraphsearch reaches every
 # best known value (with kick_size=16, 60 experiments of up to 20,000 moves).
-DIVERSITY = [(100, 10, 333, 329), (100, 20, 1195, 1171), (100, 30, 2457, 2457), (100, 40, 4142, 4127),
-             (200, 40, 4450, 4263), (300, 60, 9689, 9297), (400, 40, 4658, 4374), (400, 80, 16956, 15595)]
+DIVERSITY = [(100, 10, 333, 321), (100, 20, 1195, 1159), (100, 30, 2457, 2376), (100, 40, 4142, 4121),
+             (200, 40, 4450, 4264), (300, 60, 9689, 9209), (400, 40, 4658, 4369), (400, 80, 16956, 15781)]
 
 
 def comparison(out: Path) -> None:
@@ -162,26 +162,26 @@ def comparison(out: Path) -> None:
 # Recorded for BENCHMARKS.md: the general solvers, each stopped after 10 s (None: nothing found; "not run").
 SOLVER_COLORS = {"CP-SAT": "#4c6ef5", "SCIP": "#12b886", "HiGHS": "#f59f00", "CBC": "#868e96"}
 # Exact edge counts on the six graphs of BENCHMARKS.md's table: vertices -> seconds per solver.
-EDGE_SOLVERS = {20: {"CP-SAT": 0.025, "SCIP": 0.10, "HiGHS": 0.35, "CBC": 0.51},
-                29: {"CP-SAT": 0.41, "SCIP": 0.78, "HiGHS": 3.0, "CBC": 2.6},
-                38: {"CP-SAT": 4.5, "SCIP": None, "HiGHS": None, "CBC": None},
+EDGE_SOLVERS = {20: {"CP-SAT": 0.03, "SCIP": 0.21, "HiGHS": 0.33, "CBC": 1.43},
+                29: {"CP-SAT": 0.42, "SCIP": 0.53, "HiGHS": 2.59, "CBC": 3.06},
+                38: {"CP-SAT": 4.16, "SCIP": None, "HiGHS": None, "CBC": None},
                 44: {"CP-SAT": None, "SCIP": None, "HiGHS": None, "CBC": None},
-                50: {"CP-SAT": 8.8, "SCIP": None, "HiGHS": None, "CBC": None},
+                50: {"CP-SAT": 8.29, "SCIP": None, "HiGHS": None, "CBC": None},
                 59: {"CP-SAT": None, "SCIP": None, "HiGHS": None, "CBC": None}}
 # Maximum diversity: the best total each solver found in 10 s, by instance: label, best known value, and the
 # totals of CP-SAT, SCIP, HiGHS and CBC. subgraphsearch reaches every best known value (the real-valued GKD-c and
 # MDG-a to within the rounding of their published values).
-_MIP = {"SCIP": [206, 847, 2101, 3665, 3830, 8350, 3635, "not run"],
-        "HiGHS": [209, 915, 1911, 3881, 3582, None, None, "not run"],
-        "CBC": [221, 853, 1940, 3534, 3426, None, None, "not run"]}
+_MIP = {"SCIP": [220, 987, 2101, 3665, 3830, 8350, 3635, 14892],
+        "HiGHS": [241, 975, 2077, 3702, 3599, None, None, "not run"],
+        "CBC": [214, 844, 1954, 3575, 3426, None, None, "not run"]}
 DIVERSITY_ALL = [(f"SOM-b, {n} items, {k} chosen", best, (cp, _MIP["SCIP"][i], _MIP["HiGHS"][i], _MIP["CBC"][i]))
                  for i, (n, k, best, cp) in enumerate(DIVERSITY)] + [
-    ("SOM-b, 500 items, 50 chosen", 7141, (6636, 5638, "not run", "not run")),
-    ("SOM-b, 500 items, 100 chosen", 26258, (23802, 23300, "not run", "not run")),
-    ("SOM-b, 500 items, 150 chosen", 56572, (52257, 52137, "not run", "not run")),
-    ("SOM-b, 500 items, 200 chosen", 97344, (91945, 92174, "not run", "not run")),
-    ("GKD-c, 500 items, 50 chosen", 19485.19, (19329.0, 15997.4, "not run", "not run")),
-    ("MDG-a, 500 items, 50 chosen", 7833.83, (7294.0, 6229.7, "not run", "not run"))]
+    ("SOM-b, 500 items, 50 chosen", 7141, (6456, 5638, "not run", "not run")),
+    ("SOM-b, 500 items, 100 chosen", 26258, (24073, 23300, "not run", "not run")),
+    ("SOM-b, 500 items, 150 chosen", 56572, (54094, 52137, "not run", "not run")),
+    ("SOM-b, 500 items, 200 chosen", 97344, (92967, 92174, "not run", "not run")),
+    ("GKD-c, 500 items, 50 chosen", 19485.19, (18416.6, 15997.4, "not run", "not run")),
+    ("MDG-a, 500 items, 50 chosen", 7833.83, (7270.9, 6229.7, "not run", "not run"))]
 
 
 def benchmarks(out: Path) -> None:

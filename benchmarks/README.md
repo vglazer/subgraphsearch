@@ -9,7 +9,7 @@ case, and `--help` lists its options.
 | `edge_counts.py` | Exact edge counts | under 1 s | `--solvers all`: CP-SAT, SCIP, HiGHS and CBC (up to 10 minutes) |
 | `diversity.py` | Maximum diversity | about 10 s, after fetching data once | `--specialist`: MDG-a_21 to 24 at OBMA's budget, with and without `aspiration="full"` (about 7 minutes); `--solvers all` (about 20 minutes) |
 | `cliques.py` | Maximum cliques | about 4 s | `--tenures`; `--igraph`: igraph's exact clique number, 90 s cap per graph |
-| `hypercubes.py` | Snake-in-the-box | about 30 s | `--nine`: the 9-cube (about 2.5 minutes) |
+| `hypercubes.py` | Snake-in-the-box | about 25 s | `--nine`: the 9-cube (about 2 minutes) |
 | `steiner.py` | Steiner triple systems | about 75 s | `--points`, `--large` |
 | `legacy_speed.py` | [PORTING.md](../PORTING.md#speed), Speed: the original C programs against legacy mode and threads | about 1 minute | `--threads`, `--repeats` |
 

@@ -245,6 +245,33 @@ Without kicks, subgraphsearch reaches the best known value of the 100-item insta
 of the larger ones in about half to most runs. With large kicks nearly every run reaches it on every instance,
 in under half a second for 60 runs. Without a published value to aim at, `ss.densest(items, k)` finds the most
 diverse selection the search can reach.
+
+In practice distances are usually real numbers, computed from the items' features. `ss.WeightedGraph.from_scores`
+turns them into weights from 1 to 255 for the search, scaling the largest to 255 and rounding, and keeps the
+original distances: the result reports its exact total as `.score`, and among selections tied at the rounded
+weights, `densest` returns the one with the highest exact total. Here, 20 of 400 random points in the unit
+square, as far apart in total as possible:
+"""),
+    code("""
+import numpy as np
+
+points = np.random.default_rng(7).random((400, 2))
+distances = np.linalg.norm(points[:, None] - points[None], axis=-1)
+places, factor = ss.WeightedGraph.from_scores(distances)
+spread = ss.densest(places, 20, experiments=40, max_moves=5000)
+print(spread.summary())
+print(f"exact total distance {spread.score:.3f}; the rounded weights alone give about {spread.value / factor:.3f}")
+
+fig, ax = plt.subplots(figsize=(4, 4), layout="constrained")
+ax.scatter(*points.T, s=6, color="#adb5bd")
+ax.scatter(*points[list(spread.vertices)].T, s=30, color="#d6336c")
+ax.set_aspect("equal")
+ax.set_title("the 20 points with the largest total distance", fontsize=10, loc="left");
+"""),
+    md("""
+Maximizing the total favors the extremes, so the chosen points gather near the corners. For points spread
+evenly instead, the closest pair matters, not the total: join the points at least a distance $d$ apart, and a
+$k$-clique of that graph is $k$ points pairwise at least $d$ apart; raise $d$ until no clique is found.
 """),
     md("""
 ## Saving and repeating results
@@ -275,7 +302,11 @@ viz.plot_sweep(sweep, parameter="div_dur");
 """),
     md("""
 Aspiration is worth comparing the same way. On the hard 346-edge target from earlier it raises the number of
-successes a little; on many targets it makes little difference.
+successes a little; on many targets it makes little difference. Its full form, `aspiration="full"`, considers
+every swap the tabu tenure forbids, not only those involving the two vertices just swapped; here, with a
+tenure of 1, the two are the same. It pays off with long tenures, on large instances: on the 2000-item
+diversity benchmark MDG-a_21, it raised the runs reaching the best known value from 7 to 27 of 30 in the same
+time (see the [benchmarks](https://github.com/vglazer/subgraphsearch/blob/main/BENCHMARKS.md#maximum-diversity)).
 """),
     code("""
 for aspiration in (False, True):
