@@ -102,7 +102,8 @@ def main() -> None:
         ("reg_search", "a 40-vertex independent set as 0-regular, G(1000, 0.5)", (1000, 40, 0, 32, 200, 300, 8), "dense.txt", ["--degree", "0"]),
         ("ereg_search", "the same in two phases", (1000, 40, 0, 32, 1000, 300, 8), "dense.txt", ["--degree", "0", "--two-phase"]),
     ]
-    print(f"{'program':<12} {'moves':>8} {'C -O2':>7} {'legacy':>7} {'x C':>5} {f'{args.threads} thr':>7} {'x 1 thr':>7} {'x C':>5}   search (output identical to C's)")
+    print(f"{'program':<12} {'moves':>8} {'C -O2':>7} {'legacy':>7} {'x C':>5} {'1 thr':>7} {f'{args.threads} thr':>7} "
+          f"{'x 1 thr':>7} {'x C':>5}   search (output identical to C's)")
     for prog, what, (v, size, target, exps, moves, freq, dur), graph, options in cases:
         binary = work / prog
         subprocess.run(["cc", "-O2", "-o", str(binary), str(src / f"{prog}.c")], check=True)
@@ -117,8 +118,8 @@ def main() -> None:
             search += ["--kick-size", "0", "--tabu-tenure", "1"]
         one = median_time([*search, "--threads", "1"], None, args.repeats)[0]
         many = median_time([*search, "--threads", str(args.threads)], None, args.repeats)[0]
-        print(f"{prog:<12} {exps * moves:>8,} {c:>7.2f} {legacy:>7.2f} {c / legacy:>5.1f} {many:>7.3f} {one / many:>7.1f} "
-              f"{c / many:>5.0f}   {what}", flush=True)
+        print(f"{prog:<12} {exps * moves:>8,} {c:>7.2f} {legacy:>7.2f} {c / legacy:>5.1f} {one:>7.2f} {many:>7.3f} "
+              f"{one / many:>7.1f} {c / many:>5.0f}   {what}", flush=True)
 
 
 if __name__ == "__main__":
