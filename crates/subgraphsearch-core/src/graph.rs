@@ -4,6 +4,8 @@
 //! sorted neighbor lists (fast traversal), mirroring the original C programs, which kept a
 //! `char` adjacency matrix alongside adjacency lists for the same reasons.
 
+use std::sync::Arc;
+
 use crate::Error;
 
 /// An undirected graph without self-loops or multiple edges.
@@ -330,9 +332,31 @@ impl Graph {
     }
 }
 
+/// The real-valued scores a [`WeightedGraph`] was made from with [`WeightedGraph::from_scores`]:
+/// an `n x n` row-major matrix, 0 for pairs without a score, shared between copies of the graph.
+/// Compared bit for bit, so that graphs stay `Eq`.
+#[derive(Clone)]
+struct Scores(Arc<Vec<f64>>);
+
+impl PartialEq for Scores {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+            || (self.0.len() == other.0.len()
+                && self
+                    .0
+                    .iter()
+                    .zip(other.0.iter())
+                    .all(|(a, b)| a.to_bits() == b.to_bits()))
+    }
+}
+
+impl Eq for Scores {}
+
 /// An undirected graph whose edges carry small positive integer weights (1 to 255), as used by
 /// the original `wsub_search` and `wggen`. Weights live in an `n x n` byte matrix (O(1) lookup, `n * n`
-/// bytes) alongside sorted neighbor lists.
+/// bytes) alongside sorted neighbor lists. A graph made from real-valued scores with
+/// [`WeightedGraph::from_scores`] also keeps those scores (`8 * n * n` bytes), so that results can be
+/// totalled exactly ([`WeightedGraph::induced_score`]).
 #[derive(Clone, PartialEq, Eq)]
 pub struct WeightedGraph {
     n: usize,
@@ -342,6 +366,8 @@ pub struct WeightedGraph {
     row_max: Vec<u8>,
     num_edges: usize,
     total_weight: u64,
+    /// With [`WeightedGraph::from_scores`]: the scores the weights were rounded from.
+    scores: Option<Scores>,
 }
 
 impl std::fmt::Debug for WeightedGraph {
@@ -385,6 +411,90 @@ impl WeightedGraph {
         Ok(Self::from_matrix(n, weights))
     }
 
+    /// Builds a weighted graph from real-valued, non-negative scores between pairs of vertices,
+    /// such as distances or similarities, given as `(u, v, score)` triples, and returns it with the
+    /// factor the scores were scaled by. Weights are integers from 1 to 255, so each score is
+    /// multiplied by `resolution / largest score` and rounded (ties to even): the largest becomes
+    /// `resolution`, at most 255. A positive score too small to survive rounding keeps weight 1, and
+    /// a score of 0 is no edge. A total weight `t` stands for scores totalling about `t / factor`;
+    /// the graph keeps the scores, so [`WeightedGraph::induced_score`] gives the exact total. If a
+    /// pair is listed more than once, the last score given wins.
+    pub fn from_scores<I>(
+        n: usize,
+        scores: I,
+        resolution: u32,
+    ) -> Result<(WeightedGraph, f64), Error>
+    where
+        I: IntoIterator<Item = (usize, usize, f64)>,
+    {
+        if !(1..=255).contains(&resolution) {
+            return Err(Error::Invalid(
+                "resolution must be from 1 to 255, the range of weights".into(),
+            ));
+        }
+        let mut matrix = vec![0.0f64; n * n];
+        for (u, v, score) in scores {
+            for x in [u, v] {
+                if x >= n {
+                    return Err(Error::VertexOutOfRange {
+                        vertex: x as i64,
+                        n,
+                    });
+                }
+            }
+            if !score.is_finite() || score < 0.0 {
+                return Err(Error::Invalid(format!(
+                    "the score of {{{u}, {v}}} is {score}; scores must be finite and non-negative"
+                )));
+            }
+            if u == v {
+                if score != 0.0 {
+                    return Err(Error::SelfLoop(u));
+                }
+                continue;
+            }
+            matrix[u * n + v] = score;
+            matrix[v * n + u] = score;
+        }
+        let top = matrix.iter().copied().fold(0.0, f64::max);
+        let factor = if top > 0.0 {
+            f64::from(resolution) / top
+        } else {
+            1.0
+        };
+        let weights = matrix
+            .iter()
+            .map(|&s| {
+                if s == 0.0 {
+                    0
+                } else {
+                    ((s * factor).round_ties_even() as u8).max(1)
+                }
+            })
+            .collect();
+        let mut g = Self::from_matrix(n, weights);
+        g.scores = Some(Scores(Arc::new(matrix)));
+        Ok((g, factor))
+    }
+
+    /// The scores the graph was made from with [`WeightedGraph::from_scores`], as an `n x n`
+    /// row-major matrix (0 for pairs without a score), or `None` for other graphs.
+    pub fn scores(&self) -> Option<&[f64]> {
+        self.scores.as_ref().map(|s| &s.0[..])
+    }
+
+    /// The total score of the pairs among `vertices`, from the scores the graph was made from: the
+    /// exact counterpart of [`WeightedGraph::induced_weight`]. `None` for graphs without scores.
+    pub fn induced_score(&self, vertices: &[usize]) -> Option<f64> {
+        let scores = self.scores()?;
+        let mut total = 0.0;
+        for (i, &u) in vertices.iter().enumerate() {
+            let row = &scores[u * self.n..(u + 1) * self.n];
+            total += vertices[i + 1..].iter().map(|&v| row[v]).sum::<f64>();
+        }
+        Some(total)
+    }
+
     /// Every edge of `g` with weight 1.
     pub fn from_graph(g: &Graph) -> WeightedGraph {
         let n = g.num_vertices();
@@ -410,6 +520,7 @@ impl WeightedGraph {
             row_max,
             num_edges: twice_edges / 2,
             total_weight: twice_weight / 2,
+            scores: None,
         }
     }
 
@@ -488,6 +599,36 @@ impl WeightedGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scores_become_weights_and_stay_exact() {
+        let (w, factor) =
+            WeightedGraph::from_scores(3, [(0, 1, 2.5), (1, 2, 1.0), (0, 2, 0.01)], 255).unwrap();
+        // the largest score becomes 255; 1.0 rounds to 102; 0.01 would round to 0, so keeps 1
+        assert_eq!(
+            (w.weight(0, 1), w.weight(1, 2), w.weight(0, 2)),
+            (255, 102, 1)
+        );
+        assert_eq!(factor, 102.0);
+        assert_eq!(w.induced_weight(&[0, 1, 2]), 358);
+        assert!((w.induced_score(&[0, 1, 2]).unwrap() - 3.51).abs() < 1e-12);
+        assert_eq!(w.scores().unwrap()[1], 2.5);
+        // ties round to even, as numpy's rint does: 0.5 and 1.5 become 0 (so 1) and 2
+        let (w, _) =
+            WeightedGraph::from_scores(3, [(0, 1, 4.0), (1, 2, 1.5), (0, 2, 0.5)], 4).unwrap();
+        assert_eq!((w.weight(1, 2), w.weight(0, 2)), (2, 1));
+        // a score of 0 is no edge; graphs not made from scores have none
+        let (w, _) = WeightedGraph::from_scores(3, [(0, 1, 1.0), (1, 2, 0.0)], 255).unwrap();
+        assert_eq!(w.num_edges(), 1);
+        let plain = WeightedGraph::from_weighted_edges(3, [(0, 1, 5)]).unwrap();
+        assert_eq!((plain.scores(), plain.induced_score(&[0, 1])), (None, None));
+        for bad in [-1.0, f64::NAN, f64::INFINITY] {
+            assert!(WeightedGraph::from_scores(2, [(0, 1, bad)], 255).is_err());
+        }
+        assert!(WeightedGraph::from_scores(2, [(0, 2, 1.0)], 255).is_err());
+        assert!(WeightedGraph::from_scores(2, [(1, 1, 1.0)], 255).is_err());
+        assert!(WeightedGraph::from_scores(2, [(0, 1, 1.0)], 0).is_err());
+    }
 
     #[test]
     fn graphs_of_words_join_allowed_distances() {

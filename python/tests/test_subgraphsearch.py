@@ -988,3 +988,34 @@ def test_weighted_graph_from_scores():
     for bad, kwargs in (([[0, 1], [2, 0]], {}), ([(0, 1, -1.0)], {"n": 2}), ([(0, 1, 1.0)], {"n": 2, "resolution": 300})):
         with pytest.raises(ValueError):
             ss.WeightedGraph.from_scores(bad, **kwargs)
+
+
+def test_scores_are_kept_and_break_ties(tmp_path):
+    import subprocess
+
+    # resolution 1 makes every positive score weight 1, so every pair ties in weight
+    scores = [(0, 1, 1.0), (2, 3, 2.0), (0, 2, 1.5), (1, 3, 1.25)]
+    w, factor = ss.WeightedGraph.from_scores(scores, 4, resolution=1)
+    assert w.has_scores and factor == 0.5 and w.induced_score([0, 2]) == 1.5
+    assert not ss.WeightedGraph(3, [(0, 1, 2)]).has_scores
+    assert ss.WeightedGraph(3, [(0, 1, 2)]).induced_score([0, 1]) is None
+    d = ss.densest(w, 2, experiments=20)
+    assert d.vertices == (2, 3) and d.score == 2.0 and d.solutions()[0] == (2, 3)
+    assert "score 2.0000" in d.summary()
+    s = ss.sparsest(w, 2, experiments=20)
+    assert s.score in (0.0, 1.0)   # a pair without an edge, or the lightest edge
+    with pytest.raises(ValueError, match="non-negative"):
+        ss.WeightedGraph.from_scores([(0, 1, -1.0)], 2)
+    with pytest.raises(ValueError, match="resolution"):
+        ss.WeightedGraph.from_scores([(0, 1, 1.0)], 2, resolution=300)
+    # the command line reads real-valued scores and reports exact totals
+    exe = Path(__file__).resolve().parents[2] / "target" / "release" / "subgraphsearch"
+    if not exe.exists():
+        pytest.skip("build the CLI first: cargo build --release")
+    path = tmp_path / "scores.edges"
+    path.write_text("# vertices: 4\n" + "".join(f"{u} {v} {x}\n" for u, v, x in scores), encoding="utf-8")
+    run = subprocess.run([exe, "search", path, "--scores", "--densest", "-k", "2", "-n", "20", "-q",
+                          "--json", tmp_path / "r.json"], check=True, capture_output=True, text=True)
+    assert "score 2.0000, the best in experiment" in run.stdout
+    data = json.loads((tmp_path / "r.json").read_text(encoding="utf-8"))
+    assert max(e["score"] for e in data["experiments"]) == 2.0

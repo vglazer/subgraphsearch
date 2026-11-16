@@ -118,6 +118,19 @@ impl GraphInput {
         }
     }
 
+    /// The graph made from real-valued scores (an edge list's third column or Matrix Market
+    /// values), and the factor they were scaled by.
+    fn load_scores(&self) -> Result<(WeightedGraph, f64)> {
+        let (n, triples) = if self.graph == Path::new("-") {
+            let (text, format) = read_stdin(self.format)?;
+            formats::parse_scores(&text, format)?
+        } else {
+            formats::read_scores_file(&self.graph, self.format)
+                .with_context(|| format!("reading {}", self.graph.display()))?
+        };
+        Ok(WeightedGraph::from_scores(n, triples, 255)?)
+    }
+
     /// The graph with edge weights (an edge list's third column, Matrix Market values, or
     /// weighted lists); formats without weights give every edge weight 1.
     fn load_weighted(&self) -> Result<WeightedGraph> {
@@ -212,6 +225,13 @@ struct SearchArgs {
     /// edge list's third column, Matrix Market values, or weighted lists (--from wlists).
     #[arg(long, conflicts_with = "all")]
     weighted: bool,
+    /// Read the weights as real-valued scores, such as distances, from an edge list's third column
+    /// or Matrix Market values: they are scaled so that the largest becomes 255 and rounded, as
+    /// weights must be integers, and each subgraph's exact total score is reported alongside its
+    /// total weight. With --densest or --sparsest, ties in total weight go to the best exact total.
+    /// Implies --weighted.
+    #[arg(long, conflicts_with = "all")]
+    scores: bool,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -633,8 +653,12 @@ fn run_search(args: SearchArgs) -> Result<u8> {
         }
     };
     let extreme_search = args.densest || args.sparsest;
-    if args.weighted {
-        let graph = args.input.load_weighted()?;
+    if args.weighted || args.scores {
+        let graph = if args.scores {
+            args.input.load_scores()?.0
+        } else {
+            args.input.load_weighted()?
+        };
         let mut params = params.clone();
         if extreme_search {
             params.edges = extreme(255, graph.total_weight() as i64);
@@ -646,15 +670,29 @@ fn run_search(args: SearchArgs) -> Result<u8> {
             .iter()
             .map(|e| graph.induced_weight(&e.vertices) as i64)
             .collect();
+        let scores: Option<Vec<f64>> = graph.scores().map(|_| {
+            result
+                .experiments
+                .iter()
+                .filter_map(|e| graph.induced_score(&e.vertices))
+                .collect()
+        });
+        let best = extreme_search
+            .then(|| result.best_by_score(&graph, args.densest))
+            .flatten();
         report(
             &mut out,
             &result,
             start.elapsed(),
             "",
             &args,
-            extreme_search.then_some(&values[..]),
+            extreme_search.then_some(Extreme {
+                values: &values,
+                scores: scores.as_deref(),
+                best,
+            }),
         )?;
-        write_json(&args, &[(0, result.clone())])?;
+        write_json(&args, &[(0, result.clone())], scores.as_deref())?;
         return Ok(if result.successes() > 0 || extreme_search {
             0
         } else {
@@ -694,7 +732,11 @@ fn run_search(args: SearchArgs) -> Result<u8> {
             start.elapsed(),
             &prefix,
             &args,
-            extreme_search.then_some(&values[..]),
+            extreme_search.then_some(Extreme {
+                values: &values,
+                scores: None,
+                best: None,
+            }),
         )?;
         graphs_with_success += usize::from(result.successes() > 0 || extreme_search);
         results.push((index, result));
@@ -708,7 +750,7 @@ fn run_search(args: SearchArgs) -> Result<u8> {
             target(&params, false)
         )?;
     }
-    write_json(&args, &results)?;
+    write_json(&args, &results, None)?;
     Ok(if graphs_with_success > 0 { 0 } else { 2 })
 }
 
@@ -794,8 +836,13 @@ fn run_one<G: SearchGraph>(
     }
 }
 
-/// Writes --json output: one result, or with --all a list tagged with graph indices.
-fn write_json(args: &SearchArgs, results: &[(usize, SearchResult)]) -> Result<()> {
+/// Writes --json output: one result, or with --all a list tagged with graph indices. With
+/// `scores`, each experiment also records the exact total score of its subgraph.
+fn write_json(
+    args: &SearchArgs,
+    results: &[(usize, SearchResult)],
+    scores: Option<&[f64]>,
+) -> Result<()> {
     let Some(path) = &args.json else {
         return Ok(());
     };
@@ -809,7 +856,13 @@ fn write_json(args: &SearchArgs, results: &[(usize, SearchResult)]) -> Result<()
             .collect();
         serde_json::to_writer(writer, &all)?;
     } else if let Some((_, r)) = results.first() {
-        serde_json::to_writer(writer, r)?;
+        let mut value = serde_json::to_value(r)?;
+        if let (Some(scores), Some(experiments)) = (scores, value["experiments"].as_array_mut()) {
+            for (e, &s) in experiments.iter_mut().zip(scores) {
+                e["score"] = serde_json::json!(s);
+            }
+        }
+        serde_json::to_writer(writer, &value)?;
     }
     Ok(())
 }
@@ -841,44 +894,61 @@ fn target(params: &SearchParams, weighted: bool) -> String {
     }
 }
 
+/// The values of a --densest or --sparsest search: each experiment's edge count or total weight,
+/// with --scores its exact total score, and the best experiment if ties were broken by score.
+struct Extreme<'a> {
+    values: &'a [i64],
+    scores: Option<&'a [f64]>,
+    best: Option<usize>,
+}
+
 fn report(
     out: &mut impl Write,
     result: &subgraphsearch_core::SearchResult,
     elapsed: std::time::Duration,
     prefix: &str,
     args: &SearchArgs,
-    values: Option<&[i64]>,
+    extreme: Option<Extreme<'_>>,
 ) -> Result<()> {
     let params = &result.params;
-    if let Some(values) = values {
+    if let Some(Extreme {
+        values,
+        scores,
+        best,
+    }) = extreme
+    {
         // --densest or --sparsest: the best value found, and the experiments within --max-conflict of it
-        let what = if args.weighted {
+        let what = if args.weighted || args.scores {
             "total weight"
         } else {
             "edges"
         };
-        let best = result
-            .experiments
-            .iter()
-            .zip(values)
-            .min_by_key(|(e, _)| e.best_conflict)
-            .map_or(0, |(_, &v)| v);
+        let best_index = best.or_else(|| {
+            (0..result.experiments.len()).min_by_key(|&i| result.experiments[i].best_conflict)
+        });
+        let best = best_index.map_or(0, |i| values[i]);
+        let score = |i: usize| scores.map_or(String::new(), |s| format!(", score {:.4}", s[i]));
         if !args.quiet {
             for (i, (e, &v)) in result.experiments.iter().zip(values).enumerate() {
                 if (v - best).abs() <= args.max_conflict {
                     let list: Vec<String> = e.vertices.iter().map(usize::to_string).collect();
                     writeln!(
                         out,
-                        "{prefix}experiment {i}: {v} {what}: {}",
+                        "{prefix}experiment {i}: {v} {what}{}: {}",
+                        score(i),
                         list.join(" ")
                     )?;
                 }
             }
         }
         let reached = values.iter().filter(|&&v| v == best).count();
+        let exact = match (scores, best_index) {
+            (Some(_), Some(i)) => format!("{}, the best in experiment {i}", score(i)),
+            _ => String::new(),
+        };
         writeln!(
             out,
-            "{prefix}{} {}-vertex subgraph found: {best} {what}, in {reached}/{} experiments ({:.2}s)",
+            "{prefix}{} {}-vertex subgraph found: {best} {what}{exact}, in {reached}/{} experiments ({:.2}s)",
             if args.densest { "densest" } else { "sparsest" },
             params.size,
             result.experiments.len(),

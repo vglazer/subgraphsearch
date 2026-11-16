@@ -310,6 +310,18 @@ impl PyWeightedGraph {
         }
         Ok(())
     }
+
+    /// Checks that `vertices` are distinct vertices of the graph.
+    fn check_set(&self, vertices: &[usize]) -> PyResult<()> {
+        let mut seen = vec![false; self.inner.num_vertices()];
+        for &v in vertices {
+            self.check(v)?;
+            if std::mem::replace(&mut seen[v], true) {
+                return Err(PyValueError::new_err(format!("vertex {v} is listed twice")));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -326,6 +338,49 @@ impl PyWeightedGraph {
     #[staticmethod]
     fn from_graph(g: &PyGraph) -> Self {
         Self::wrap(WeightedGraph::from_graph(&g.inner))
+    }
+
+    /// A graph from real-valued scores packed as little-endian float64 (u, v, score) triples, and
+    /// the factor they were scaled by; see `WeightedGraph::from_scores` in the core.
+    #[staticmethod]
+    fn from_score_bytes(
+        py: Python<'_>,
+        n: usize,
+        data: &[u8],
+        resolution: u32,
+    ) -> PyResult<(Self, f64)> {
+        if !data.len().is_multiple_of(24) {
+            return Err(PyValueError::new_err(
+                "score data must be a whole number of float64 (u, v, score) triples",
+            ));
+        }
+        let value = |c: &[u8]| f64::from_le_bytes(c.try_into().expect("8 bytes"));
+        let triples: Vec<(usize, usize, f64)> = data
+            .chunks_exact(24)
+            .map(|c| {
+                (
+                    value(&c[..8]) as usize,
+                    value(&c[8..16]) as usize,
+                    value(&c[16..]),
+                )
+            })
+            .collect();
+        let (g, factor) = py
+            .detach(|| WeightedGraph::from_scores(n, triples, resolution))
+            .map_err(err)?;
+        Ok((Self::wrap(g), factor))
+    }
+
+    /// Whether the graph was made from real-valued scores, which it keeps.
+    #[getter]
+    fn has_scores(&self) -> bool {
+        self.inner.scores().is_some()
+    }
+
+    /// The exact total score of the pairs among `vertices`, for a graph made from scores.
+    fn induced_score(&self, vertices: Vec<usize>) -> PyResult<Option<f64>> {
+        self.check_set(&vertices)?;
+        Ok(self.inner.induced_score(&vertices))
     }
 
     #[staticmethod]
@@ -403,8 +458,7 @@ impl PyWeightedGraph {
     }
 
     fn induced_weight(&self, vertices: Vec<usize>) -> PyResult<u64> {
-        let structure = self.inner.structure();
-        ops::rest(&structure, &vertices).map_err(err)?;
+        self.check_set(&vertices)?;
         Ok(self.inner.induced_weight(&vertices))
     }
 

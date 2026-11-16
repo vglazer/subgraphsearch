@@ -62,9 +62,17 @@ distances or similarities, become weights with `ss.WeightedGraph.from_scores(sco
 symmetric matrix or from `(u, v, score)` triples with `n=` given. It scales the scores so that the
 largest becomes 255 and rounds them; a positive score too small to survive rounding keeps weight 1,
 and a score of 0 is no edge. It returns the graph and the scale factor, so a total weight $`t`$
-stands for scores totalling about $`t`$ divided by the factor. 255 levels are enough for most
-uses, but rounding can make nearly equal selections tie, so when exact totals matter, score the
-selections found with the original scores and keep the best.
+stands for scores totalling about $`t`$ divided by the factor.
+
+The graph keeps the original scores, at 8 bytes per pair of items, so totals can be exact:
+`w.induced_score(vertices)` sums the scores of a selection, and `ss.densest` and `ss.sparsest`
+report it as `.score`. The search itself runs on the rounded weights, where nearly equal selections
+can tie; among tied selections, `densest` returns the one with the highest exact total (`sparsest`
+the lowest), and `solutions()` lists the best first.
+
+On the command line, `subgraphsearch search --scores` reads scores from an edge list's third column
+or a Matrix Market file's values, makes the weights the same way, and reports each subgraph's exact
+total, in the summary and in the `--json` output.
 
 ## Incidence structures
 

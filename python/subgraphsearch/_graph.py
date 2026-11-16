@@ -483,11 +483,15 @@ class WeightedGraph:
         are integers from 1 to 255, so each score is multiplied by ``resolution / largest score`` and
         rounded: the largest becomes ``resolution`` (255 by default). A positive score too small to survive
         rounding keeps weight 1, and a score of 0 is no edge. Returns the graph and the factor, so a
-        total weight ``t`` corresponds to scores totalling about ``t / factor``.
+        total weight ``t`` corresponds to scores totalling about ``t / factor``. The graph keeps the
+        scores (8 bytes per pair of vertices), so :meth:`induced_score` gives exact totals, and
+        :func:`subgraphsearch.densest` reports them and breaks ties in weight by them.
 
         >>> w, factor = WeightedGraph.from_scores([[0, 2.5, 0.01], [2.5, 0, 1.0], [0.01, 1.0, 0]])
         >>> w.weight(0, 1), w.weight(1, 2), w.weight(0, 2), factor
         (255, 102, 1, 102.0)
+        >>> w.induced_score([0, 1, 2])
+        3.51
         """
         if n is None:
             a = np.asarray(scores, dtype=float)
@@ -497,20 +501,23 @@ class WeightedGraph:
                 raise ValueError("a score matrix must be symmetric")
             n = a.shape[0]
             u, v = np.triu_indices(n, 1)
-            s = a[u, v]
+            triples = np.column_stack([u, v, a[u, v]])
         else:
-            t = np.asarray(scores, dtype=float).reshape(-1, 3)
-            u, v, s = t[:, 0].astype(np.int64), t[:, 1].astype(np.int64), t[:, 2]
-        if not 1 <= resolution <= 255:
-            raise ValueError("resolution must be from 1 to 255, the range of weights")
-        if np.any(s < 0) or not np.all(np.isfinite(s)):
-            raise ValueError("scores must be finite and non-negative")
-        top = float(s.max()) if len(s) else 0.0
-        factor = resolution / top if top > 0 else 1.0
-        w = np.rint(s * factor).astype(np.int64)
-        w[(s > 0) & (w == 0)] = 1
-        keep = w > 0
-        return WeightedGraph(int(n), np.column_stack([u[keep], v[keep], w[keep]])), factor
+            triples = np.asarray(scores, dtype=float).reshape(-1, 3)
+        data = np.ascontiguousarray(triples, dtype="<f8").tobytes()
+        g, factor = _core.WeightedGraph.from_score_bytes(int(n), data, int(resolution))
+        return WeightedGraph(g), factor
+
+    @property
+    def has_scores(self) -> bool:
+        """Whether the graph was made from real-valued scores (:meth:`from_scores`), which it keeps."""
+        return self._g.has_scores
+
+    def induced_score(self, vertices: Iterable[int]) -> float | None:
+        """The exact total score of the pairs among ``vertices``, for a graph made with
+        :meth:`from_scores`; ``None`` for other graphs. :meth:`induced_weight` is its rounded,
+        scaled counterpart."""
+        return self._g.induced_score([int(v) for v in vertices])
 
     @staticmethod
     def read(path: str | PathLike, format: str | None = None) -> WeightedGraph:

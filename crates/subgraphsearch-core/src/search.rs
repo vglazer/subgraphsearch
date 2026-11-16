@@ -516,6 +516,29 @@ impl SearchResult {
         (s > 0).then(|| self.experiments.iter().map(|e| e.moves).sum::<usize>() as f64 / s as f64)
     }
 
+    /// The best experiment of a densest or sparsest search of `graph`: the smallest conflict; then,
+    /// if the graph was made from scores ([`WeightedGraph::from_scores`]), the highest total score
+    /// (`highest`) or the lowest, since selections tied at rounded weights can differ in their
+    /// exact totals; then the earliest. `None` without experiments.
+    pub fn best_by_score(&self, graph: &WeightedGraph, highest: bool) -> Option<usize> {
+        let least = self.experiments.iter().map(|e| e.best_conflict).min()?;
+        let tied =
+            (0..self.experiments.len()).filter(|&i| self.experiments[i].best_conflict == least);
+        let score = |i: usize| {
+            graph
+                .induced_score(&self.experiments[i].vertices)
+                .unwrap_or(0.0)
+        };
+        tied.reduce(|best, i| {
+            let (a, b) = (score(best), score(i));
+            if (highest && b > a) || (!highest && b < a) {
+                i
+            } else {
+                best
+            }
+        })
+    }
+
     /// Mean best objective value over all experiments ("average conflict").
     pub fn average_conflict(&self) -> f64 {
         if self.experiments.is_empty() {
@@ -1836,6 +1859,28 @@ mod tests {
                 "size {size}, edges {edges}, full aspiration {full_aspiration}"
             );
         }
+    }
+
+    #[test]
+    fn densest_ties_go_to_the_best_exact_score() {
+        // with resolution 1 every positive score becomes weight 1, so every edge ties; the
+        // exact scores tell {2, 3} apart as the heaviest pair and {0, 1} as the lightest
+        let scores = [(0, 1, 1.0), (2, 3, 2.0), (0, 2, 1.5), (1, 3, 1.25)];
+        let (w, _) = WeightedGraph::from_scores(4, scores, 1).unwrap();
+        let mut p = SearchParams::new(2, 1);
+        p.experiments = 20;
+        let result = search(&w, &p).unwrap();
+        assert!(result.experiments.iter().all(|e| e.success));
+        let pick = |highest| {
+            result.experiments[result.best_by_score(&w, highest).unwrap()]
+                .vertices
+                .clone()
+        };
+        assert_eq!((pick(true), pick(false)), (vec![2, 3], vec![0, 1]));
+        // without scores, the earliest of the tied experiments
+        let plain =
+            WeightedGraph::from_weighted_edges(4, scores.map(|(u, v, _)| (u, v, 1))).unwrap();
+        assert_eq!(result.best_by_score(&plain, true), Some(0));
     }
 
     #[test]

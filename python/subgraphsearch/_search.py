@@ -487,31 +487,56 @@ class ExtremeResult:
         g = self.graph
         return g.induced_weight(vertices) if isinstance(g, WeightedGraph) else g.induced_edge_count(vertices)
 
+    def _scored(self) -> bool:
+        return isinstance(self.graph, WeightedGraph) and self.graph.has_scores
+
+    def _rank(self, vertices) -> float:
+        """How good a selection's exact score is: higher is better, for densest and sparsest alike."""
+        score = self.graph.induced_score(vertices)
+        return score if self.kind == "densest" else -score
+
     @property
     def vertices(self) -> tuple[int, ...]:
-        """The vertices of the densest (or sparsest) subgraph found."""
-        return self.result.best.vertices
+        """The vertices of the densest (or sparsest) subgraph found. On a graph made from scores
+        (:meth:`WeightedGraph.from_scores`), ties in total weight go to the highest (for sparsest, the
+        lowest) exact total score, as selections tied at rounded weights can differ in it; then to the
+        earliest experiment."""
+        best = self.result.best
+        if not self._scored():
+            return best.vertices
+        tied = [e for e in self.result.experiments if e.best_conflict == best.best_conflict]
+        return max(tied, key=lambda e: (self._rank(e.vertices), -e.index)).vertices
 
     @property
     def value(self) -> int:
         """Its number of edges, or total weight in a weighted graph."""
         return self._value(self.vertices)
 
+    @property
+    def score(self) -> float | None:
+        """Its exact total score, on a graph made from scores (:meth:`WeightedGraph.from_scores`);
+        ``None`` otherwise."""
+        return self.graph.induced_score(self.vertices) if self._scored() else None
+
     def solutions(self) -> list[tuple[int, ...]]:
-        """Every distinct vertex set found with :attr:`value`, each listed once."""
-        return [vs for vs in self.result.solutions(max_conflict=self.result.best.best_conflict)
-                if self._value(vs) == self.value]
+        """Every distinct vertex set found with :attr:`value`, each listed once; on a graph made
+        from scores, the best exact total first."""
+        found = [vs for vs in self.result.solutions(max_conflict=self.result.best.best_conflict)
+                 if self._value(vs) == self.value]
+        return sorted(found, key=self._rank, reverse=True) if self._scored() else found
 
     def summary(self) -> str:
         what = "total weight" if isinstance(self.graph, WeightedGraph) else "edges"
+        score = f" (score {self.score:,.4f})" if self._scored() else ""
         best = self.result.best
         reached = sum(e.best_conflict == best.best_conflict for e in self.result.experiments)
-        return (f"{self.kind} {self.result.params.size} vertices found: {self.value} {what}, reached by {reached} of "
-                f"{len(self.result.experiments)} experiments ({len(self.solutions())} distinct)")
+        return (f"{self.kind} {self.result.params.size} vertices found: {self.value} {what}{score}, reached by "
+                f"{reached} of {len(self.result.experiments)} experiments ({len(self.solutions())} distinct)")
 
     def __repr__(self) -> str:
         what = "weight" if isinstance(self.graph, WeightedGraph) else "edges"
-        return f"ExtremeResult({self.kind}, size={self.result.params.size}, {what}={self.value})"
+        score = f", score={self.score:.4f}" if self._scored() else ""
+        return f"ExtremeResult({self.kind}, size={self.result.params.size}, {what}={self.value}{score})"
 
 
 def densest(graph: Graph | WeightedGraph, size: int, **kwargs) -> ExtremeResult:

@@ -14,7 +14,9 @@
 //! Weighted graphs ([`WeightedGraph`]) are read with [`parse_weighted`] and written with
 //! [`to_string_weighted`]: weights are the third column of an edge list, the values of a Matrix
 //! Market file, or encoded in weighted lists. Formats without weights read as unit weights, and
-//! writing a weighted graph to one is an error.
+//! writing a weighted graph to one is an error. Real-valued scores, such as distances, are read
+//! from the same two columns with [`parse_scores`] and turned into weights with
+//! [`WeightedGraph::from_scores`].
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -276,6 +278,134 @@ pub fn to_string_weighted(
             )));
         }
     })
+}
+
+/// The number of vertices and the `(u, v, score)` triples read by [`parse_scores`].
+pub type Scores = (usize, Vec<(usize, usize, f64)>);
+
+/// Parses real-valued, non-negative scores between pairs of vertices, such as distances, from an
+/// edge list's third column or a Matrix Market file's values: the number of vertices and the
+/// `(u, v, score)` triples, for [`WeightedGraph::from_scores`]. Edge-list lines without a third
+/// column score 1; Matrix Market entries on the diagonal are skipped.
+pub fn parse_scores(text: &str, format: Format) -> Result<Scores, Error> {
+    let score = |line: usize, f: &str| {
+        f.parse::<f64>()
+            .ok()
+            .filter(|s| s.is_finite() && *s >= 0.0)
+            .ok_or_else(|| parse_error(line, format!("'{f}' is not a non-negative number")))
+    };
+    let mut triples = Vec::new();
+    match format {
+        Format::EdgeList => {
+            let mut declared = None;
+            for (i, line) in text.lines().enumerate() {
+                let line = line.trim();
+                if let Some(comment) = line.strip_prefix('#').or_else(|| line.strip_prefix('%')) {
+                    if let Some(n) = comment.trim().strip_prefix("vertices:") {
+                        declared = Some(
+                            n.trim()
+                                .parse::<usize>()
+                                .map_err(|_| parse_error(i + 1, "bad vertex count"))?,
+                        );
+                    }
+                    continue;
+                }
+                if line.is_empty() {
+                    continue;
+                }
+                let f: Vec<&str> = line
+                    .split(|c: char| c == ',' || c.is_whitespace())
+                    .filter(|f| !f.is_empty())
+                    .collect();
+                if f.len() < 2 {
+                    return Err(parse_error(
+                        i + 1,
+                        "expected two vertices and an optional score",
+                    ));
+                }
+                let num = |x: &str| {
+                    x.parse::<usize>()
+                        .map_err(|_| parse_error(i + 1, format!("'{x}' is not a vertex number")))
+                };
+                let s = f.get(2).map_or(Ok(1.0), |x| score(i + 1, x))?;
+                triples.push((num(f[0])?, num(f[1])?, s));
+            }
+            let n = declared.unwrap_or_else(|| {
+                triples
+                    .iter()
+                    .map(|&(u, v, _)| u.max(v) + 1)
+                    .max()
+                    .unwrap_or(0)
+            });
+            Ok((n, triples))
+        }
+        Format::MatrixMarket => {
+            // checks the header and the size line the same way as the unweighted reader
+            if text
+                .lines()
+                .next()
+                .unwrap_or("")
+                .to_ascii_lowercase()
+                .split_whitespace()
+                .nth(3)
+                != Some("pattern")
+            {
+                let mut size = None;
+                for (i, line) in text.lines().enumerate().skip(1) {
+                    let line = line.trim();
+                    if line.is_empty() || line.starts_with('%') {
+                        continue;
+                    }
+                    let f: Vec<&str> = line.split_whitespace().collect();
+                    let num = |x: &str| {
+                        x.parse::<usize>()
+                            .map_err(|_| parse_error(i + 1, format!("'{x}' is not an index")))
+                    };
+                    match size {
+                        None => size = Some(num(f.first().copied().unwrap_or(""))?),
+                        Some(n) => {
+                            if f.len() < 3 {
+                                return Err(parse_error(i + 1, "expected 'row column value'"));
+                            }
+                            let (r, c) = (num(f[0])?, num(f[1])?);
+                            if r == 0 || c == 0 || r > n || c > n {
+                                return Err(parse_error(
+                                    i + 1,
+                                    format!("index out of range [1, {n}]"),
+                                ));
+                            }
+                            if r != c {
+                                triples.push((r - 1, c - 1, score(i + 1, f[2])?));
+                            }
+                        }
+                    }
+                }
+                parse_matrix_market(text)?;
+                return Ok((size.unwrap_or(0), triples));
+            }
+            let g = parse_matrix_market(text)?;
+            Ok((
+                g.num_vertices(),
+                g.edges().map(|(u, v)| (u, v, 1.0)).collect(),
+            ))
+        }
+        _ => Err(Error::Invalid(format!(
+            "{} files hold no scores: use an edge list or a Matrix Market file",
+            format.name()
+        ))),
+    }
+}
+
+/// Reads real-valued scores from a file, using `format` or else guessing it from the extension;
+/// see [`parse_scores`].
+pub fn read_scores_file(path: &Path, format: Option<Format>) -> Result<Scores, Error> {
+    let format = format.or_else(|| Format::from_path(path)).ok_or_else(|| {
+        Error::Invalid(format!(
+            "cannot tell the format of {} from its extension; specify it",
+            path.display()
+        ))
+    })?;
+    parse_scores(&std::fs::read_to_string(path)?, format)
 }
 
 /// Reads a weighted graph from a file, using `format` or else guessing it from the extension.
@@ -976,6 +1106,20 @@ fn write_graphml(g: &Graph, highlight: &[usize]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scores_read_from_edge_lists_and_matrix_market() {
+        let (n, t) =
+            parse_scores("# vertices: 4\n0 1 2.5\n1,2,0.25\n2 3\n", Format::EdgeList).unwrap();
+        assert_eq!((n, t), (4, vec![(0, 1, 2.5), (1, 2, 0.25), (2, 3, 1.0)]));
+        let mtx =
+            "%%MatrixMarket matrix coordinate real symmetric\n3 3 3\n2 1 1.5\n3 3 9\n3 1 0.75\n";
+        let (n, t) = parse_scores(mtx, Format::MatrixMarket).unwrap();
+        assert_eq!((n, t), (3, vec![(1, 0, 1.5), (2, 0, 0.75)]));
+        assert!(parse_scores("0 1 -2\n", Format::EdgeList).is_err());
+        assert!(parse_scores("0 1 x\n", Format::EdgeList).is_err());
+        assert!(parse_scores("", Format::Graph6).is_err());
+    }
 
     fn sample() -> Graph {
         Graph::from_edges(9, [(0, 1), (0, 2), (1, 2), (5, 6), (7, 8), (2, 8)]).unwrap()

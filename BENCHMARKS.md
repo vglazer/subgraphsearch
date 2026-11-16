@@ -87,7 +87,9 @@ scored with the original distances. subgraphsearch ran `ss.densest` as above.
 | MDG-a 1 | 500 | 50 | 7,833.83 | 7,833.83 in all 60 runs, 0.36&nbsp;s | 7,294.0 | 6,229.7 |
 
 Matching is to within 0.003, the precision of the published distances. The GKD-c misses are
-rounding: some slightly lighter selections tie with the best one at integer weights.
+rounding: some slightly lighter selections tie with the best one at integer weights. Among tied
+selections, `ss.densest` returns the one with the highest exact total, so its result is the best
+known value whenever any of its runs reaches it, as at least one does here.
 
 **Against specialists.** These instances are easy for the heuristics made for the problem, whose
 papers test on 2000 to 5000 items. On MDG-a_21 (200 of 2000 items, integer distances 0 to 10, best

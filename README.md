@@ -93,7 +93,8 @@ from subgraphsearch import viz
 items = np.random.default_rng(0).random((500, 8))             # 500 items, 8 features each
 dist = np.linalg.norm(items[:, None] - items[None], axis=-1)  # the distance between every two
 w, factor = ss.WeightedGraph.from_scores(dist)                # items as vertices, distances as weights
-picked = ss.densest(w, 50).vertices                           # 50 items as far apart as possible
+best = ss.densest(w, 50)                                      # 50 items as far apart as possible:
+best.vertices, best.score                                     # which, and their total distance
 
 g = ss.generate("exponential", 100, 0.6, seed=1)   # a random graph: 100 vertices, density 0.6
 
@@ -253,6 +254,7 @@ subgraphs, switching and products (`op`), and build graphs from block designs (`
 | `--aspiration[=full]` | take a tabu swap that beats the best value so far: the two vertices just swapped, or with `=full` every swap the tenure forbids (for long tenures) | off |
 | `-s`, `--seed` | random seed | 1 |
 | `--weighted` | read edge weights; `-m` is then a total weight | off |
+| `--scores` | read real-valued scores, such as distances, as weights scaled to 1–255, and report exact totals; implies `--weighted` | off |
 
 ## Rust
 
