@@ -11,3 +11,4 @@ python/subgraphsearch/_core*.so
 /out/
 python/PYPI_README.md
 /benchmarks/data/
+docs/_build/

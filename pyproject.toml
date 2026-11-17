@@ -28,6 +28,7 @@ subgraphsearch = "subgraphsearch._cli:main"
 
 [project.urls]
 Homepage = "https://github.com/vglazer/subgraphsearch"
+Documentation = "https://subgraphsearch.readthedocs.io"
 Repository = "https://github.com/vglazer/subgraphsearch"
 Issues = "https://github.com/vglazer/subgraphsearch/issues"
 Changelog = "https://github.com/vglazer/subgraphsearch/commits/main"

@@ -77,6 +77,7 @@ pip install "subgraphsearch[all]" jupyterlab && python -m subgraphsearch quickst
 | Document | What it covers |
 | --- | --- |
 | [Quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb) | A hands-on tour of every kind of search and its applications |
+| [API reference](https://subgraphsearch.readthedocs.io) | Every Python function and class, from the docstrings, on Read the Docs |
 | [BENCHMARKS.md](BENCHMARKS.md) | How subgraphsearch compares with other methods on standard benchmarks |
 | [ALGORITHM.md](ALGORITHM.md) | How the search works: moves, perturbations, variants, data structures |
 | [TUNING.md](TUNING.md) | Which search to use for a goal, and how to set its parameters |
