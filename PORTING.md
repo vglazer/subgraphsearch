@@ -111,6 +111,23 @@ candidate swaps that cannot be best (*bounded rows* in
 degree search (`reg_search`, `ereg_search`) has no such shortcut, and runs at 0.7–0.9 times the C
 programs' speed.
 
+The gap is widest for `ereg_search`, and narrower than it looks. With an unreachable target, as
+here, the two-phase search never leaves its first phase, which searches for the right number of
+edges. That phase's inner loop does very little per candidate swap: a subtraction and a comparison.
+Profiling put the whole difference in that loop. The C compiler unrolls it 8 times, so its
+bookkeeping runs once per 8 candidates. Rust's version also checks every array index. Scanning in
+chunks of 8, so that the compiler unrolls it too, recovered part of the gap. Removing the index
+checks would take `unsafe` code, which this project does not use, and would gain only about 4%.
+The rest is how the compiler schedules the instructions.
+
+The gap matters little in practice. It is a one-thread comparison of legacy mode, which exists to
+reproduce the original output. Real two-phase searches reach the right number of edges quickly and
+spend most of their time in the second phase. With threads, the modern search is several times
+faster than C, as the table below shows. TUNING.md suggests two phases for large dense graphs. That
+advice compares the modern one- and two-phase searches with each other, not with C. There, on
+G(1000, 0.5) in the quickstart notebook, the two-phase search takes 5.6 ms per success against the
+one-phase search's 11.3 ms, twice as fast.
+
 **On 16 threads,** the modern search runs experiments in parallel:
 
 | Program | 1 thread | 16 threads | Speed-up from threads | Speed-up over C |
