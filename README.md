@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/subgraphsearch)](https://pypi.org/project/subgraphsearch/)
 [![crates.io: subgraphsearch](https://img.shields.io/crates/v/subgraphsearch?label=crates.io%3A%20subgraphsearch)](https://crates.io/crates/subgraphsearch)
 [![crates.io: subgraphsearch-core](https://img.shields.io/crates/v/subgraphsearch-core?label=crates.io%3A%20subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
+[![Documentation](https://img.shields.io/readthedocs/subgraphsearch/stable)](https://subgraphsearch.readthedocs.io)
 
 Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) of a given size that hit a
 prescribed target**, in milliseconds where general solvers take seconds or give out. It is a family
