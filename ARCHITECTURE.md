@@ -64,7 +64,9 @@ they are built together and share one version number.
   - `search.rs`: the counting search, for edge counts and weights, whose move loop `Workspace::run`
     drives named steps (`start_experiment`, `choose_move`, `apply_swap`, `list_candidates`,
     `bound_rows`, `collect_best_moves`); `regular.rs`: the degree search, for regular
-    subgraphs, cycles and paths (see [ALGORITHM.md](ALGORITHM.md#two-searches));
+    subgraphs, cycles and paths (see [ALGORITHM.md](ALGORITHM.md#two-searches)), whose one- and
+    two-phase loops (`run_regular`, `run_two_phase`) share the steps of a move
+    (`regularity_after_swap`, `update_sub_degs`, `apply_swap`, `record`);
     `largest.rs`: the search for the largest size of a shape.
   - `graph.rs`: `Graph` (a bit matrix and adjacency lists) and `WeightedGraph` (a byte matrix).
     Searches are written once for any type that implements the `SearchGraph` *trait*, Rust's

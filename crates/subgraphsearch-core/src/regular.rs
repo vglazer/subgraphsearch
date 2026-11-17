@@ -345,6 +345,8 @@ struct Workspace {
     sub_opt: Vec<usize>,
     rest_opt: Vec<usize>,
     rand_perm: Vec<usize>,
+    /// Phase two's swaps that keep the edge count, reused from move to move.
+    candidates: Vec<usize>,
     /// With `params.connected`.
     components: Option<Components>,
 }
@@ -384,6 +386,7 @@ impl Workspace {
             sub_opt: vec![0; v],
             rest_opt: vec![0; v],
             rand_perm: Vec::with_capacity(v - v_fix),
+            candidates: Vec::new(),
             components: (params.connected || params.path).then(|| Components::new(v)),
         };
         ws.pos = if ws.dense {
@@ -629,6 +632,95 @@ impl Workspace {
         }
     }
 
+    /// Lists the vertices outside the subgraph in `rest_verts`, ascending, with their indices in
+    /// `vert_inds`.
+    fn index_rest(&mut self) {
+        let mut l = 0;
+        for j in 0..self.v {
+            if self.sub_ch[j] == 0 {
+                self.vert_inds[j] = l;
+                self.rest_verts[l] = j;
+                l += 1;
+            }
+        }
+    }
+
+    /// The regularity objective `obj_val` after swapping `sub_vert` out for `rest_vert` in, with
+    /// `diffs` updated to match. Call it before [`Workspace::update_sub_degs`]: it reads the
+    /// subgraph degrees from before the swap, and `adjacent` says whether the two are neighbors.
+    fn regularity_after_swap(
+        &mut self,
+        mut obj_val: i64,
+        sub_vert: usize,
+        rest_vert: usize,
+        adjacent: bool,
+        d_sub: i64,
+    ) -> i64 {
+        obj_val -= abs(self.diffs[sub_vert]);
+        self.diffs[rest_vert] = self.sub_degs[rest_vert] - d_sub - i64::from(adjacent);
+        obj_val += abs(self.diffs[rest_vert]);
+        for k in 0..self.sub_degs[sub_vert] as usize {
+            let vert = self.adj_list[sub_vert][k] as usize;
+            if self.diffs[vert] > 0 {
+                obj_val -= 1;
+            } else {
+                obj_val += 1;
+            }
+            self.diffs[vert] -= 1;
+        }
+        for k in 0..self.sub_degs[rest_vert] as usize {
+            let vert = self.adj_list[rest_vert][k] as usize;
+            if vert == sub_vert {
+                continue;
+            }
+            if self.diffs[vert] >= 0 {
+                obj_val += 1;
+            } else {
+                obj_val -= 1;
+            }
+            self.diffs[vert] += 1;
+        }
+        obj_val
+    }
+
+    /// Updates every vertex's degree within the subgraph for the swap; with `mark`, also marks in
+    /// `u_ch` the vertices adjacent to exactly one of the two, whose swap values change.
+    fn update_sub_degs(&mut self, sub_vert: usize, rest_vert: usize, mark: bool) {
+        for k in 0..self.degs[sub_vert] {
+            let vert = self.adj_list[sub_vert][k] as usize;
+            self.sub_degs[vert] -= 1;
+            if mark {
+                self.u_ch[vert] = 1;
+            }
+        }
+        for k in 0..self.degs[rest_vert] {
+            let vert = self.adj_list[rest_vert][k] as usize;
+            self.sub_degs[vert] += 1;
+            if mark {
+                self.u_ch[vert] = 1 - self.u_ch[vert];
+            }
+        }
+    }
+
+    /// Makes the swap in the membership flags and the vertex lists.
+    fn apply_swap(&mut self, sub_vert: usize, rest_vert: usize, sub_row: usize, rest_col: usize) {
+        self.sub_ch[sub_vert] = 0;
+        self.sub_ch[rest_vert] = 1;
+        self.swap_lists(sub_vert, rest_vert, sub_row, rest_col);
+    }
+
+    /// Records the conflict after a move: in the trace, if one is kept, and as the best so far
+    /// if it beats `g_opt_val`.
+    fn record(&mut self, conflict: i64, g_opt_val: &mut i64, trace: &mut Option<Vec<u32>>) {
+        if let Some(t) = trace.as_mut() {
+            t.push(conflict.clamp(0, u32::MAX as i64) as u32);
+        }
+        if conflict < *g_opt_val {
+            *g_opt_val = conflict;
+            self.opt_ch.copy_from_slice(&self.sub_ch);
+        }
+    }
+
     /// One `reg_search` experiment: `(best value, moves, success, trace)`.
     fn run_regular<R: SearchRng>(
         &mut self,
@@ -645,17 +737,13 @@ impl Workspace {
         self.partition(true);
 
         let mut obj_val = 0i64;
-        let mut l = 0;
         for j in 0..v {
             if self.sub_ch[j] != 0 {
                 self.diffs[j] = self.sub_degs[j] - d_sub;
                 obj_val += abs(self.diffs[j]);
-            } else {
-                self.vert_inds[j] = l;
-                self.rest_verts[l] = j;
-                l += 1;
             }
         }
+        self.index_rest();
 
         let v_sq = self.v_sq;
         let (mut g_opt_val, mut old_min_val) = (v_sq, v_sq);
@@ -670,48 +758,10 @@ impl Workspace {
             let sub_row = self.vert_inds[sub_vert];
             let rest_col = self.vert_inds[rest_vert];
 
-            // objective and differences
-            obj_val -= abs(self.diffs[sub_vert]);
-            for k in 0..self.sub_degs[sub_vert] as usize {
-                let vert = self.adj_list[sub_vert][k] as usize;
-                if self.diffs[vert] > 0 {
-                    obj_val -= 1;
-                } else {
-                    obj_val += 1;
-                }
-                self.diffs[vert] -= 1;
-            }
-            for k in 0..self.sub_degs[rest_vert] as usize {
-                let vert = self.adj_list[rest_vert][k] as usize;
-                if vert == sub_vert {
-                    continue;
-                }
-                if self.diffs[vert] >= 0 {
-                    obj_val += 1;
-                } else {
-                    obj_val -= 1;
-                }
-                self.diffs[vert] += 1;
-            }
-
-            // subgraph degrees; mark vertices adjacent to exactly one of the two swapped
-            for k in 0..self.degs[sub_vert] {
-                let vert = self.adj_list[sub_vert][k] as usize;
-                self.sub_degs[vert] -= 1;
-                self.u_ch[vert] = 1;
-            }
-            for k in 0..self.degs[rest_vert] {
-                let vert = self.adj_list[rest_vert][k] as usize;
-                self.sub_degs[vert] += 1;
-                self.u_ch[vert] = 1 - self.u_ch[vert];
-            }
-
-            self.diffs[rest_vert] = self.sub_degs[rest_vert] - d_sub;
-            obj_val += abs(self.diffs[rest_vert]);
-
-            self.sub_ch[sub_vert] = 0;
-            self.sub_ch[rest_vert] = 1;
-            self.swap_lists(sub_vert, rest_vert, sub_row, rest_col);
+            let adjacent = graph.has_edge(sub_vert, rest_vert);
+            obj_val = self.regularity_after_swap(obj_val, sub_vert, rest_vert, adjacent, d_sub);
+            self.update_sub_degs(sub_vert, rest_vert, true);
+            self.apply_swap(sub_vert, rest_vert, sub_row, rest_col);
 
             let extra = self.extra_components(graph, &params.fixed);
             let conflict = if params.path {
@@ -726,15 +776,8 @@ impl Workspace {
             } else {
                 obj_val + extra
             };
-            if let Some(t) = trace.as_mut() {
-                t.push(conflict.clamp(0, u32::MAX as i64) as u32);
-            }
-
             let new_min_val = obj_val;
-            if conflict < g_opt_val {
-                g_opt_val = conflict;
-                self.opt_ch.copy_from_slice(&self.sub_ch);
-            }
+            self.record(conflict, &mut g_opt_val, &mut trace);
 
             self.update_partition(sub_vert, rest_vert);
 
@@ -822,19 +865,15 @@ impl Workspace {
         self.u_ch.fill(0);
         self.random_subgraph(rng);
 
-        let mut l = 0;
         for j in 0..v {
             if self.sub_ch[j] != 0 {
                 for k in 0..self.degs[j] {
                     let x = self.adj_list[j][k] as usize;
                     self.sub_degs[x] += 1;
                 }
-            } else {
-                self.vert_inds[j] = l;
-                self.rest_verts[l] = j;
-                l += 1;
             }
         }
+        self.index_rest();
         let mut new_min_val: i64 = (0..v)
             .filter(|&j| self.sub_ch[j] != 0)
             .map(|j| self.sub_degs[j])
@@ -861,69 +900,26 @@ impl Workspace {
                     - i64::from(swapped_adjacent);
                 obj_val = abs(new_min_val);
             } else {
-                obj_val -= abs(self.diffs[sub_vert]);
-                self.diffs[rest_vert] =
-                    self.sub_degs[rest_vert] - d_sub - i64::from(swapped_adjacent);
-                obj_val += abs(self.diffs[rest_vert]);
-                for k in 0..self.sub_degs[sub_vert] as usize {
-                    let vert = self.adj_list[sub_vert][k] as usize;
-                    if self.diffs[vert] > 0 {
-                        obj_val -= 1;
-                    } else {
-                        obj_val += 1;
-                    }
-                    self.diffs[vert] -= 1;
-                }
-                for k in 0..self.sub_degs[rest_vert] as usize {
-                    let vert = self.adj_list[rest_vert][k] as usize;
-                    if vert == sub_vert {
-                        continue;
-                    }
-                    if self.diffs[vert] >= 0 {
-                        obj_val += 1;
-                    } else {
-                        obj_val -= 1;
-                    }
-                    self.diffs[vert] += 1;
-                }
+                obj_val = self.regularity_after_swap(
+                    obj_val,
+                    sub_vert,
+                    rest_vert,
+                    swapped_adjacent,
+                    d_sub,
+                );
             }
-
-            for k in 0..self.degs[sub_vert] {
-                let x = self.adj_list[sub_vert][k] as usize;
-                self.sub_degs[x] -= 1;
-            }
-            for k in 0..self.degs[rest_vert] {
-                let x = self.adj_list[rest_vert][k] as usize;
-                self.sub_degs[x] += 1;
-            }
-
-            self.sub_ch[sub_vert] = 0;
-            self.sub_ch[rest_vert] = 1;
-            self.swap_lists(sub_vert, rest_vert, sub_row, rest_col);
+            // in phase one, mark the rows whose swap values change, as run_regular does
+            self.update_sub_degs(sub_vert, rest_vert, !sol_found);
+            self.apply_swap(sub_vert, rest_vert, sub_row, rest_col);
 
             let extra = self.extra_components(graph, &params.fixed);
             let mut conflict = obj_val + extra;
-            if let Some(t) = trace.as_mut() {
-                t.push(conflict.clamp(0, u32::MAX as i64) as u32);
-            }
-
-            if conflict < g_opt_val {
-                g_opt_val = conflict;
-                self.opt_ch.copy_from_slice(&self.sub_ch);
-            }
+            self.record(conflict, &mut g_opt_val, &mut trace);
 
             let (mut u_cols, mut m) = (0, 0);
             if sol_found {
                 self.update_partition(sub_vert, rest_vert);
             } else {
-                for k in 0..self.degs[sub_vert] {
-                    let x = self.adj_list[sub_vert][k] as usize;
-                    self.u_ch[x] = 1;
-                }
-                for k in 0..self.degs[rest_vert] {
-                    let x = self.adj_list[rest_vert][k] as usize;
-                    self.u_ch[x] = 1 - self.u_ch[x];
-                }
                 (u_cols, m) = self.active_columns(sub_vert, rest_col);
                 if new_min_val != old_min_val {
                     for k in 0..self.v_sub {
@@ -997,7 +993,7 @@ impl Workspace {
             } else {
                 let mut opt_val = v_sq;
                 let curr_rest = rest_vert;
-                let mut candidates = Vec::new();
+                let mut candidates = std::mem::take(&mut self.candidates);
                 for k in 0..self.v_sub {
                     let sv = self.sub_verts[k];
                     if sv == curr_rest {
@@ -1033,6 +1029,7 @@ impl Workspace {
                     }
                     self.restore_diffs(sv);
                 }
+                self.candidates = candidates;
                 // no move keeps the edge count: the experiment fails
                 if opt_mov == 0 {
                     return (g_opt_val, j, false, trace);
