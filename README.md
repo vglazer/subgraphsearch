@@ -5,23 +5,25 @@
 [![crates.io: subgraphsearch](https://img.shields.io/crates/v/subgraphsearch?label=crates.io%3A%20subgraphsearch)](https://crates.io/crates/subgraphsearch)
 [![crates.io: subgraphsearch-core](https://img.shields.io/crates/v/subgraphsearch-core?label=crates.io%3A%20subgraphsearch-core)](https://crates.io/crates/subgraphsearch-core)
 
-Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) with a prescribed number of
-vertices and edges** in a graph, or with a prescribed total weight in a weighted graph, in
-milliseconds where general solvers take seconds or give out.
+Find **[induced subgraphs](https://en.wikipedia.org/wiki/Induced_subgraph) of a given size that hit a
+prescribed target**, in milliseconds where general solvers take seconds or give out. It is a family
+of searches, one for each kind of target:
 
-Its most practical use is **choosing $`k`$ of $`n`$ items that are as different from each other as
-possible**: a diverse portfolio, sites for facilities that should be far apart, a varied set of
-compounds to test. On the standard benchmark for this, the
-[maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html), it reaches the best
-published values for up to 500 items in well under a second, where general solvers left running for
-10 seconds fall short, CP-SAT by up to 10% ([How it compares](#how-it-compares)).
+- **A number of edges:** $`k`$ vertices spanning exactly $`m`$ edges, including
+  [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)) (all edges), independent sets (none)
+  and [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory)).
+- **A degree for every vertex:** regular subgraphs, such as induced
+  [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)) (every vertex of degree 2), and induced
+  [paths](https://en.wikipedia.org/wiki/Induced_path).
+- **A total weight,** in a weighted graph. The heaviest $`k`$ vertices solve the
+  **[maximum diversity problem](https://grafo.etsii.urjc.es/optsicom/mdp.html)**: choosing $`k`$ of
+  $`n`$ items as different from each other as possible, such as a diverse portfolio or far-apart
+  facility sites. Here it matches the best published values for up to 500 items in under a second.
 
-The same search finds induced [cycles](https://en.wikipedia.org/wiki/Cycle_(graph_theory)),
-[paths](https://en.wikipedia.org/wiki/Induced_path), [trees](https://en.wikipedia.org/wiki/Tree_(graph_theory))
-and [cliques](https://en.wikipedia.org/wiki/Clique_(graph_theory)), regular subgraphs of a given
-degree, and subgraphs through given vertices. Searches are reproducible from a seed, report near
-misses alongside exact solutions, and come with diagnostics for tuning; many
-[graph formats](GRAPHS.md#formats) are supported.
+Where a specialized solver exists, such as for cliques, that solver usually wins at scale
+([How it compares](#how-it-compares)). Searches can pass through given vertices, are reproducible
+from a seed, report near misses alongside exact solutions, and come with diagnostics for tuning;
+many [graph formats](GRAPHS.md#formats) are supported.
 
 Start with the
 [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb),

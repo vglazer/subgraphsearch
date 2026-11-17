@@ -10,6 +10,9 @@ scripts in [benchmarks](benchmarks/README.md) reproduce every measurement; the n
 subgraphsearch 4.4.0. Its counts and success rates reproduce exactly, since they depend only on the
 seed; times vary by about 10% between runs. The general solvers' results depend on their time
 limits and, for CP-SAT, which runs on 16 threads, on timing too, so they vary between runs.
+[examples/data](examples/data/README.md) holds the benchmark instances and their licenses, and the
+[quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
+runs several of these searches. The [README](README.md#how-it-compares) sums up the comparison.
 
 ![Left: CP-SAT's time to find k vertices spanning exactly m edges grows to seconds and then past its 10-second limit as random graphs grow from 20 to 59 vertices. Middle: subgraphsearch finds the same targets in about a millisecond or less. Right: on eight maximum diversity benchmark instances, subgraphsearch reaches every best known value, while CP-SAT after 10 seconds falls up to 7% short](assets/comparison.png)
 
@@ -187,14 +190,3 @@ problem, with records set by specialized searches.
 
 The general path search reaches the records up to the 8-cube; the 9-cube's record came from a
 specialized annealing search.
-
-## In short
-
-subgraphsearch is the tool for subgraphs with a prescribed number of vertices and edges or total
-weight, where no specialized solver exists: it finds them in milliseconds where general solvers
-stall, and matches the best published maximum diversity values up to 500 items. At 2000 items,
-with `aspiration="full"`, it reaches the best known value about as often as a heuristic made for
-the problem, in the same time. Where specialists exist elsewhere they win at scale: on maximum
-cliques, on Steiner triple systems, and on the 9-cube's snake. The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
-runs several of these searches, and [examples/data](examples/data/README.md) holds the benchmark
-instances and their licenses.
