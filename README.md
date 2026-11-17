@@ -132,7 +132,8 @@ In Jupyter, graphs and results display as summaries with small charts.
   spectra, and parameter sweeps for tuning.
 
 The [quickstart notebook](https://github.com/vglazer/subgraphsearch/blob/main/examples/quickstart.ipynb)
-goes through all of these.
+goes through all of these, and the API is documented on
+[Read the Docs](https://subgraphsearch.readthedocs.io).
 
 ## How it compares
 
